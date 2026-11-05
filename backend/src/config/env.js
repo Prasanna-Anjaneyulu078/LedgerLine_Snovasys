@@ -3,12 +3,15 @@ import { z } from 'zod';
 
 dotenv.config();
 
+const sanitizeUrl = (val) => (typeof val === 'string' ? val.trim().replace(/^["']|["']$/g, '') : val);
+
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(5000),
-  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
-  DIRECT_URL: z.string().optional(),
-  TEST_DATABASE_URL: z.string().optional(),
+  DATABASE_URL: z.string().min(1, 'DATABASE_URL is required').transform(sanitizeUrl),
+  DIRECT_URL: z.string().optional().transform(sanitizeUrl),
+  TEST_DATABASE_URL: z.string().optional().transform(sanitizeUrl),
+  TEST_DIRECT_URL: z.string().optional().transform(sanitizeUrl),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters for security'),
   JWT_EXPIRES_IN: z.string().default('1d'),
   BCRYPT_SALT_ROUNDS: z.coerce.number().default(12),
@@ -27,4 +30,3 @@ if (!parsed.success) {
 }
 
 export const env = parsed.data;
-

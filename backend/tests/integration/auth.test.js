@@ -1,6 +1,6 @@
 import request from 'supertest';
 import app from '../../src/app.js';
-import { cleanDatabase, seedTestFixtures, testPool } from '../helpers/testDb.js';
+import { cleanDatabase, seedTestFixtures, teardownTestDb } from '../helpers/testDb.js';
 
 describe('Authentication & Authorization Tests', () => {
   let fixtures;
@@ -11,7 +11,7 @@ describe('Authentication & Authorization Tests', () => {
   });
 
   afterAll(async () => {
-    await testPool.end();
+    await teardownTestDb();
   });
 
   test('POST /api/v1/auth/register - Successfully registers a new account holder', async () => {

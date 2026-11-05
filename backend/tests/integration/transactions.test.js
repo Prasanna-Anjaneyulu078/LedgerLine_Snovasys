@@ -1,6 +1,6 @@
 import request from 'supertest';
 import app from '../../src/app.js';
-import { cleanDatabase, seedTestFixtures, testPool } from '../helpers/testDb.js';
+import { cleanDatabase, seedTestFixtures, testPool, teardownTestDb } from '../helpers/testDb.js';
 
 describe('Financial Transactions & Money Conservation Tests', () => {
   let fixtures;
@@ -11,7 +11,7 @@ describe('Financial Transactions & Money Conservation Tests', () => {
   });
 
   afterAll(async () => {
-    await testPool.end();
+    await teardownTestDb();
   });
 
   test('Deposit - Successfully credits account and updates balance in PostgreSQL', async () => {

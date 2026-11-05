@@ -8,10 +8,11 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "migrate": "node src/database/migrate.js",
+    "migrate:test": "node src/database/migrate.js --test",
     "seed": "node src/database/seed.js",
-    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --detectOpenHandles --forceExit",
-    "test:unit": "cross-env NODE_OPTIONS=--experimental-vm-modules jest tests/unit",
-    "test:integration": "cross-env NODE_OPTIONS=--experimental-vm-modules jest tests/integration --runInBand --detectOpenHandles --forceExit"
+    "test": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest --runInBand --detectOpenHandles",
+    "test:unit": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest tests/unit",
+    "test:integration": "cross-env NODE_ENV=test NODE_OPTIONS=--experimental-vm-modules jest tests/integration --runInBand --detectOpenHandles"
   },
   "keywords": [
     "fintech",

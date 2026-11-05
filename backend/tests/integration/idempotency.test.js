@@ -1,6 +1,6 @@
 import request from 'supertest';
 import app from '../../src/app.js';
-import { cleanDatabase, seedTestFixtures, testPool } from '../helpers/testDb.js';
+import { cleanDatabase, seedTestFixtures, testPool, teardownTestDb } from '../helpers/testDb.js';
 
 describe('Idempotency Implementation Tests', () => {
   let fixtures;
@@ -11,7 +11,7 @@ describe('Idempotency Implementation Tests', () => {
   });
 
   afterAll(async () => {
-    await testPool.end();
+    await teardownTestDb();
   });
 
   test('Idempotent Retry - Same key and payload returns cached response without duplicate execution', async () => {

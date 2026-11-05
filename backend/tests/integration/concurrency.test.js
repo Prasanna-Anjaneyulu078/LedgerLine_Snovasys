@@ -1,6 +1,6 @@
 import request from 'supertest';
 import app from '../../src/app.js';
-import { cleanDatabase, seedTestFixtures, testPool } from '../helpers/testDb.js';
+import { cleanDatabase, seedTestFixtures, testPool, teardownTestDb } from '../helpers/testDb.js';
 
 describe('Concurrency Safety & Race Condition Protection Tests', () => {
   let fixtures;
@@ -11,7 +11,7 @@ describe('Concurrency Safety & Race Condition Protection Tests', () => {
   });
 
   afterAll(async () => {
-    await testPool.end();
+    await teardownTestDb();
   });
 
   test('Concurrent Withdrawals - Two simultaneous withdrawals exceeding available balance cannot overdraw account', async () => {

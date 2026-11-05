@@ -1,6 +1,6 @@
 import request from 'supertest';
 import app from '../../src/app.js';
-import { cleanDatabase, seedTestFixtures, testPool } from '../helpers/testDb.js';
+import { cleanDatabase, seedTestFixtures, teardownTestDb } from '../helpers/testDb.js';
 
 describe('Role-Based & Account-Level Authorization Tests', () => {
   let fixtures;
@@ -11,7 +11,7 @@ describe('Role-Based & Account-Level Authorization Tests', () => {
   });
 
   afterAll(async () => {
-    await testPool.end();
+    await teardownTestDb();
   });
 
   test('Account Access - User cannot view balance of another user account', async () => {

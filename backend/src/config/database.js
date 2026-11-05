@@ -17,18 +17,42 @@ const connectionString =
     ? env.TEST_DATABASE_URL
     : env.DATABASE_URL;
 
-const isSslRequired = connectionString.includes('sslmode=require');
+const isSslRequired =
+  connectionString.includes('sslmode=require') ||
+  connectionString.includes('sslmode=verify-full') ||
+  connectionString.includes('ssl=true');
 
-export const pool = new Pool({
-  connectionString,
-  ssl: isSslRequired ? { rejectUnauthorized: false } : false,
-  max: 20,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 15000,
-});
+function createPoolInstance() {
+  const p = new Pool({
+    connectionString,
+    ssl: isSslRequired ? { rejectUnauthorized: true } : false,
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 15000,
+  });
 
-pool.on('error', (err) => {
-  logger.error({ err }, 'Unexpected error on idle PostgreSQL client');
+  p.on('error', (err) => {
+    logger.error({ err }, 'Unexpected error on idle PostgreSQL client');
+  });
+
+  return p;
+}
+
+let activePool = createPoolInstance();
+
+export function getActivePool() {
+  if (!activePool || activePool.ended) {
+    activePool = createPoolInstance();
+  }
+  return activePool;
+}
+
+export const pool = new Proxy({}, {
+  get(target, prop) {
+    const current = getActivePool();
+    const val = current[prop];
+    return typeof val === 'function' ? val.bind(current) : val;
+  },
 });
 
 /**
@@ -72,6 +96,8 @@ export async function checkDatabaseConnection() {
  * Graceful close of the pool
  */
 export async function closePool() {
-  await pool.end();
-  logger.info('Database pool closed cleanly');
+  if (activePool && !activePool.ended) {
+    await activePool.end();
+    logger.info('Database pool closed cleanly');
+  }
 }

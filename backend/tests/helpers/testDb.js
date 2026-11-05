@@ -1,39 +1,63 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import pg from 'pg';
 import { env } from '../../src/config/env.js';
+import { pool, closePool } from '../../src/config/database.js';
+import { runMigrations } from '../../src/database/migrate.js';
 
-const { Pool, types } = pg;
-types.setTypeParser(20, (val) => (val === null ? null : BigInt(val)));
-BigInt.prototype.toJSON = function () {
-  return this.toString();
-};
-
-const testConnectionString = env.TEST_DATABASE_URL || env.DATABASE_URL;
-const isSslRequired = testConnectionString.includes('sslmode=require');
-
-export const testPool = new Pool({
-  connectionString: testConnectionString,
-  ssl: isSslRequired ? { rejectUnauthorized: false } : false,
-  max: 10,
-});
+// Unified connection pool for test assertions, fixtures, and app operations
+export const testPool = pool;
 
 /**
- * Truncate tables for a clean test run
+ * Truncate tables for a clean test run with strict safety checks
  */
 export async function cleanDatabase() {
   const client = await testPool.connect();
   try {
-    await client.query('BEGIN;');
-    await client.query(`
-      TRUNCATE TABLE idempotency_keys, audit_events, ledger_entries, transactions, accounts, users CASCADE;
+    // 1. Strict safety check: Never truncate non-test databases
+    const dbRes = await client.query('SELECT current_database() as db;');
+    const dbName = dbRes.rows[0]?.db;
+    if (!dbName || !dbName.toLowerCase().includes('test')) {
+      throw new Error(
+        `SAFETY CHECK ABORTED: Refusing to truncate database '${dbName}'. Test database name must contain 'test'.`
+      );
+    }
+
+    // 2. Schema check: Verify required tables exist; if missing, auto-run test migrations
+    const tableCheckRes = await client.query(`
+      SELECT table_name FROM information_schema.tables 
+      WHERE table_schema = 'public' 
+        AND table_name IN ('users', 'accounts', 'transactions', 'ledger_entries', 'idempotency_keys', 'audit_events');
     `);
-    await client.query('COMMIT;');
-  } catch (err) {
-    await client.query('ROLLBACK;');
-    throw err;
+    const existingTables = new Set(tableCheckRes.rows.map((r) => r.table_name));
+    const requiredTables = ['users', 'accounts', 'transactions', 'ledger_entries', 'idempotency_keys', 'audit_events'];
+    const missingTables = requiredTables.filter((t) => !existingTables.has(t));
+
+    if (missingTables.length > 0) {
+      client.release();
+      await runMigrations({ isTest: true });
+      return cleanDatabase();
+    }
+
+    // 3. Truncate in safe dependency order without outer transaction block to prevent deadlocks
+    await client.query(
+      'TRUNCATE TABLE idempotency_keys, audit_events, ledger_entries, transactions, accounts, users CASCADE;'
+    );
   } finally {
     client.release();
+  }
+}
+
+/**
+ * Cleanly shuts down the shared database connection pool
+ * to eliminate open handles and lingering TLS sockets
+ */
+export async function teardownTestDb() {
+  try {
+    await closePool();
+    // Allow brief grace period for TLS close notify handshake to finish
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  } catch {
+    // ignore already ended pool
   }
 }
 
