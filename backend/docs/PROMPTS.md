@@ -30,3 +30,18 @@ This log tracks genuine engineering suggestions, identified design trade-offs, d
 - **Correction**: Stored idempotency keys in PostgreSQL (`idempotency_keys` table) with `UNIQUE (user_id, idempotency_key)`. The key reservation and the final response caching are committed atomically with the transaction and ledger entries. If the operation fails, the transaction rolls back cleanly.
 - **Verification**: `tests/integration/idempotency.test.js` verified both identical retries and payload tampering conflict (409).
 
+
+
+## Session 2: 2026-11-05 — Pre-Frontend Compliance Audit & Integration Architecture
+
+### 1. Statement Refusal Tracking vs. Ledger Separation
+- **Initial Suggestion**: Log failed transactions (insufficient funds, authorization rejections) into `ledger_entries` with a status flag.
+- **Flaw Discovered**: Double-entry accounting principles dictate that the financial ledger must strictly reflect executed, committed balance movements. Polluting the immutable ledger with rejected attempts breaks accounting balance calculations and historical reconciliation (`SUM(credit) - SUM(debit) == balance`).
+- **Correction**: Recorded refused operations in the `audit_events` table (`TRANSACTION_WITHDRAW_REFUSED`, `TRANSACTION_TRANSFER_REFUSED`) with exact refusal reasons and attempted amounts. In the dedicated `/api/v1/statements/:accountId` endpoint, committed postings are retrieved from `ledger_entries`, while refused attempts are pulled dynamically from `audit_events`.
+- **Verification**: Verified in `tests/integration/transactions.test.js`, `authorization.test.js`, and `src/modules/statements/statement.service.js`.
+
+### 2. Append-Only Protection at Database Level vs. Application Level
+- **Initial Suggestion**: Rely solely on repository-level methods (omitting `UPDATE` / `DELETE` queries) to guarantee append-only ledger entries.
+- **Flaw Discovered**: Application-level restrictions protect against normal API flows, but do not prevent direct accidental SQL updates or rogue scripts executed directly against the database.
+- **Correction**: Documented the recommendation to install a database trigger or role-based SQL privilege revocation (`REVOKE UPDATE, DELETE ON ledger_entries FROM ...`) to enforce immutability at the PostgreSQL engine level.
+- **Verification**: Reflected in `CHALLENGE_CHECKLIST.md` under Section 2.

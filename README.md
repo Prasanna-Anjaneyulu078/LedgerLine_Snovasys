@@ -51,3 +51,13 @@ Health check endpoint: `http://localhost:5000/health`
 
 Please see [backend/README.md](backend/README.md) for full architecture and API documentation.
 
+---
+
+## 4. Challenge Verification & Architecture Documentation
+
+- **Official Challenge Checklist**: [CHALLENGE_CHECKLIST.md](CHALLENGE_CHECKLIST.md) (10/10 compliance verification & test evidence)
+- **Frontend Integration Plan**: [FRONTEND_INTEGRATION_PLAN.md](FRONTEND_INTEGRATION_PLAN.md) (Exhaustive route inventory, schemas, & component hierarchy)
+- **Threat Model & Security**: [THREATS.md](THREATS.md) (Threat vectors, concurrency races, & mitigations)
+- **AI Session History**: [PROMPTS.md](PROMPTS.md) (Genuine architectural session logs & design trade-offs)
+
+
