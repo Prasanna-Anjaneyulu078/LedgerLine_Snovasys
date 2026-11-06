@@ -82,3 +82,23 @@ This document analyzes security, integrity, and concurrency threats to LedgerLin
 - **Residual Risk**: None for INR paise accounting.
 - **Automated Verification**: `tests/unit/money.test.js`.
 
+---
+
+### Threat 8: Ledger Record Modification or Deletion (Ledger Immutability Breach)
+- **Threat Vector**: A malicious actor, compromised application runtime credentials, SQL injection attack, or rogue internal service attempts to execute `UPDATE` or `DELETE` statements on the `ledger_entries` table to manipulate balances, alter financial statements, or purge historical records.
+- **Mitigation (Defense-in-Depth)**:
+  1. **Database Role Privileges (Layer 1)**:
+     - Dedicated restricted application runtime role (`ledgerline_runtime`) used by the running service.
+     - Runtime role has strictly least-privilege permissions: `SELECT` and `INSERT` on `ledger_entries`.
+     - Explicitly revoked `UPDATE`, `DELETE`, and `TRUNCATE` privileges on `ledger_entries`.
+     - The runtime role does NOT own the tables, schema, or trigger functions, preventing privilege escalation, schema modification, or trigger disabling (PostgreSQL rejects attempts with error `42501 (insufficient_privilege)`).
+  2. **Database Engine Trigger Invariant (Layer 2)**:
+     - PostgreSQL row-level trigger `trg_prevent_ledger_modification` executing `prevent_ledger_modification()` `BEFORE UPDATE OR DELETE ON ledger_entries FOR EACH ROW`.
+     - Even if an update or delete query is issued by the database owner (`neondb_owner`) or another privileged account, the trigger intercepts the operation and raises an exception with SQLSTATE `23000 (integrity_constraint_violation)`.
+  3. **Application Layer (Layer 3)**:
+     - `LedgerRepository` exposes strictly append-only write operations (`create`). No update or delete operations are implemented in the codebase.
+- **Residual Risk**: A database administrator with superuser/owner privileges could drop the trigger or alter table permissions directly in PostgreSQL. Mitigated through separation of owner/migration credentials (`DIRECT_URL`) from runtime credentials (`DATABASE_URL`), cloud audit logging, and external immutable backups.
+- **Automated Verification**: `tests/integration/ledger_immutability.test.js` (`Database-Level Append-Only Ledger Immutability & Role Permission Tests`).
+- **Status**: Verified.
+
+

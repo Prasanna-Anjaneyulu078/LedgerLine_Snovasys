@@ -1,17 +1,43 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import pg from 'pg';
 import { env } from '../../src/config/env.js';
 import { pool, closePool } from '../../src/config/database.js';
 import { runMigrations } from '../../src/database/migrate.js';
 
-// Unified connection pool for test assertions, fixtures, and app operations
+const { Pool } = pg;
+
+// Unified connection pool for test assertions, fixtures, and app operations (runtime role)
 export const testPool = pool;
+
+// Dedicated administrative pool for test schema setup and TRUNCATE cleanup (owner role)
+const adminConnectionString = env.TEST_DIRECT_URL || env.TEST_DATABASE_URL;
+const isAdminSslRequired =
+  adminConnectionString.includes('sslmode=require') ||
+  adminConnectionString.includes('sslmode=verify-full') ||
+  adminConnectionString.includes('ssl=true');
+
+let adminPoolInstance = null;
+
+export function getAdminPool() {
+  if (!adminPoolInstance || adminPoolInstance.ended) {
+    adminPoolInstance = new Pool({
+      connectionString: adminConnectionString,
+      ssl: isAdminSslRequired ? { rejectUnauthorized: true } : false,
+      max: 5,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 15000,
+    });
+  }
+  return adminPoolInstance;
+}
 
 /**
  * Truncate tables for a clean test run with strict safety checks
  */
 export async function cleanDatabase() {
-  const client = await testPool.connect();
+  const admin = getAdminPool();
+  const client = await admin.connect();
   try {
     // 1. Strict safety check: Never truncate non-test databases
     const dbRes = await client.query('SELECT current_database() as db;');
@@ -48,12 +74,15 @@ export async function cleanDatabase() {
 }
 
 /**
- * Cleanly shuts down the shared database connection pool
+ * Cleanly shuts down database connection pools
  * to eliminate open handles and lingering TLS sockets
  */
 export async function teardownTestDb() {
   try {
     await closePool();
+    if (adminPoolInstance && !adminPoolInstance.ended) {
+      await adminPoolInstance.end();
+    }
     // Allow brief grace period for TLS close notify handshake to finish
     await new Promise((resolve) => setTimeout(resolve, 300));
   } catch {

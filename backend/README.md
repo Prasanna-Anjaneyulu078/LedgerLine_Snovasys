@@ -52,8 +52,10 @@ backend/
 │   │   │   ├── 003_create_ledger_entries.sql
 │   │   │   ├── 004_create_transactions.sql
 │   │   │   ├── 005_create_idempotency_keys.sql
-│   │   │   └── 006_create_audit_events.sql
+│   │   │   ├── 006_create_audit_events.sql
+│   │   │   └── 007_prevent_ledger_modification.sql
 │   │   ├── migrate.js              # Safe SQL migration runner with advisory locks
+│   │   ├── setup-runtime-role.js   # Provisions least-privilege application role
 │   │   └── seed.js                 # Seed script with demo accounts and initial ledger
 │   │
 │   ├── modules/
@@ -100,11 +102,12 @@ backend/
 │   ├── unit/
 │   │   └── money.test.js           # Unit tests for paise arithmetic & formatting
 │   └── integration/
-│       ├── auth.test.js            # Authentication & registration tests
-│       ├── transactions.test.js    # Money conservation & double-entry tests
-│       ├── idempotency.test.js     # Idempotent retry & conflict tests
-│       ├── authorization.test.js   # RBAC & account ownership tests
-│       └── concurrency.test.js     # Parallel race condition & deadlock tests
+│       ├── auth.test.js                 # Authentication & registration tests
+│       ├── transactions.test.js         # Money conservation & double-entry tests
+│       ├── idempotency.test.js          # Idempotent retry & conflict tests
+│       ├── authorization.test.js        # RBAC & account ownership tests
+│       ├── concurrency.test.js          # Parallel race condition & deadlock tests
+│       └── ledger_immutability.test.js  # Append-only trigger & runtime role permission tests
 │
 ├── docs/
 │   ├── ARCHITECTURE.md             # Complete architectural blueprints & invariants
@@ -200,26 +203,34 @@ npm install
 ```
 
 ### 4. Execute Migrations
-Applies the 6 sequential raw SQL migration files:
+Applies the 7 sequential raw SQL migration files (including append-only trigger protection):
 ```bash
 npm run migrate
 ```
 
-### 5. Seed Database
+### 5. Setup Restricted Runtime Role (Optional / Production)
+Provisions the least-privilege `ledgerline_runtime` role and configures table grants:
+```bash
+npm run setup:runtime-role
+# For test database:
+npm run setup:runtime-role -- --test
+```
+
+### 6. Seed Database
 Seeds demo users, initial accounts, and opening ledger entries:
 ```bash
 npm run seed
 ```
 
-### 6. Start the Server
+### 7. Start the Server
 ```bash
 npm start
 # For auto-reloading during development:
 npm run dev
 ```
 
-### 7. Run Test Suite
-Runs all 31 automated tests against real Neon PostgreSQL:
+### 8. Run Test Suite
+Runs all 39 automated tests against real Neon PostgreSQL (covering unit tests and 6 integration test suites):
 ```bash
 npm test
 ```

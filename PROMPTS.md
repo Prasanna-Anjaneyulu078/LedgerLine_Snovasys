@@ -45,3 +45,21 @@ This log tracks genuine engineering suggestions, identified design trade-offs, d
 - **Flaw Discovered**: Application-level restrictions protect against normal API flows, but do not prevent direct accidental SQL updates or rogue scripts executed directly against the database.
 - **Correction**: Documented the recommendation to install a database trigger or role-based SQL privilege revocation (`REVOKE UPDATE, DELETE ON ledger_entries FROM ...`) to enforce immutability at the PostgreSQL engine level.
 - **Verification**: Reflected in `CHALLENGE_CHECKLIST.md` under Section 2.
+
+---
+
+## Session 3: 2026-11-06 — Database-Level Append-Only Ledger Hardening & Role Separation
+
+### 1. Dual-Layer Defense-in-Depth vs. Single Layer
+- **Initial Consideration**: Enforcing immutability either via SQL trigger alone OR via PostgreSQL role permissions alone.
+- **Flaw Discovered**: A trigger alone allows the runtime connection to hold `UPDATE` and `DELETE` table privileges; if a bug or malicious actor alters the trigger, the rows become vulnerable. Conversely, role privileges alone leave the table unprotected if queries run through administrative or migration credentials.
+- **Correction**: Implemented dual-layer defense-in-depth:
+  1. **PostgreSQL Trigger (`trg_prevent_ledger_modification`)**: Intercepts any `UPDATE` or `DELETE` attempt `BEFORE` execution and raises SQLSTATE `23000 (integrity_constraint_violation)`.
+  2. **Restricted Runtime Role (`ledgerline_runtime`)**: Table permissions explicitly grant `SELECT` and `INSERT` while revoking `UPDATE`, `DELETE`, and `TRUNCATE` (`42501 insufficient_privilege`).
+- **Verification**: Verified in `tests/integration/ledger_immutability.test.js` where both layers are asserted independently.
+
+### 2. Test Harness Truncation Isolation
+- **Flaw Discovered**: Running integration tests under the restricted runtime role broke test isolation because `cleanDatabase()` calls `TRUNCATE TABLE ... ledger_entries CASCADE`, which requires table ownership or TRUNCATE privileges that the restricted runtime role must not possess.
+- **Correction**: Separated test harness administrative cleanup from runtime application execution. `cleanDatabase()` utilizes `adminPool` via `TEST_DIRECT_URL` (database owner), whereas all application endpoints, repositories, and integration assertions execute through `testPool` via `TEST_DATABASE_URL` (the restricted runtime role `ledgerline_runtime`).
+- **Verification**: Verified with `npm test` passing 39/39 tests across unit and 6 integration test suites.
+

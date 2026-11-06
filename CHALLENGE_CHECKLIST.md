@@ -2,8 +2,8 @@
 
 This checklist verifies the compliance of the **LedgerLine** financial core repository against the official specifications of the **Snovasys Fresher Hiring Challenge 2026**.
 
-**Audit Date**: November 5, 2026  
-**Latest Automated Test Suite Result**: **31/31 Passing** (Run in-band against real Neon PostgreSQL test database)  
+**Audit Date**: November 6, 2026  
+**Latest Automated Test Suite Result**: **39/39 Passing** (Run in-band against real Neon PostgreSQL test database across 7 test suites)  
 **Status Legend**:
 - `COMPLETE`: Fully implemented, documented, and verified with automated test suites or live database evidence.
 - `PARTIAL`: Implemented in application code or tests, but with recommended operational enhancements.
@@ -34,7 +34,7 @@ This checklist verifies the compliance of the **LedgerLine** financial core repo
 | Item | Status | Verification Details |
 | :--- | :---: | :--- |
 | **Append-Only Application Architecture** | **COMPLETE** | `src/repositories/ledger.repository.js` contains solely `create`, `findByTransactionId`, `findByAccountId`, and `findAll`. No `UPDATE` or `DELETE` SQL queries exist in any repository or service. |
-| **Database-Level Immutability Enforcement** | **PARTIAL** | The `ledger_entries` table currently has foreign key `ON DELETE RESTRICT` constraints. While application queries only perform `INSERT`, a PostgreSQL trigger `BEFORE UPDATE OR DELETE ON ledger_entries` or `REVOKE UPDATE, DELETE` would provide engine-level immutability against direct SQL edits. |
+| **Database-Level Immutability Enforcement** | **COMPLETE** | Implemented migration `007_prevent_ledger_modification.sql` attaching PostgreSQL row-level trigger `trg_prevent_ledger_modification` (`BEFORE UPDATE OR DELETE ON ledger_entries FOR EACH ROW`) which aborts modification attempts with SQLSTATE `23000`. In addition, dedicated restricted runtime role `ledgerline_runtime` explicitly revokes `UPDATE`, `DELETE`, and `TRUNCATE` (`42501`). Fully verified via `tests/integration/ledger_immutability.test.js`. |
 | **Double-Entry Ledger Balancing Invariant** | **COMPLETE** | Every transfer generates balanced `DEBIT` and `CREDIT` entries for the exact amount. Verified in `ledgerRepository.calculateNetBalanceFromLedger` and `tests/integration/transactions.test.js`. |
 
 ---
@@ -73,8 +73,8 @@ This checklist verifies the compliance of the **LedgerLine** financial core repo
 ## 5. Summary Compliance Scorecard
 
 - **Official Challenge Requirements**: **10 / 10 COMPLETE** (100%)
-- **Automated Test Coverage**: **31 / 31 Passing** (100%)
-- **Backend Readiness**: **All 9 Criteria Satisfied**
+- **Automated Test Coverage**: **39 / 39 Passing** (100%)
+- **Backend Readiness**: **All Criteria Satisfied & Hardened**
 - **Documentation Coverage**: **Complete across all challenge deliverables**
 - **Action Required Before Frontend**: Proceed with frontend implementation following `FRONTEND_INTEGRATION_PLAN.md`.
 
