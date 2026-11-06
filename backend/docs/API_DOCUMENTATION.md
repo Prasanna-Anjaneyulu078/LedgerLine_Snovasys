@@ -141,8 +141,17 @@
 - **Method**: `POST`
 - **Path**: `/api/v1/transactions/transfer`
 - **Headers**: `Authorization: Bearer <TOKEN>`, `Idempotency-Key: <UUID>`
-- **Authorization**: Must own `sourceAccountId` or be Admin. Auditor forbidden.
-- **Request Body**:
+- **Authorization**: Must own source account or be Admin. Auditor forbidden.
+- **Request Body (Account Number-Based - Preferred)**:
+  ```json
+  {
+    "sourceAccountNumber": "LL-ACC-1001",
+    "destinationAccountNumber": "LL-ACC-2001",
+    "amount": "250.00",
+    "description": "Funds transfer"
+  }
+  ```
+- **Request Body (UUID-Based - Backward Compatible)**:
   ```json
   {
     "sourceAccountId": "07be6ea0-6a47-47da-b514-1da78683bee5",
@@ -162,6 +171,8 @@
       "transactionReference": "TRF-1793893066772-EE1E079F",
       "type": "TRANSFER",
       "status": "SUCCESS",
+      "sourceAccountNumber": "LL-ACC-1001",
+      "destinationAccountNumber": "LL-ACC-2001",
       "sourceAccountId": "07be6ea0-6a47-47da-b514-1da78683bee5",
       "destinationAccountId": "a34f98ca-044d-40c8-8269-df41f2639eab",
       "amountPaise": "25000",

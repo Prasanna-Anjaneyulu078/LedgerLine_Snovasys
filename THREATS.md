@@ -101,4 +101,18 @@ This document analyzes security, integrity, and concurrency threats to LedgerLin
 - **Automated Verification**: `tests/integration/ledger_immutability.test.js` (`Database-Level Append-Only Ledger Immutability & Role Permission Tests`).
 - **Status**: Verified.
 
+---
+
+### Threat 9: Account-Number Enumeration, IDOR, and Unauthorized Source Debiting
+- **Threat Vector**: A malicious user supplies another customer's account number as the `sourceAccountNumber` in a transfer payload or probes arbitrary `destinationAccountNumber` values to discover valid customer account numbers.
+- **Mitigation**:
+  1. **Source Account Ownership Verification**: In `transactionService.transfer()`, the source account is resolved and compared against authenticated `user.id`. Unless the caller is an `ADMIN`, any attempt to specify an account owned by another customer aborts immediately with `403 Forbidden` (`You are not authorized to transfer from this account`).
+  2. **Refusal Auditing**: The unauthorized transfer attempt is permanently recorded in `audit_events` with the caller's ID and attempted parameters.
+  3. **Strict Validation & Lifecycle Checking**: Both source and destination account numbers are validated via regex format constraints (`LL-ACC-XXXX`). Non-existent accounts return `404 Not Found`, identical source and destination accounts return `400 Bad Request`, and frozen/suspended accounts return `400 Bad Request`.
+  4. **Internal Deadlock Prevention Maintained**: User-supplied account numbers are resolved to database rows, and locks are acquired in canonical UUID order (`findTwoForUpdate`) inside an atomic database transaction.
+- **Residual Risk**: High-frequency probing of destination account numbers; mitigated by express rate limiters on API routes.
+- **Automated Verification**: `tests/integration/account_number_transfer.test.js` (20 integration tests covering unauthorized transfer, inactive accounts, same account transfer, invalid formats, concurrent serialization, and money conservation).
+- **Status**: Verified.
+
+
 

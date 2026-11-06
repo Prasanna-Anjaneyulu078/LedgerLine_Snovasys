@@ -99,4 +99,62 @@ This log tracks genuine engineering suggestions, identified design trade-offs, d
 - **Correction**: Updated `DATABASE_URL`, `DIRECT_URL`, `TEST_DATABASE_URL`, and `TEST_DIRECT_URL` in `.env` and `.env.example` to explicitly use `sslmode=verify-full&channel_binding=require`. Added regex normalization in `src/config/env.js` `sanitizeUrl()` so any `sslmode=require` is automatically upgraded to `sslmode=verify-full` while maintaining strict `rejectUnauthorized: true` certificate validation.
 - **Verification**: Database connection test runs with zero deprecation warnings.
 
+---
+
+## Session 5: 2026-11-06 — Implement Account Number-Based Transfers (Source & Destination)
+
+### 1. Dual Identification Support & Backward Compatibility
+- **Initial Suggestion**: Replace `sourceAccountId` and `destinationAccountId` with `sourceAccountNumber` and `destinationAccountNumber` exclusively in validation schemas.
+- **Flaw Discovered**: Completely breaking backward compatibility would fail existing automated tests, external integrations, and legacy clients sending internal UUIDs.
+- **Correction**: Configured Zod `.superRefine` validation in `transaction.validation.js` allowing either pair:
+  1. Primary: `sourceAccountNumber` and `destinationAccountNumber`
+  2. Legacy: `sourceAccountId` and `destinationAccountId`
+  If neither or partial parameters are provided, a descriptive validation error is returned.
+- **Verification**: Tested in `account_number_transfer.test.js` asserting successful execution for both account-number and UUID-based requests.
+
+### 2. Idempotency Request Hash Normalization
+- **Initial Suggestion**: Hash whatever payload keys were provided by the caller directly.
+- **Flaw Discovered**: If a caller retries a transfer using the account number instead of the UUID, a raw payload hash would differ, bypassing the idempotency check and potentially executing the transfer twice.
+- **Correction**: In `transactionService.transfer()`, both account numbers are resolved to their persistent logical IDs, and the SHA-256 idempotency request hash is computed deterministically across resolved accounts: `{ op: 'TRANSFER', sourceAccountId, destinationAccountId, amountPaise: amountPaise.toString() }`.
+- **Verification**: Verified with `account_number_transfer.test.js` (`Duplicate transfer request with same Idempotency-Key returns cached response without duplicate execution`).
+
+### 3. Zod Error Formatting in Integration Assertions
+- **Actual Mistake Encountered**: In `tests/integration/account_number_transfer.test.js` Scenario 7 (same account transfer), the assertion `expect(res.body.message).toMatch(/Source and destination accounts must be different/i)` failed because `validateRequest` middleware formats top-level `message: "Validation failed"` and puts the custom rule message in `res.body.errors[0].message`.
+- **Correction**: Updated the test assertion to inspect the response errors structure `expect(JSON.stringify(res.body)).toMatch(/Source and destination accounts must be different/i)`.
+- **Verification**: All 20 integration tests passed in `account_number_transfer.test.js`.
+
+---
+
+## Human Correction: Account Number-Based Transfers
+
+**Context:** During the implementation of the transfer functionality, the AI initially suggested using internal database account IDs (`sourceAccountId` and `destinationAccountId`) in the transfer request.
+
+**My review and correction:**
+
+I reviewed the suggested API design and identified that requiring users to enter internal database IDs is not user-friendly. Users should identify their accounts using account numbers instead.
+
+I therefore corrected the proposed implementation to use:
+
+- `sourceAccountNumber`
+- `destinationAccountNumber`
+
+**Expected implementation:**
+
+1. The frontend must use account numbers for source and destination account selection.
+2. The transfer API must accept account numbers instead of exposing internal UUIDs.
+3. The backend must resolve both account numbers to their corresponding internal account UUIDs.
+4. All existing database relationships, transaction processing, row-level locking, and ledger entries must continue using internal UUIDs.
+5. Source account ownership must be verified against the authenticated user.
+6. Existing authorization, idempotency, concurrency, double-entry accounting, and append-only ledger protections must remain unchanged.
+
+**Reason for the correction:**
+
+This improves usability without compromising the existing database design or financial transaction security.
+
+**Human contribution:** I reviewed the AI-generated recommendation, identified the API usability limitation, decided on the account-number-based interface, and instructed the AI to modify the implementation while preserving internal UUID-based processing.
+
+**Implementation status:** Completed and verified. The transfer API accepts `sourceAccountNumber` and `destinationAccountNumber` (with backward compatibility for legacy UUIDs), resolves them to internal account UUIDs, validates ownership against authenticated users, preserves deterministic row locking (`findTwoForUpdate`), enforces append-only double-entry ledger postings, and passed all 20 automated integration scenarios in `backend/tests/integration/account_number_transfer.test.js`.
+
+
+
 

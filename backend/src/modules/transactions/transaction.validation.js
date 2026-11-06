@@ -18,16 +18,105 @@ export const withdrawSchema = z.object({
 
 export const transferSchema = z
   .object({
-    sourceAccountId: z.string().uuid('Invalid source account ID format'),
-    destinationAccountId: z.string().uuid('Invalid destination account ID format'),
+    sourceAccountNumber: z
+      .string({ invalid_type_error: 'Source account number must be a string' })
+      .trim()
+      .min(1, 'Source account number is required')
+      .optional(),
+    destinationAccountNumber: z
+      .string({ invalid_type_error: 'Destination account number must be a string' })
+      .trim()
+      .min(1, 'Destination account number is required')
+      .optional(),
+    sourceAccountId: z.string().uuid('Invalid source account ID format').optional(),
+    destinationAccountId: z.string().uuid('Invalid destination account ID format').optional(),
     amount: z.union([z.string(), z.number(), z.bigint()], {
       required_error: 'Amount is required',
     }),
     description: z.string().max(255).optional(),
   })
-  .refine((data) => data.sourceAccountId !== data.destinationAccountId, {
-    message: 'Source and destination accounts must be different',
-    path: ['destinationAccountId'],
+  .superRefine((data, ctx) => {
+    const hasAccountNumbers = Boolean(data.sourceAccountNumber || data.destinationAccountNumber);
+    const hasAccountIds = Boolean(data.sourceAccountId || data.destinationAccountId);
+
+    if (hasAccountNumbers && hasAccountIds) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Provide either account numbers or account IDs, not both',
+        path: ['sourceAccountNumber'],
+      });
+      return;
+    }
+
+    if (!hasAccountNumbers && !hasAccountIds) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Source account number is required',
+        path: ['sourceAccountNumber'],
+      });
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Destination account number is required',
+        path: ['destinationAccountNumber'],
+      });
+      return;
+    }
+
+    if (hasAccountNumbers) {
+      if (!data.sourceAccountNumber) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Source account number is required',
+          path: ['sourceAccountNumber'],
+        });
+      }
+      if (!data.destinationAccountNumber) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Destination account number is required',
+          path: ['destinationAccountNumber'],
+        });
+      }
+      if (
+        data.sourceAccountNumber &&
+        data.destinationAccountNumber &&
+        data.sourceAccountNumber === data.destinationAccountNumber
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Source and destination accounts must be different',
+          path: ['destinationAccountNumber'],
+        });
+      }
+    }
+
+    if (hasAccountIds) {
+      if (!data.sourceAccountId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Source account ID is required',
+          path: ['sourceAccountId'],
+        });
+      }
+      if (!data.destinationAccountId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Destination account ID is required',
+          path: ['destinationAccountId'],
+        });
+      }
+      if (
+        data.sourceAccountId &&
+        data.destinationAccountId &&
+        data.sourceAccountId === data.destinationAccountId
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'Source and destination accounts must be different',
+          path: ['destinationAccountId'],
+        });
+      }
+    }
   });
 
 export const transactionIdParamSchema = z.object({

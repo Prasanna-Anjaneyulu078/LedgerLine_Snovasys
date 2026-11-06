@@ -89,12 +89,40 @@ export const swaggerDocument = {
       },
       TransferRequest: {
         type: 'object',
-        required: ['sourceAccountId', 'destinationAccountId', 'amount'],
+        required: ['sourceAccountNumber', 'destinationAccountNumber', 'amount'],
         properties: {
-          sourceAccountId: { type: 'string', format: 'uuid', example: '6ba7b810-9dad-11d1-80b4-00c04fd430c8' },
-          destinationAccountId: { type: 'string', format: 'uuid', example: '7ba7b810-9dad-11d1-80b4-00c04fd430c9' },
-          amount: { type: 'string', example: '250.00' },
-          description: { type: 'string', example: 'Rent payment split' },
+          sourceAccountNumber: {
+            type: 'string',
+            example: 'LL-ACC-1001',
+            description: 'Source bank account number owned by authenticated user (or managed by Admin)',
+          },
+          destinationAccountNumber: {
+            type: 'string',
+            example: 'LL-ACC-2001',
+            description: 'Destination bank account number to receive the funds',
+          },
+          sourceAccountId: {
+            type: 'string',
+            format: 'uuid',
+            example: '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
+            description: 'Legacy backward-compatible source account UUID',
+          },
+          destinationAccountId: {
+            type: 'string',
+            format: 'uuid',
+            example: '7ba7b810-9dad-11d1-80b4-00c04fd430c9',
+            description: 'Legacy backward-compatible destination account UUID',
+          },
+          amount: {
+            type: 'string',
+            example: '250.00',
+            description: 'Monetary amount in INR (converted to integer paise minor units)',
+          },
+          description: {
+            type: 'string',
+            example: 'Rent payment split',
+            description: 'Optional transaction memo (max 255 chars)',
+          },
         },
       },
       UserStatusUpdateRequest: {
@@ -228,13 +256,65 @@ export const swaggerDocument = {
     '/transactions/transfer': {
       post: {
         summary: 'Transfer funds between accounts with double-entry ledger postings',
+        description:
+          'Executes an atomic double-entry transfer between accounts identified by source and destination account numbers (or legacy UUIDs). Enforces source account ownership, row-level locking, deadlock prevention, positive balance invariants, and creates balanced debit/credit ledger postings.',
         security: [{ BearerAuth: [] }],
-        parameters: [{ name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }],
+        parameters: [
+          {
+            name: 'Idempotency-Key',
+            in: 'header',
+            required: false,
+            schema: { type: 'string' },
+            description: 'Optional unique client key guaranteeing at-most-once execution',
+          },
+        ],
         requestBody: {
           required: true,
           content: { 'application/json': { schema: { $ref: '#/components/schemas/TransferRequest' } } },
         },
-        responses: { 200: { description: 'Transfer successful' } },
+        responses: {
+          200: {
+            description: 'Transfer completed successfully with balanced double-entry ledger postings',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    statusCode: { type: 'integer', example: 200 },
+                    message: { type: 'string', example: 'Transfer completed successfully' },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        transactionId: { type: 'string', format: 'uuid' },
+                        transactionReference: { type: 'string', example: 'TRF-1730911200000-A1B2' },
+                        type: { type: 'string', example: 'TRANSFER' },
+                        status: { type: 'string', example: 'SUCCESS' },
+                        sourceAccountId: { type: 'string', format: 'uuid' },
+                        sourceAccountNumber: { type: 'string', example: 'LL-ACC-1001' },
+                        destinationAccountId: { type: 'string', format: 'uuid' },
+                        destinationAccountNumber: { type: 'string', example: 'LL-ACC-2001' },
+                        amountPaise: { type: 'string', example: '25000' },
+                        amountFormatted: { type: 'string', example: '250.00' },
+                        sourceBalanceAfterPaise: { type: 'string', example: '75000' },
+                        sourceBalanceAfterFormatted: { type: 'string', example: '750.00' },
+                        destinationBalanceAfterPaise: { type: 'string', example: '125000' },
+                        destinationBalanceAfterFormatted: { type: 'string', example: '1250.00' },
+                        ledgerEntries: { type: 'array', items: { type: 'string', format: 'uuid' } },
+                        createdAt: { type: 'string', format: 'date-time' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: { description: 'Validation failed, insufficient funds, or inactive account' },
+          401: { description: 'Missing or invalid authentication token' },
+          403: { description: 'Forbidden: caller is an Auditor or does not own the source account' },
+          404: { description: 'Source or destination account not found' },
+          409: { description: 'Idempotency key conflict or in-flight transaction collision' },
+        },
       },
     },
     '/transactions': {

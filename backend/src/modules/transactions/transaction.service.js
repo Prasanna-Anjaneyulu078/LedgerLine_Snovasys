@@ -374,9 +374,17 @@ export class TransactionService {
 
   /**
    * Process double-entry internal transfer between two accounts
+   * Supports primary account-number based transfers and backward-compatible UUID transfers
    */
   async transfer(
-    { sourceAccountId, destinationAccountId, amount, description = 'Account transfer' },
+    {
+      sourceAccountNumber,
+      destinationAccountNumber,
+      sourceAccountId,
+      destinationAccountId,
+      amount,
+      description = 'Account transfer',
+    },
     user,
     idempotencyKey = null,
     context = {}
@@ -385,8 +393,15 @@ export class TransactionService {
       throw AppError.forbidden('Auditors are restricted from initiating financial transactions');
     }
 
-    if (sourceAccountId === destinationAccountId) {
-      throw AppError.badRequest('Source and destination accounts cannot be identical');
+    const rawSourceAccNum = typeof sourceAccountNumber === 'string' ? sourceAccountNumber.trim() : null;
+    const rawDestAccNum = typeof destinationAccountNumber === 'string' ? destinationAccountNumber.trim() : null;
+
+    if (rawSourceAccNum && rawDestAccNum && rawSourceAccNum === rawDestAccNum) {
+      throw AppError.badRequest('Source and destination accounts must be different');
+    }
+
+    if (sourceAccountId && destinationAccountId && sourceAccountId === destinationAccountId) {
+      throw AppError.badRequest('Source and destination accounts must be different');
     }
 
     const amountPaise = toPaise(amount);
@@ -394,9 +409,114 @@ export class TransactionService {
       throw AppError.badRequest('Transfer amount must be strictly greater than zero');
     }
 
+    // 1. Resolve accounts securely using indexed columns
+    let resolvedSourceAccount = null;
+    let resolvedDestAccount = null;
+
+    if (rawSourceAccNum && rawDestAccNum) {
+      resolvedSourceAccount = await accountRepository.findByAccountNumber(rawSourceAccNum);
+      if (!resolvedSourceAccount) {
+        throw AppError.notFound('Source account not found');
+      }
+
+      resolvedDestAccount = await accountRepository.findByAccountNumber(rawDestAccNum);
+      if (!resolvedDestAccount) {
+        throw AppError.notFound('Destination account not found');
+      }
+    } else if (sourceAccountId && destinationAccountId) {
+      resolvedSourceAccount = await accountRepository.findById(sourceAccountId);
+      if (!resolvedSourceAccount) {
+        throw AppError.notFound('Source account not found');
+      }
+
+      resolvedDestAccount = await accountRepository.findById(destinationAccountId);
+      if (!resolvedDestAccount) {
+        throw AppError.notFound('Destination account not found');
+      }
+    } else {
+      throw AppError.badRequest('Source and destination account numbers are required');
+    }
+
+    if (resolvedSourceAccount.id === resolvedDestAccount.id) {
+      throw AppError.badRequest('Source and destination accounts must be different');
+    }
+
+    const resolvedSourceId = resolvedSourceAccount.id;
+    const resolvedDestId = resolvedDestAccount.id;
+    const resolvedSourceAccNum = resolvedSourceAccount.account_number;
+    const resolvedDestAccNum = resolvedDestAccount.account_number;
+
+    // Fast-path security check: Source account ownership
+    if (user.role !== 'ADMIN' && resolvedSourceAccount.owner_id !== user.id) {
+      await auditRepository
+        .create({
+          actorId: user.id,
+          action: 'TRANSACTION_TRANSFER_REFUSED',
+          resourceType: 'TRANSACTION',
+          metadata: {
+            sourceAccountId: resolvedSourceId,
+            destinationAccountId: resolvedDestId,
+            sourceAccountNumber: resolvedSourceAccNum,
+            destinationAccountNumber: resolvedDestAccNum,
+            amount: amount?.toString() || '0',
+            refusalReason: 'You do not have permission to transfer funds from this source account',
+          },
+          ipAddress: context.ipAddress,
+        })
+        .catch(() => {});
+
+      throw AppError.forbidden('You do not have permission to transfer funds from this source account');
+    }
+
+    // Fast-path security check: Active status
+    if (resolvedSourceAccount.status !== 'ACTIVE') {
+      await auditRepository
+        .create({
+          actorId: user.id,
+          action: 'TRANSACTION_TRANSFER_REFUSED',
+          resourceType: 'TRANSACTION',
+          metadata: {
+            sourceAccountId: resolvedSourceId,
+            destinationAccountId: resolvedDestId,
+            sourceAccountNumber: resolvedSourceAccNum,
+            destinationAccountNumber: resolvedDestAccNum,
+            amount: amount?.toString() || '0',
+            refusalReason: `Source account is not active (status: ${resolvedSourceAccount.status})`,
+          },
+          ipAddress: context.ipAddress,
+        })
+        .catch(() => {});
+
+      throw AppError.badRequest(`Source account is not active (status: ${resolvedSourceAccount.status})`);
+    }
+
+    if (resolvedDestAccount.status !== 'ACTIVE') {
+      await auditRepository
+        .create({
+          actorId: user.id,
+          action: 'TRANSACTION_TRANSFER_REFUSED',
+          resourceType: 'TRANSACTION',
+          metadata: {
+            sourceAccountId: resolvedSourceId,
+            destinationAccountId: resolvedDestId,
+            sourceAccountNumber: resolvedSourceAccNum,
+            destinationAccountNumber: resolvedDestAccNum,
+            amount: amount?.toString() || '0',
+            refusalReason: `Destination account is not active (status: ${resolvedDestAccount.status})`,
+          },
+          ipAddress: context.ipAddress,
+        })
+        .catch(() => {});
+
+      throw AppError.badRequest(`Destination account is not active (status: ${resolvedDestAccount.status})`);
+    }
+
+    // 2. Canonical Idempotency Request Hash based on resolved logical transfer
     const requestHash = this.computeRequestHash('TRANSFER', {
-      sourceAccountId,
-      destinationAccountId,
+      sourceAccountId: resolvedSourceId,
+      destinationAccountId: resolvedDestId,
+      sourceAccountNumber: resolvedSourceAccNum,
+      destinationAccountNumber: resolvedDestAccNum,
       amountPaise: amountPaise.toString(),
     });
 
@@ -408,9 +528,11 @@ export class TransactionService {
 
     const client = await getClient();
     let idempotencyEntryId = null;
+    let inTransaction = false;
 
     try {
       await client.query('BEGIN;');
+      inTransaction = true;
 
       if (idempotencyKey) {
         try {
@@ -429,8 +551,8 @@ export class TransactionService {
 
       // Concurrency Safety: Lock both accounts in deterministic order (by UUID) to eliminate deadlocks
       const [sourceAccount, destAccount] = await accountRepository.findTwoForUpdate(
-        sourceAccountId,
-        destinationAccountId,
+        resolvedSourceId,
+        resolvedDestId,
         client
       );
 
@@ -442,7 +564,7 @@ export class TransactionService {
         throw AppError.notFound('Destination account not found');
       }
 
-      // Ownership authorization check on source account
+      // Re-verify ownership inside transaction lock boundary
       if (user.role !== 'ADMIN' && sourceAccount.owner_id !== user.id) {
         throw AppError.forbidden('You do not have permission to transfer funds from this source account');
       }
@@ -565,24 +687,30 @@ export class TransactionService {
       await client.query('COMMIT;');
       return responseData;
     } catch (error) {
-      await client.query('ROLLBACK;');
+      if (inTransaction) {
+        await client.query('ROLLBACK;').catch(() => {});
+      }
 
       if (idempotencyKey) {
         await idempotencyRepository.deleteByKey(user.id, idempotencyKey).catch(() => {});
       }
 
-      await auditRepository.create({
-        actorId: user.id,
-        action: 'TRANSACTION_TRANSFER_REFUSED',
-        resourceType: 'TRANSACTION',
-        metadata: {
-          sourceAccountId,
-          destinationAccountId,
-          amount: amount.toString(),
-          refusalReason: error.message,
-        },
-        ipAddress: context.ipAddress,
-      }).catch(() => {});
+      await auditRepository
+        .create({
+          actorId: user.id,
+          action: 'TRANSACTION_TRANSFER_REFUSED',
+          resourceType: 'TRANSACTION',
+          metadata: {
+            sourceAccountId: resolvedSourceId || sourceAccountId || null,
+            destinationAccountId: resolvedDestId || destinationAccountId || null,
+            sourceAccountNumber: resolvedSourceAccNum || rawSourceAccNum || null,
+            destinationAccountNumber: resolvedDestAccNum || rawDestAccNum || null,
+            amount: amount?.toString() || '0',
+            refusalReason: error.message,
+          },
+          ipAddress: context.ipAddress,
+        })
+        .catch(() => {});
 
       throw error;
     } finally {
