@@ -27,8 +27,11 @@ export function getAdminPool() {
       connectionString: adminConnectionString,
       ssl: isAdminSslRequired ? { rejectUnauthorized: true } : false,
       max: 5,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 15000,
+      idleTimeoutMillis: 10000,
+      connectionTimeoutMillis: 30000,
+    });
+    adminPoolInstance.on('error', () => {
+      // Ignore background idle disconnects
     });
   }
   return adminPoolInstance;
@@ -37,10 +40,11 @@ export function getAdminPool() {
 /**
  * Truncate tables for a clean test run with strict safety checks
  */
-export async function cleanDatabase() {
-  const admin = getAdminPool();
-  const client = await admin.connect();
+export async function cleanDatabase(retries = 2) {
+  let client = null;
   try {
+    const admin = getAdminPool();
+    client = await admin.connect();
     // 1. Strict safety check: Never truncate non-test databases
     const dbRes = await client.query('SELECT current_database() as db;');
     const dbName = dbRes.rows[0]?.db;
@@ -63,6 +67,7 @@ export async function cleanDatabase() {
 
       if (missingTables.length > 0) {
         client.release();
+        client = null;
         await runMigrations({ isTest: true });
         isSchemaVerified = true;
         return cleanDatabase();
@@ -74,8 +79,24 @@ export async function cleanDatabase() {
     await client.query(
       'TRUNCATE TABLE idempotency_keys, audit_events, ledger_entries, transactions, accounts, users CASCADE;'
     );
+  } catch (err) {
+    if (client) {
+      client.release(true);
+      client = null;
+    }
+    if (retries > 0) {
+      if (adminPoolInstance && !adminPoolInstance.ended) {
+        await adminPoolInstance.end().catch(() => {});
+        adminPoolInstance = null;
+      }
+      await new Promise((r) => setTimeout(r, 1000));
+      return cleanDatabase(retries - 1);
+    }
+    throw err;
   } finally {
-    client.release();
+    if (client) {
+      client.release();
+    }
   }
 }
 
@@ -197,7 +218,8 @@ export async function seedTestFixtures() {
       },
     };
   } catch (err) {
-    await client.query('ROLLBACK;');
+    await client.query('ROLLBACK;').catch(() => {});
+    client.release(true);
     throw err;
   } finally {
     client.release();

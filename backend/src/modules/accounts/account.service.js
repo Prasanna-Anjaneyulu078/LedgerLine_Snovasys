@@ -107,12 +107,13 @@ export class AccountService {
    * Get account statement (ledger history with running balances)
    */
   async getAccountStatement(accountId, user, query = {}) {
-    await this.getAccountById(accountId, user);
+    const account = await this.getAccountById(accountId, user);
 
-    const statement = await ledgerRepository.findByAccountId(accountId, query);
+    const statement = await ledgerRepository.findByAccountId(account.id, query);
 
     return {
-      accountId,
+      accountId: account.id,
+      accountNumber: account.account_number,
       totalEntries: statement.total,
       entries: statement.entries.map((entry) => ({
         id: entry.id,
