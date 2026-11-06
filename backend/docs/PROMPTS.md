@@ -63,3 +63,10 @@ This log tracks genuine engineering suggestions, identified design trade-offs, d
 - **Correction**: Separated test harness administrative cleanup from runtime application execution. `cleanDatabase()` utilizes `adminPool` via `TEST_DIRECT_URL` (database owner), whereas all application endpoints, repositories, and integration assertions execute through `testPool` via `TEST_DATABASE_URL` (the restricted runtime role `ledgerline_runtime`).
 - **Verification**: Verified with `npm test` passing 39/39 tests across unit and 6 integration test suites.
 
+### 3. BigInt Comparison on PostgreSQL SUM() Result
+- **Actual Mistake Encountered**: In `tests/integration/ledger_immutability.test.js`, the test asserted `expect(aliceCalculated).toBe(aliceDbAcc.rows[0].balance)` expecting `9000n`. The test failed with `Expected: 9000n, Received: "9000"`.
+- **Root Cause**: PostgreSQL's `SUM()` aggregate returns a `NUMERIC` type when summing integers, which `node-postgres` parses as a string to prevent precision loss. `accounts.balance` is a `BIGINT` column parsed into JavaScript native `BigInt` (OID 20 parser). Comparing string to BigInt via strict equality failed.
+- **Correction**: Wrapped the returned value with `BigInt(aliceCalculated)` and `BigInt(bobCalculated)` to compare numeric values safely without precision loss.
+- **Fixing Commit URL**: https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/e56267c6fe8cb289b0ff6f0166551097f870950b
+
+
