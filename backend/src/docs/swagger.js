@@ -101,18 +101,6 @@ export const swaggerDocument = {
             example: 'LL-ACC-2001',
             description: 'Destination bank account number to receive the funds',
           },
-          sourceAccountId: {
-            type: 'string',
-            format: 'uuid',
-            example: '6ba7b810-9dad-11d1-80b4-00c04fd430c8',
-            description: 'Legacy backward-compatible source account UUID',
-          },
-          destinationAccountId: {
-            type: 'string',
-            format: 'uuid',
-            example: '7ba7b810-9dad-11d1-80b4-00c04fd430c9',
-            description: 'Legacy backward-compatible destination account UUID',
-          },
           amount: {
             type: 'string',
             example: '250.00',
