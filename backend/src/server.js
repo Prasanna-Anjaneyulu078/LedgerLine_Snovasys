@@ -28,21 +28,16 @@ async function startServer() {
       `API Base URL      : http://localhost:${env.PORT}/api/v1`,
       `API Documentation : http://localhost:${env.PORT}/api-docs`,
       `Database          : ${dbStatus}`,
+      '--------------------------------------------------',
+      'Default User Credentials:',
+      '1. Admin          : admin@ledgerline.internal / Admin@123456',
+      '2. Account Holder : alice@example.com / Alice@123456',
+      '3. Auditor        : auditor@ledgerline.internal / Auditor@123456',
+      '   (User 2 - Bob) : bob@example.com / Bob@123456',
       '==================================================',
     ].join('\n');
 
     console.log(`\n${banner}\n`);
-
-    logger.info(
-      {
-        port: env.PORT,
-        environment: env.NODE_ENV,
-        database: dbStatus,
-        apiDocs: `http://localhost:${env.PORT}/api-docs`,
-        healthCheck: `http://localhost:${env.PORT}/health`,
-      },
-      'LedgerLine Core Server initialized successfully'
-    );
   });
 }
 
