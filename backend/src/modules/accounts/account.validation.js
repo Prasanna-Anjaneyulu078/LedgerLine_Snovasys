@@ -5,9 +5,14 @@ export const createAccountSchema = z.object({
   currency: z.string().length(3).default('INR').optional(),
 });
 
-export const accountIdParamSchema = z.object({
-  accountId: z.string().uuid('Invalid account ID format'),
-});
+export const accountIdParamSchema = z
+  .object({
+    accountId: z.string().trim().min(1, 'Account identifier is required').optional(),
+    accountNumber: z.string().trim().min(1, 'Account identifier is required').optional(),
+  })
+  .refine((data) => Boolean(data.accountId || data.accountNumber), {
+    message: 'Account identifier is required',
+  });
 
 export const statementQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(50).optional(),

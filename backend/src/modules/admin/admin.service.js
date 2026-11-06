@@ -46,7 +46,7 @@ export class AdminService {
   }
 
   async updateAccountStatus(accountId, status, adminUser, context = {}) {
-    const account = await accountRepository.findById(accountId);
+    const account = await accountRepository.findByIdOrAccountNumber(accountId);
     if (!account) {
       throw AppError.notFound('Account not found');
     }
@@ -56,14 +56,14 @@ export class AdminService {
       throw AppError.badRequest(`Invalid account status. Permitted: ${validStatuses.join(', ')}`);
     }
 
-    const updated = await accountRepository.updateStatus(accountId, status);
+    const updated = await accountRepository.updateStatus(account.id, status);
 
     await auditRepository.create({
       actorId: adminUser.id,
       action: 'ADMIN_ACCOUNT_STATUS_UPDATED',
       resourceType: 'ACCOUNT',
-      resourceId: accountId,
-      metadata: { previousStatus: account.status, newStatus: status },
+      resourceId: account.id,
+      metadata: { previousStatus: account.status, newStatus: status, accountNumber: account.account_number },
       ipAddress: context.ipAddress,
     });
 

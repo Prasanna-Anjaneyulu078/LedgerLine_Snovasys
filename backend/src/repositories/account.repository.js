@@ -14,6 +14,23 @@ export class AccountRepository {
     return res.rows[0];
   }
 
+  isUuid(str) {
+    return typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str.trim());
+  }
+
+  /**
+   * Find account by either ID (UUID) or Account Number (e.g. LL-ACC-1001)
+   */
+  async findByIdOrAccountNumber(identifier, client = pool) {
+    if (!identifier) return null;
+    const cleanId = String(identifier).trim();
+    if (this.isUuid(cleanId)) {
+      const byId = await this.findById(cleanId, client);
+      if (byId) return byId;
+    }
+    return await this.findByAccountNumber(cleanId, client);
+  }
+
   /**
    * Find account by ID
    */
@@ -106,13 +123,19 @@ export class AccountRepository {
    * Must be called within an active transaction with a checked-out client!
    */
   async findByIdForUpdate(id, client) {
+    let accountId = id;
+    if (!this.isUuid(id)) {
+      const acc = await this.findByAccountNumber(id, client);
+      if (!acc) return null;
+      accountId = acc.id;
+    }
     const sql = `
       SELECT id, account_number, owner_id, account_type, currency, balance, status, created_at, updated_at
       FROM accounts
       WHERE id = $1
       FOR UPDATE;
     `;
-    const res = await client.query(sql, [id]);
+    const res = await client.query(sql, [accountId]);
     return res.rows[0] || null;
   }
 

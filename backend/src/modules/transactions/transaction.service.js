@@ -60,7 +60,7 @@ export class TransactionService {
   /**
    * Process external funds deposit into an account
    */
-  async deposit({ accountId, amount, description = 'Account deposit' }, user, idempotencyKey = null, context = {}) {
+  async deposit({ accountNumber, accountId, amount, description = 'Account deposit' }, user, idempotencyKey = null, context = {}) {
     if (user.role === 'AUDITOR') {
       throw AppError.forbidden('Auditors are restricted from initiating financial transactions');
     }
@@ -70,7 +70,29 @@ export class TransactionService {
       throw AppError.badRequest('Deposit amount must be strictly greater than zero');
     }
 
-    const requestHash = this.computeRequestHash('DEPOSIT', { accountId, amountPaise: amountPaise.toString() });
+    const targetIdentifier = accountNumber || accountId;
+    if (!targetIdentifier) {
+      throw AppError.badRequest('Account number is required');
+    }
+
+    // Resolve target account first
+    const targetAccount = await accountRepository.findByIdOrAccountNumber(targetIdentifier);
+    if (!targetAccount) {
+      throw AppError.notFound('Destination account not found');
+    }
+
+    if (targetAccount.status !== 'ACTIVE') {
+      throw AppError.badRequest(`Cannot deposit to account with status: ${targetAccount.status}`);
+    }
+
+    const resolvedAccountId = targetAccount.id;
+    const resolvedAccountNumber = targetAccount.account_number;
+
+    const requestHash = this.computeRequestHash('DEPOSIT', {
+      accountId: resolvedAccountId,
+      accountNumber: resolvedAccountNumber,
+      amountPaise: amountPaise.toString(),
+    });
 
     // Check Idempotency
     const idempotencyRecord = await this.checkIdempotency(user.id, idempotencyKey, requestHash);
@@ -100,8 +122,8 @@ export class TransactionService {
         }
       }
 
-      // Lock destination account
-      const account = await accountRepository.findByIdForUpdate(accountId, client);
+      // Lock destination account using resolved UUID
+      const account = await accountRepository.findByIdForUpdate(resolvedAccountId, client);
       if (!account) {
         throw AppError.notFound('Destination account not found');
       }
@@ -199,8 +221,12 @@ export class TransactionService {
         actorId: user.id,
         action: 'TRANSACTION_DEPOSIT_REFUSED',
         resourceType: 'ACCOUNT',
-        resourceId: accountId,
-        metadata: { amount: amount.toString(), refusalReason: error.message },
+        resourceId: resolvedAccountId || accountId || null,
+        metadata: {
+          accountNumber: resolvedAccountNumber || accountNumber || null,
+          amount: amount.toString(),
+          refusalReason: error.message,
+        },
         ipAddress: context.ipAddress,
       }).catch(() => {});
 
@@ -213,7 +239,7 @@ export class TransactionService {
   /**
    * Process withdrawal from an account
    */
-  async withdraw({ accountId, amount, description = 'Account withdrawal' }, user, idempotencyKey = null, context = {}) {
+  async withdraw({ accountNumber, accountId, amount, description = 'Account withdrawal' }, user, idempotencyKey = null, context = {}) {
     if (user.role === 'AUDITOR') {
       throw AppError.forbidden('Auditors are restricted from initiating financial transactions');
     }
@@ -223,7 +249,34 @@ export class TransactionService {
       throw AppError.badRequest('Withdrawal amount must be strictly greater than zero');
     }
 
-    const requestHash = this.computeRequestHash('WITHDRAWAL', { accountId, amountPaise: amountPaise.toString() });
+    const targetIdentifier = accountNumber || accountId;
+    if (!targetIdentifier) {
+      throw AppError.badRequest('Account number is required');
+    }
+
+    // Fast-path lookup to verify account exists and check ownership before acquiring lock
+    const targetAccount = await accountRepository.findByIdOrAccountNumber(targetIdentifier);
+    if (!targetAccount) {
+      throw AppError.notFound('Source account not found');
+    }
+
+    // Ownership authorization check (fast-path pre-check)
+    if (user.role !== 'ADMIN' && targetAccount.owner_id !== user.id) {
+      throw AppError.forbidden('You do not have permission to withdraw from this account');
+    }
+
+    if (targetAccount.status !== 'ACTIVE') {
+      throw AppError.badRequest(`Cannot withdraw from account with status: ${targetAccount.status}`);
+    }
+
+    const resolvedAccountId = targetAccount.id;
+    const resolvedAccountNumber = targetAccount.account_number;
+
+    const requestHash = this.computeRequestHash('WITHDRAWAL', {
+      accountId: resolvedAccountId,
+      accountNumber: resolvedAccountNumber,
+      amountPaise: amountPaise.toString(),
+    });
 
     // Check Idempotency
     const idempotencyRecord = await this.checkIdempotency(user.id, idempotencyKey, requestHash);
@@ -252,13 +305,13 @@ export class TransactionService {
         }
       }
 
-      // Lock source account
-      const account = await accountRepository.findByIdForUpdate(accountId, client);
+      // Lock source account using resolved UUID
+      const account = await accountRepository.findByIdForUpdate(resolvedAccountId, client);
       if (!account) {
         throw AppError.notFound('Source account not found');
       }
 
-      // Ownership authorization check
+      // Ownership authorization check inside lock
       if (user.role !== 'ADMIN' && account.owner_id !== user.id) {
         throw AppError.forbidden('You do not have permission to withdraw from this account');
       }
@@ -361,8 +414,12 @@ export class TransactionService {
         actorId: user.id,
         action: 'TRANSACTION_WITHDRAW_REFUSED',
         resourceType: 'ACCOUNT',
-        resourceId: accountId,
-        metadata: { amount: amount.toString(), refusalReason: error.message },
+        resourceId: resolvedAccountId || accountId || null,
+        metadata: {
+          accountNumber: resolvedAccountNumber || accountNumber || null,
+          amount: amount.toString(),
+          refusalReason: error.message,
+        },
         ipAddress: context.ipAddress,
       }).catch(() => {});
 
@@ -719,10 +776,16 @@ export class TransactionService {
   }
 
   /**
-   * Get transaction details by ID
+   * Get transaction details by ID or Reference
    */
   async getTransactionById(transactionId, user) {
-    const txn = await transactionRepository.findById(transactionId);
+    let txn = null;
+    if (accountRepository.isUuid(transactionId)) {
+      txn = await transactionRepository.findById(transactionId);
+    }
+    if (!txn) {
+      txn = await transactionRepository.findByReference(transactionId);
+    }
     if (!txn) {
       throw AppError.notFound('Transaction not found');
     }
@@ -761,8 +824,20 @@ export class TransactionService {
    * Get transactions with filtering (role-based)
    */
   async getTransactions(user, query = {}) {
+    let filterAccountId = query.accountId || null;
+    if (query.accountNumber) {
+      const acc = await accountRepository.findByAccountNumber(query.accountNumber);
+      if (!acc) {
+        return { transactions: [], total: 0 };
+      }
+      filterAccountId = acc.id;
+    }
+
     if (user.role === 'ADMIN' || user.role === 'AUDITOR') {
-      const result = await transactionRepository.findAll(query);
+      const result = await transactionRepository.findAll({
+        ...query,
+        accountId: filterAccountId,
+      });
       return {
         ...result,
         transactions: result.transactions.map((t) => ({
@@ -781,14 +856,14 @@ export class TransactionService {
       return { transactions: [], total: 0 };
     }
 
-    // If query.accountId is specified, ensure user owns it
-    if (query.accountId && !userAccountIds.includes(query.accountId)) {
+    // If filterAccountId is specified, ensure user owns it
+    if (filterAccountId && !userAccountIds.includes(filterAccountId)) {
       throw AppError.forbidden('You do not have permission to inspect transactions for this account');
     }
 
     const result = await transactionRepository.findAll({
       ...query,
-      accountId: query.accountId || null,
+      accountId: filterAccountId,
     });
 
     // Filter to ensure only transactions related to user's accounts

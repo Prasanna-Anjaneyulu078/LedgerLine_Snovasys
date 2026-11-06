@@ -9,7 +9,7 @@ export class StatementService {
    * Generates a comprehensive account statement with running balances and refused attempts
    */
   async getStatement(accountId, user, query = {}) {
-    const account = await accountRepository.findById(accountId);
+    const account = await accountRepository.findByIdOrAccountNumber(accountId);
     if (!account) {
       throw AppError.notFound('Account not found');
     }
@@ -19,7 +19,7 @@ export class StatementService {
     }
 
     // 1. Fetch committed ledger entries
-    const ledgerData = await ledgerRepository.findByAccountId(accountId, query);
+    const ledgerData = await ledgerRepository.findByAccountId(account.id, query);
 
     // 2. Fetch refused attempts from audit events for this account
     const auditData = await auditRepository.findAll({
@@ -28,7 +28,7 @@ export class StatementService {
     });
 
     const refusedAttempts = auditData.events
-      .filter((ev) => ev.resource_id === accountId && ev.action.includes('REFUSED'))
+      .filter((ev) => (ev.resource_id === account.id || ev.metadata?.accountNumber === account.account_number) && ev.action.includes('REFUSED'))
       .map((ev) => ({
         id: ev.id,
         action: ev.action,

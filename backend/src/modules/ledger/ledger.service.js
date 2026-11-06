@@ -25,7 +25,7 @@ export class LedgerService {
    * Account-specific ledger view with running balance verification
    */
   async getAccountLedgerEntries(accountId, user, query = {}) {
-    const account = await accountRepository.findById(accountId);
+    const account = await accountRepository.findByIdOrAccountNumber(accountId);
     if (!account) {
       throw AppError.notFound('Account not found');
     }
@@ -34,11 +34,11 @@ export class LedgerService {
       throw AppError.forbidden('You do not have permission to view the ledger for this account');
     }
 
-    const result = await ledgerRepository.findByAccountId(accountId, query);
-    const netCalculatedPaise = await ledgerRepository.calculateNetBalanceFromLedger(accountId);
+    const result = await ledgerRepository.findByAccountId(account.id, query);
+    const netCalculatedPaise = await ledgerRepository.calculateNetBalanceFromLedger(account.id);
 
     return {
-      accountId,
+      accountId: account.id,
       accountNumber: account.account_number,
       currentBalancePaise: account.balance.toString(),
       currentBalanceFormatted: formatRupees(account.balance),

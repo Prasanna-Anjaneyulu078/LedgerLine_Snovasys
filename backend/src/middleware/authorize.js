@@ -27,28 +27,38 @@ export function authorize(...allowedRoles) {
  * Enforces account-level authorization:
  * - ADMIN and AUDITOR can access for administrative / audit purposes.
  * - ACCOUNT_HOLDER can ONLY access accounts they own.
- * @param {string} accountIdParamKey - name of request parameter containing accountId (default 'accountId')
+ * Resolves both public account numbers (e.g. LL-ACC-1001) and internal account UUIDs.
+ * Sets req.targetAccount, req.params.accountId, and req.params.accountNumber.
+ * @param {string} accountIdParamKey - name of request parameter containing identifier
  */
-export function authorizeAccountAccess(accountIdParamKey = 'accountId') {
+export function authorizeAccountAccess(accountIdParamKey = 'accountNumber') {
   return async (req, res, next) => {
     try {
       if (!req.user) {
         return next(AppError.unauthorized('Authentication required'));
       }
 
-      const accountId = req.params[accountIdParamKey];
-      if (!accountId) {
+      const identifier =
+        req.params[accountIdParamKey] ||
+        req.params.accountNumber ||
+        req.params.accountId ||
+        req.params.id;
+
+      if (!identifier) {
         return next(AppError.badRequest(`Missing account parameter: ${accountIdParamKey}`));
       }
 
-      const account = await accountRepository.findById(accountId);
+      const account = await accountRepository.findByIdOrAccountNumber(identifier);
       if (!account) {
         return next(AppError.notFound('Account not found'));
       }
 
+      req.targetAccount = account;
+      req.params.accountId = account.id;
+      req.params.accountNumber = account.account_number;
+
       // Admins and auditors have broad inspection privileges
       if (req.user.role === 'ADMIN' || req.user.role === 'AUDITOR') {
-        req.targetAccount = account;
         return next();
       }
 
@@ -57,7 +67,6 @@ export function authorizeAccountAccess(accountIdParamKey = 'accountId') {
         return next(AppError.forbidden('You do not have permission to access this account'));
       }
 
-      req.targetAccount = account;
       next();
     } catch (error) {
       next(error);

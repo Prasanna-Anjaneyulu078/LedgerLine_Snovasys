@@ -7,7 +7,7 @@ const statementRouter = Router();
 
 statementRouter.use(authenticate);
 
-statementRouter.get('/:accountId', authorizeAccountAccess('accountId'), statementController.getStatement);
+statementRouter.get('/:accountNumber', authorizeAccountAccess('accountNumber'), statementController.getStatement);
 
 export { statementRouter };
 

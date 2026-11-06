@@ -72,7 +72,7 @@ export class AccountService {
    * Get single account details
    */
   async getAccountById(accountId, user) {
-    const account = await accountRepository.findById(accountId);
+    const account = await accountRepository.findByIdOrAccountNumber(accountId);
     if (!account) {
       throw AppError.notFound('Account not found');
     }

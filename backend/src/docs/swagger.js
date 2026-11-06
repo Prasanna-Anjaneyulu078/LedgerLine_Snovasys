@@ -71,18 +71,26 @@ export const swaggerDocument = {
       },
       DepositRequest: {
         type: 'object',
-        required: ['accountId', 'amount'],
+        required: ['accountNumber', 'amount'],
         properties: {
-          accountId: { type: 'string', format: 'uuid', example: '6ba7b810-9dad-11d1-80b4-00c04fd430c8' },
+          accountNumber: {
+            type: 'string',
+            example: 'LL-ACC-1001',
+            description: 'Destination bank account number',
+          },
           amount: { type: 'string', example: '500.00' },
           description: { type: 'string', example: 'Direct salary deposit' },
         },
       },
       WithdrawalRequest: {
         type: 'object',
-        required: ['accountId', 'amount'],
+        required: ['accountNumber', 'amount'],
         properties: {
-          accountId: { type: 'string', format: 'uuid', example: '6ba7b810-9dad-11d1-80b4-00c04fd430c8' },
+          accountNumber: {
+            type: 'string',
+            example: 'LL-ACC-1001',
+            description: 'Source bank account number owned by authenticated user',
+          },
           amount: { type: 'string', example: '150.00' },
           description: { type: 'string', example: 'ATM Cash Withdrawal' },
         },
@@ -189,28 +197,50 @@ export const swaggerDocument = {
         responses: { 201: { description: 'Account created' } },
       },
     },
-    '/accounts/{accountId}': {
+    '/accounts/{accountNumber}': {
       get: {
         summary: 'Get single account details',
         security: [{ BearerAuth: [] }],
-        parameters: [{ name: 'accountId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        parameters: [
+          {
+            name: 'accountNumber',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', example: 'LL-ACC-1001' },
+            description: 'Account number (or UUID)',
+          },
+        ],
         responses: { 200: { description: 'Account details retrieved' } },
       },
     },
-    '/accounts/{accountId}/balance': {
+    '/accounts/{accountNumber}/balance': {
       get: {
         summary: 'Get account balance',
         security: [{ BearerAuth: [] }],
-        parameters: [{ name: 'accountId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        parameters: [
+          {
+            name: 'accountNumber',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', example: 'LL-ACC-1001' },
+            description: 'Account number (or UUID)',
+          },
+        ],
         responses: { 200: { description: 'Balance retrieved' } },
       },
     },
-    '/accounts/{accountId}/statement': {
+    '/accounts/{accountNumber}/statement': {
       get: {
         summary: 'Get account statement and running balances',
         security: [{ BearerAuth: [] }],
         parameters: [
-          { name: 'accountId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          {
+            name: 'accountNumber',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', example: 'LL-ACC-1001' },
+            description: 'Account number (or UUID)',
+          },
           { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 50 } },
           { name: 'offset', in: 'query', required: false, schema: { type: 'integer', default: 0 } },
         ],
@@ -310,7 +340,8 @@ export const swaggerDocument = {
         summary: 'List transactions',
         security: [{ BearerAuth: [] }],
         parameters: [
-          { name: 'accountId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+          { name: 'accountNumber', in: 'query', required: false, schema: { type: 'string', example: 'LL-ACC-1001' }, description: 'Filter by account number' },
+          { name: 'accountId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' }, description: 'Filter by account UUID (legacy)' },
           { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 50 } },
           { name: 'offset', in: 'query', required: false, schema: { type: 'integer', default: 0 } },
         ],
@@ -321,16 +352,16 @@ export const swaggerDocument = {
       get: {
         summary: 'Get single transaction details and double-entry ledger postings',
         security: [{ BearerAuth: [] }],
-        parameters: [{ name: 'transactionId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        parameters: [{ name: 'transactionId', in: 'path', required: true, schema: { type: 'string', example: 'TRF-1730911200000-A1B2' }, description: 'Transaction UUID or reference' }],
         responses: { 200: { description: 'Transaction details retrieved' } },
       },
     },
-    '/statements/{accountId}': {
+    '/statements/{accountNumber}': {
       get: {
         summary: 'Get full account statement with committed postings and audited refused attempts',
         security: [{ BearerAuth: [] }],
         parameters: [
-          { name: 'accountId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { name: 'accountNumber', in: 'path', required: true, schema: { type: 'string', example: 'LL-ACC-1001' }, description: 'Account number (or UUID)' },
           { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 50 } },
           { name: 'offset', in: 'query', required: false, schema: { type: 'integer', default: 0 } },
         ],
@@ -348,11 +379,11 @@ export const swaggerDocument = {
         responses: { 200: { description: 'Ledger list' } },
       },
     },
-    '/ledger/{accountId}': {
+    '/ledger/{accountNumber}': {
       get: {
         summary: 'Get account ledger entries and consistency verification',
         security: [{ BearerAuth: [] }],
-        parameters: [{ name: 'accountId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        parameters: [{ name: 'accountNumber', in: 'path', required: true, schema: { type: 'string', example: 'LL-ACC-1001' }, description: 'Account number (or UUID)' }],
         responses: { 200: { description: 'Account ledger' } },
       },
     },

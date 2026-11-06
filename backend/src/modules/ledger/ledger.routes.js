@@ -8,7 +8,7 @@ const ledgerRouter = Router();
 ledgerRouter.use(authenticate);
 
 ledgerRouter.get('/', authorize('ADMIN', 'AUDITOR'), ledgerController.getAllLedgerEntries);
-ledgerRouter.get('/:accountId', authorizeAccountAccess('accountId'), ledgerController.getAccountLedgerEntries);
+ledgerRouter.get('/:accountNumber', authorizeAccountAccess('accountNumber'), ledgerController.getAccountLedgerEntries);
 
 export { ledgerRouter };
 

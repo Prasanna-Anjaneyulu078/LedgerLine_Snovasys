@@ -1,20 +1,50 @@
 import { z } from 'zod';
 
-export const depositSchema = z.object({
-  accountId: z.string().uuid('Invalid account ID format'),
-  amount: z.union([z.string(), z.number(), z.bigint()], {
-    required_error: 'Amount is required',
-  }),
-  description: z.string().max(255).optional(),
-});
+export const depositSchema = z
+  .object({
+    accountNumber: z
+      .string({ invalid_type_error: 'Account number must be a string' })
+      .trim()
+      .min(1, 'Account number is required')
+      .optional(),
+    accountId: z.string().uuid('Invalid account ID format').optional(),
+    amount: z.union([z.string(), z.number(), z.bigint()], {
+      required_error: 'Amount is required',
+    }),
+    description: z.string().max(255).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.accountNumber && !data.accountId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Account number is required',
+        path: ['accountNumber'],
+      });
+    }
+  });
 
-export const withdrawSchema = z.object({
-  accountId: z.string().uuid('Invalid account ID format'),
-  amount: z.union([z.string(), z.number(), z.bigint()], {
-    required_error: 'Amount is required',
-  }),
-  description: z.string().max(255).optional(),
-});
+export const withdrawSchema = z
+  .object({
+    accountNumber: z
+      .string({ invalid_type_error: 'Account number must be a string' })
+      .trim()
+      .min(1, 'Account number is required')
+      .optional(),
+    accountId: z.string().uuid('Invalid account ID format').optional(),
+    amount: z.union([z.string(), z.number(), z.bigint()], {
+      required_error: 'Amount is required',
+    }),
+    description: z.string().max(255).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.accountNumber && !data.accountId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Account number is required',
+        path: ['accountNumber'],
+      });
+    }
+  });
 
 export const transferSchema = z
   .object({
@@ -120,13 +150,14 @@ export const transferSchema = z
   });
 
 export const transactionIdParamSchema = z.object({
-  transactionId: z.string().uuid('Invalid transaction ID format'),
+  transactionId: z.string().trim().min(1, 'Transaction identifier is required'),
 });
 
 export const transactionQuerySchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(50).optional(),
   offset: z.coerce.number().min(0).default(0).optional(),
   accountId: z.string().uuid().optional(),
+  accountNumber: z.string().trim().optional(),
   status: z.enum(['PENDING', 'SUCCESS', 'FAILED', 'REFUSED']).optional(),
   type: z.enum(['DEPOSIT', 'WITHDRAWAL', 'TRANSFER']).optional(),
   startDate: z.string().datetime().optional(),

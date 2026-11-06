@@ -24,24 +24,24 @@ accountRouter.post(
 accountRouter.get('/', accountController.getAccounts);
 
 accountRouter.get(
-  '/:accountId',
+  '/:accountNumber',
   validate(accountIdParamSchema, 'params'),
-  authorizeAccountAccess('accountId'),
+  authorizeAccountAccess('accountNumber'),
   accountController.getAccountById
 );
 
 accountRouter.get(
-  '/:accountId/balance',
+  '/:accountNumber/balance',
   validate(accountIdParamSchema, 'params'),
-  authorizeAccountAccess('accountId'),
+  authorizeAccountAccess('accountNumber'),
   accountController.getAccountBalance
 );
 
 accountRouter.get(
-  '/:accountId/statement',
+  '/:accountNumber/statement',
   validate(accountIdParamSchema, 'params'),
   validate(statementQuerySchema, 'query'),
-  authorizeAccountAccess('accountId'),
+  authorizeAccountAccess('accountNumber'),
   accountController.getAccountStatement
 );
 
