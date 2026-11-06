@@ -51,7 +51,6 @@ export const swaggerDocument = {
           fullName: { type: 'string', example: 'Alice Sharma' },
           email: { type: 'string', format: 'email', example: 'alice@example.com' },
           password: { type: 'string', format: 'password', example: 'Alice@123456' },
-          role: { type: 'string', enum: ['ADMIN', 'ACCOUNT_HOLDER', 'AUDITOR'], example: 'ACCOUNT_HOLDER' },
         },
       },
       UserLogin: {

@@ -155,6 +155,36 @@ This improves usability without compromising the existing database design or fin
 
 **Implementation status:** Completed and verified. The transfer API accepts `sourceAccountNumber` and `destinationAccountNumber` (with backward compatibility for legacy UUIDs), resolves them to internal account UUIDs, validates ownership against authenticated users, preserves deterministic row locking (`findTwoForUpdate`), enforces append-only double-entry ledger postings, and passed all 20 automated integration scenarios in `backend/tests/integration/account_number_transfer.test.js`.
 
+---
+
+## Session 6: 2026-11-07 — Registration Security & Privilege Escalation Prevention
+
+### 1. Public Registration Schema Vulnerability & Role Injection
+- **Context & User Request**:
+  Audit and secure the public registration flow to prevent privilege escalation. A normal user must not be able to register as `ADMIN` or `AUDITOR` by modifying the HTTP request payload. Public registration must always create an `ACCOUNT_HOLDER`.
+- **Flaws Discovered During Security Audit**:
+  1. **Schema Vulnerability**: In `backend/src/modules/auth/auth.validation.js`, `registerSchema` explicitly included `role: z.enum(['ADMIN', 'ACCOUNT_HOLDER', 'AUDITOR']).default('ACCOUNT_HOLDER').optional()` and omitted `.strict()`. This permitted clients to send `{"role": "ADMIN"}` or `{"role": "AUDITOR"}`, which passed validation successfully.
+  2. **Service Parameter Passthrough**: In `backend/src/modules/auth/auth.service.js`, `register({ fullName, email, password, role = 'ACCOUNT_HOLDER' }, context)` unpacked the client-supplied `role` and passed it directly to `userRepository.create()`.
+  3. **Controller Passthrough**: In `backend/src/modules/auth/auth.controller.js`, `authController.register` passed `req.body` without field filtering.
+  4. **PostgreSQL Insertion**: In `backend/src/repositories/user.repository.js`, the parameterized query `INSERT INTO users (full_name, email, password_hash, role, is_active) VALUES ($1, $2, $3, $4, true)` inserted `$4` directly. Because the PostgreSQL `CHECK (role IN ('ADMIN', 'ACCOUNT_HOLDER', 'AUDITOR'))` constraint accepts `ADMIN` and `AUDITOR`, the injected role was committed to the database.
+  5. **JWT & Identity Escalation**: The issued JWT and `req.user` in `authenticate` middleware loaded `user.role` from the database row, giving the attacker full administrative access across `authorize('ADMIN')` endpoints.
+- **Architectural Corrections (Defense-in-Depth)**:
+  1. **Strict Zod Validation (Layer 1)**: Removed `role` entirely from `registerSchema` in `auth.validation.js` and appended `.strict()`. Any client payload containing unexpected or privileged fields (`role`, `isAdmin`, `permissions`, `isVerified`, etc.) fails validation immediately with `400 Bad Request` (`Validation failed`).
+  2. **Controller Whitelisting (Layer 2)**: Modified `auth.controller.js` to explicitly destructure only `{ fullName, email, password }` from `req.body` and pass only those fields to the service layer.
+  3. **Authoritative Server-Side Role Enforcement (Layer 3)**: Updated `auth.service.js` to unconditionally bind `const role = 'ACCOUNT_HOLDER'`. The service ignores any client-supplied role parameter, eliminating any mechanism for public registration to assign `ADMIN` or `AUDITOR` roles.
+  4. **API Documentation Alignment**: Removed the `role` property from the `UserRegister` schema in `swagger.js`.
+  5. **Comprehensive Automated Test Suite**: Expanded `tests/integration/auth.test.js` from 7 tests to 18 tests covering:
+     - Test A: Normal registration assigns `ACCOUNT_HOLDER`, hashes password with bcrypt, and profile verification via `GET /api/v1/auth/me` returns `ACCOUNT_HOLDER`.
+     - Test B: `ADMIN` role injection rejected with 400 and no user created in the database.
+     - Test C: `AUDITOR` role injection rejected with 400 and no user created in the database.
+     - Test D: Alternative/lowercase role strings (`admin`, `auditor`, `ACCOUNT_HOLDER`, `SUPER_ADMIN`, `ROOT`) rejected with 400.
+     - Test E: Privilege fields (`isAdmin`, `permissions`, `isVerified`) rejected with 400.
+     - Service Defense-in-Depth: Direct invocation of `authService.register` with `role: 'ADMIN'` strictly forces `ACCOUNT_HOLDER` in the database.
+     - JWT Tampering Protection: Client-forged JWT with tampered role claim rejected with 401.
+     - Privileged Route Access: Verified that regular users and auditors cannot access admin endpoints (`403 Forbidden`).
+- **Verification**: Executed automated test suite against Neon PostgreSQL test database (`TEST_DATABASE_URL`). All 18 auth tests and 30 API verification tests passed with 100% success rate.
+
+
 
 
 

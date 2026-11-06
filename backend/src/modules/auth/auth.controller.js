@@ -7,7 +7,8 @@ export class AuthController {
     const context = {
       ipAddress: req.ip || req.connection?.remoteAddress,
     };
-    const result = await authService.register(req.body, context);
+    const { fullName, email, password } = req.body;
+    const result = await authService.register({ fullName, email, password }, context);
     res.status(201).json(ApiResponse.created(result, 'User registered successfully'));
   });
 

@@ -9,8 +9,10 @@ import { AppError } from '../../utils/appError.js';
 export class AuthService {
   /**
    * Register a new user
+   * Public registration always assigns the ACCOUNT_HOLDER role.
+   * Client-supplied role values are never accepted or used.
    */
-  async register({ fullName, email, password, role = 'ACCOUNT_HOLDER' }, context = {}) {
+  async register({ fullName, email, password }, context = {}) {
     const existingUser = await userRepository.findByEmail(email);
     if (existingUser) {
       await auditRepository.create({
@@ -23,6 +25,9 @@ export class AuthService {
     }
 
     const passwordHash = await bcrypt.hash(password, env.BCRYPT_SALT_ROUNDS);
+
+    // Enforce server-side role assignment: public registration ALWAYS creates an ACCOUNT_HOLDER
+    const role = 'ACCOUNT_HOLDER';
 
     const newUser = await userRepository.create({
       fullName,

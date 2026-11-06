@@ -114,5 +114,24 @@ This document analyzes security, integrity, and concurrency threats to LedgerLin
 - **Automated Verification**: `tests/integration/account_number_transfer.test.js` (20 integration tests covering unauthorized transfer, inactive accounts, same account transfer, invalid formats, concurrent serialization, and money conservation).
 - **Status**: Verified.
 
+---
+
+### Threat 10: Privilege Escalation Through Public Registration
+- **Threat Vector**: A malicious actor registers a new user via `POST /api/v1/auth/register` and injects a privileged role in the HTTP request payload (e.g. `{"role": "ADMIN"}` or `{"role": "AUDITOR"}`), alternative case variations (`"admin"`, `"auditor"`, `"SUPER_ADMIN"`), or elevated privilege flags (`{"isAdmin": true}`, `{"permissions": ["*"]}`, `{"isVerified": true}`). If client-supplied role values are accepted, stripped without strict rejection, or forwarded to the database insertion query, an unauthorized user gains administrative or audit rights.
+- **Potential Impact**: Complete compromise of system authorization boundaries. An attacker registering as `ADMIN` gains total control over system users and accounts, including freezing/unfreezing customer accounts and viewing all system-wide financial accounts. An attacker registering as `AUDITOR` obtains unauthorized visibility into the global financial ledger and institution-wide audit trail.
+- **Root Cause**:
+  1. Insecure validation schema: `registerSchema` previously defined an optional `role` enum (`z.enum(['ADMIN', 'ACCOUNT_HOLDER', 'AUDITOR']).default('ACCOUNT_HOLDER').optional()`) and omitted `.strict()`, allowing clients to provide trusted roles directly in the payload.
+  2. Direct parameter passthrough: The controller forwarded the raw request body to the service layer, and `authService.register({ fullName, email, password, role = 'ACCOUNT_HOLDER' })` unpacked the client-supplied role and passed it directly to `userRepository.create()`, allowing client input to dictate database insertion values.
+- **Mitigation (Defense-in-Depth)**:
+  1. **Strict Zod Validation (Layer 1)**: In `src/modules/auth/auth.validation.js`, `registerSchema` defines strictly required public fields (`fullName`, `email`, `password`) and enforces `.strict()`. Any unexpected or privilege-related fields (`role`, `isAdmin`, `permissions`, `isVerified`, etc.) are rejected immediately with `400 Bad Request` (`Validation failed`).
+  2. **Controller-Level Input Whitelisting (Layer 2)**: In `src/modules/auth/auth.controller.js`, the register handler explicitly destructures only trusted fields `{ fullName, email, password }` from `req.body`, ensuring client-injected parameters cannot reach the service.
+  3. **Authoritative Server-Side Role Enforcement (Layer 3)**: In `src/modules/auth/auth.service.js`, public registration unconditionally and immutably binds `const role = 'ACCOUNT_HOLDER'`. The service ignores any client-supplied role parameter, eliminating any mechanism for public registration to assign `ADMIN` or `AUDITOR` roles.
+  4. **Parameterized SQL Insertion (Layer 4)**: The database query in `userRepository.create` uses parameterized SQL (`$1, $2, $3, $4`) with the server-enforced role bound to `$4`, respecting database-level `CHECK (role IN ('ADMIN', 'ACCOUNT_HOLDER', 'AUDITOR'))` constraints while preventing SQL injection.
+  5. **Privileged Account Provisioning Safeguard**: `ADMIN` and `AUDITOR` accounts can only be provisioned through secure, administrative seed migrations (`src/database/seed.js`), and existing user roles are strictly protected against modification.
+- **Residual Risk**: None for public registration. Any future role-management endpoints must require strict `ADMIN` authorization.
+- **Automated Verification**: `tests/integration/auth.test.js` (`Public Registration Flow & Role Escalation Prevention` covering Test A normal registration, Test B ADMIN injection rejection, Test C AUDITOR injection rejection, Test D alternative role strings, Test E privilege fields, service-layer defense-in-depth, password hashing, and token claims).
+- **Status**: Verified.
+
+
 
 
