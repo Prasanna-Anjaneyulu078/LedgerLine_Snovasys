@@ -6,20 +6,44 @@ import { checkDatabaseConnection, closePool } from './config/database.js';
 let server;
 
 async function startServer() {
+  let dbStatus = 'DISCONNECTED';
   try {
     // Verify database connection at startup
     await checkDatabaseConnection();
-    logger.info('Database connection verified successfully on startup');
-
-    server = app.listen(env.PORT, () => {
-      logger.info(`LedgerLine Core Server running on port ${env.PORT} in [${env.NODE_ENV}] mode`);
-      logger.info(`Interactive API Documentation: http://localhost:${env.PORT}/api-docs`);
-      logger.info(`Health check endpoint: http://localhost:${env.PORT}/health`);
-    });
+    dbStatus = 'CONNECTED';
   } catch (error) {
-    logger.fatal({ error }, 'Failed to start LedgerLine server due to initialization error');
+    logger.fatal({ error }, 'Failed to start LedgerLine server due to database connection error');
     process.exit(1);
   }
+
+  server = app.listen(env.PORT, () => {
+    const banner = [
+      '==================================================',
+      '                 LEDGERLINE API',
+      '==================================================',
+      `Environment       : ${env.NODE_ENV}`,
+      'Server Status     : RUNNING',
+      `Server URL        : http://localhost:${env.PORT}`,
+      `Health Check      : http://localhost:${env.PORT}/health`,
+      `API Base URL      : http://localhost:${env.PORT}/api/v1`,
+      `API Documentation : http://localhost:${env.PORT}/api-docs`,
+      `Database          : ${dbStatus}`,
+      '==================================================',
+    ].join('\n');
+
+    console.log(`\n${banner}\n`);
+
+    logger.info(
+      {
+        port: env.PORT,
+        environment: env.NODE_ENV,
+        database: dbStatus,
+        apiDocs: `http://localhost:${env.PORT}/api-docs`,
+        healthCheck: `http://localhost:${env.PORT}/health`,
+      },
+      'LedgerLine Core Server initialized successfully'
+    );
+  });
 }
 
 // Graceful Shutdown Handler

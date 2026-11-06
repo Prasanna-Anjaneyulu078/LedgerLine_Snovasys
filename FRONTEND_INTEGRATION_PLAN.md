@@ -8,10 +8,22 @@ This integration specification maps the exact, existing backend API routes of **
 
 ## 1. System Communication & Base Configuration
 
-- **Backend Base URL**: `http://localhost:5000` (Local) / `/api/v1` (Production / Render)
-- **API Version Route Prefix**: `/api/v1`
-- **Interactive Documentation**: `http://localhost:5000/api-docs`
+- **Axios Base URL**: `http://localhost:5000/api/v1` (Local) / `/api/v1` (Production / Render)
+  - Configured in frontend client:
+    ```javascript
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api/v1';
+    export const apiClient = axios.create({
+      baseURL: API_BASE_URL,
+      headers: { 'Content-Type': 'application/json' },
+      withCredentials: true,
+    });
+    ```
+- **API Service Paths Convention**: All API service paths are relative to `baseURL`:
+  - E.g. `apiClient.post('/auth/register', data)` -> resolves to `http://localhost:5000/api/v1/auth/register`.
+  - **CRITICAL**: Do NOT prepend `/api/v1` to individual service calls (e.g., avoid `apiClient.post('/api/v1/auth/register')` which results in `/api/v1/api/v1/auth/register`).
 - **Health Check Endpoint**: `http://localhost:5000/health`
+  - Unversioned root endpoint (outside `/api/v1`). Call using standalone fetch or root Axios instance: `fetch('http://localhost:5000/health')`.
+- **Interactive Documentation**: `http://localhost:5000/api-docs`
 - **CORS Allowed Origin**: Configured via `CORS_ORIGIN` (default: credentials allowed)
 - **Content Type**: `application/json` (Body limit: 1MB)
 - **Standard Envelope Format**:

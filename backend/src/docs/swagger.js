@@ -62,6 +62,13 @@ export const swaggerDocument = {
           password: { type: 'string', format: 'password', example: 'Alice@123456' },
         },
       },
+      CreateAccountRequest: {
+        type: 'object',
+        properties: {
+          accountType: { type: 'string', enum: ['SAVINGS', 'CHECKING', 'OPERATIONAL'], example: 'SAVINGS' },
+          currency: { type: 'string', example: 'INR' },
+        },
+      },
       DepositRequest: {
         type: 'object',
         required: ['accountId', 'amount'],
@@ -90,19 +97,40 @@ export const swaggerDocument = {
           description: { type: 'string', example: 'Rent payment split' },
         },
       },
+      UserStatusUpdateRequest: {
+        type: 'object',
+        required: ['isActive'],
+        properties: {
+          isActive: { type: 'boolean', example: false },
+        },
+      },
+      AccountStatusUpdateRequest: {
+        type: 'object',
+        required: ['status'],
+        properties: {
+          status: { type: 'string', enum: ['ACTIVE', 'FROZEN', 'CLOSED'], example: 'FROZEN' },
+        },
+      },
     },
   },
   paths: {
     '/health': {
+      servers: [
+        {
+          url: '/',
+          description: 'Root URL',
+        },
+      ],
       get: {
         summary: 'System and database health check',
+        description: 'Public health-check endpoint reporting server status, uptime, and live PostgreSQL connection state.',
         responses: {
           200: { description: 'System healthy' },
           503: { description: 'Database unreachable' },
         },
       },
     },
-    '/api/v1/auth/register': {
+    '/auth/register': {
       post: {
         summary: 'Register new user',
         requestBody: {
@@ -112,7 +140,7 @@ export const swaggerDocument = {
         responses: { 201: { description: 'Registered successfully' } },
       },
     },
-    '/api/v1/auth/login': {
+    '/auth/login': {
       post: {
         summary: 'Authenticate and receive JWT token',
         requestBody: {
@@ -122,14 +150,14 @@ export const swaggerDocument = {
         responses: { 200: { description: 'Login successful' } },
       },
     },
-    '/api/v1/auth/me': {
+    '/auth/me': {
       get: {
         summary: 'Get current user profile and accounts',
         security: [{ BearerAuth: [] }],
         responses: { 200: { description: 'User profile retrieved' } },
       },
     },
-    '/api/v1/accounts': {
+    '/accounts': {
       get: {
         summary: 'List user accounts (or all accounts if Admin/Auditor)',
         security: [{ BearerAuth: [] }],
@@ -138,10 +166,22 @@ export const swaggerDocument = {
       post: {
         summary: 'Create a new account',
         security: [{ BearerAuth: [] }],
+        requestBody: {
+          required: false,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/CreateAccountRequest' } } },
+        },
         responses: { 201: { description: 'Account created' } },
       },
     },
-    '/api/v1/accounts/{accountId}/balance': {
+    '/accounts/{accountId}': {
+      get: {
+        summary: 'Get single account details',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'accountId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: { 200: { description: 'Account details retrieved' } },
+      },
+    },
+    '/accounts/{accountId}/balance': {
       get: {
         summary: 'Get account balance',
         security: [{ BearerAuth: [] }],
@@ -149,15 +189,19 @@ export const swaggerDocument = {
         responses: { 200: { description: 'Balance retrieved' } },
       },
     },
-    '/api/v1/accounts/{accountId}/statement': {
+    '/accounts/{accountId}/statement': {
       get: {
         summary: 'Get account statement and running balances',
         security: [{ BearerAuth: [] }],
-        parameters: [{ name: 'accountId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        parameters: [
+          { name: 'accountId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 50 } },
+          { name: 'offset', in: 'query', required: false, schema: { type: 'integer', default: 0 } },
+        ],
         responses: { 200: { description: 'Statement retrieved' } },
       },
     },
-    '/api/v1/transactions/deposit': {
+    '/transactions/deposit': {
       post: {
         summary: 'Deposit funds into an account',
         security: [{ BearerAuth: [] }],
@@ -169,7 +213,7 @@ export const swaggerDocument = {
         responses: { 200: { description: 'Deposit successful' } },
       },
     },
-    '/api/v1/transactions/withdraw': {
+    '/transactions/withdraw': {
       post: {
         summary: 'Withdraw funds from an account',
         security: [{ BearerAuth: [] }],
@@ -181,7 +225,7 @@ export const swaggerDocument = {
         responses: { 200: { description: 'Withdrawal successful' } },
       },
     },
-    '/api/v1/transactions/transfer': {
+    '/transactions/transfer': {
       post: {
         summary: 'Transfer funds between accounts with double-entry ledger postings',
         security: [{ BearerAuth: [] }],
@@ -193,21 +237,50 @@ export const swaggerDocument = {
         responses: { 200: { description: 'Transfer successful' } },
       },
     },
-    '/api/v1/transactions': {
+    '/transactions': {
       get: {
         summary: 'List transactions',
         security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'accountId', in: 'query', required: false, schema: { type: 'string', format: 'uuid' } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 50 } },
+          { name: 'offset', in: 'query', required: false, schema: { type: 'integer', default: 0 } },
+        ],
         responses: { 200: { description: 'Transactions list' } },
       },
     },
-    '/api/v1/ledger': {
+    '/transactions/{transactionId}': {
+      get: {
+        summary: 'Get single transaction details and double-entry ledger postings',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'transactionId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        responses: { 200: { description: 'Transaction details retrieved' } },
+      },
+    },
+    '/statements/{accountId}': {
+      get: {
+        summary: 'Get full account statement with committed postings and audited refused attempts',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'accountId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } },
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 50 } },
+          { name: 'offset', in: 'query', required: false, schema: { type: 'integer', default: 0 } },
+        ],
+        responses: { 200: { description: 'Statement retrieved' } },
+      },
+    },
+    '/ledger': {
       get: {
         summary: 'Get global double-entry ledger records (Admin/Auditor)',
         security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 50 } },
+          { name: 'offset', in: 'query', required: false, schema: { type: 'integer', default: 0 } },
+        ],
         responses: { 200: { description: 'Ledger list' } },
       },
     },
-    '/api/v1/ledger/{accountId}': {
+    '/ledger/{accountId}': {
       get: {
         summary: 'Get account ledger entries and consistency verification',
         security: [{ BearerAuth: [] }],
@@ -215,13 +288,61 @@ export const swaggerDocument = {
         responses: { 200: { description: 'Account ledger' } },
       },
     },
-    '/api/v1/audit-events': {
+    '/audit-events': {
       get: {
         summary: 'List audit trail events (Admin/Auditor)',
         security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'limit', in: 'query', required: false, schema: { type: 'integer', default: 50 } },
+          { name: 'offset', in: 'query', required: false, schema: { type: 'integer', default: 0 } },
+        ],
         responses: { 200: { description: 'Audit trail' } },
+      },
+    },
+    '/admin/users': {
+      get: {
+        summary: 'List all system users (Admin)',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'role', in: 'query', required: false, schema: { type: 'string', enum: ['ADMIN', 'ACCOUNT_HOLDER', 'AUDITOR'] } },
+          { name: 'isActive', in: 'query', required: false, schema: { type: 'boolean' } },
+        ],
+        responses: { 200: { description: 'Users list' } },
+      },
+    },
+    '/admin/accounts': {
+      get: {
+        summary: 'List all system accounts (Admin)',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          { name: 'status', in: 'query', required: false, schema: { type: 'string', enum: ['ACTIVE', 'FROZEN', 'CLOSED'] } },
+        ],
+        responses: { 200: { description: 'Accounts list' } },
+      },
+    },
+    '/admin/users/{userId}/status': {
+      patch: {
+        summary: 'Update user active status (Admin)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'userId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/UserStatusUpdateRequest' } } },
+        },
+        responses: { 200: { description: 'User status updated' } },
+      },
+    },
+    '/admin/accounts/{accountId}/status': {
+      patch: {
+        summary: 'Update account status (Admin)',
+        security: [{ BearerAuth: [] }],
+        parameters: [{ name: 'accountId', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { $ref: '#/components/schemas/AccountStatusUpdateRequest' } } },
+        },
+        responses: { 200: { description: 'Account status updated' } },
       },
     },
   },
 };
-

@@ -69,4 +69,34 @@ This log tracks genuine engineering suggestions, identified design trade-offs, d
 - **Correction**: Wrapped the returned value with `BigInt(aliceCalculated)` and `BigInt(bobCalculated)` to compare numeric values safely without precision loss.
 - **Fixing Commit URL**: https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/e56267c6fe8cb289b0ff6f0166551097f870950b
 
+---
+
+## Session 4: 2026-11-06 — Fix Backend Startup Logs, API Routing, and 404 Errors
+
+### 1. API Base URL Duplication (`/api/v1/api/v1/auth/register`)
+- **Initial Flaw Discovered**: Requests sent from Swagger UI or configured frontend clients were producing `404 Endpoint not found: [POST] /api/v1/api/v1/auth/register`.
+- **Root Cause**: In `swagger.js`, OpenAPI `servers` had `url: '/api/v1'`, while route path keys were also declared starting with `/api/v1` (e.g., `'/api/v1/auth/register'`). When Swagger UI dispatched requests, it joined the server root and route path, yielding `/api/v1/api/v1/...`. Similarly, frontend integration documentation ambiguously stated `baseURL: http://localhost:5000/api/v1` while also listing `/api/v1/...` in service method snippets.
+- **Correction**: Established a strict, unified convention:
+  1. Base URL: `http://localhost:5000/api/v1` (for Axios and Swagger v1 server definition).
+  2. Service / Swagger paths: Strictly relative to base URL (e.g. `/auth/register`, `/accounts`, `/transactions`).
+  3. Express mounting: Versioned router mounted under `/api/v1` exactly once in `src/app.js`.
+- **Verification**: Verified via test suite and automated route verification script asserting `POST /api/v1/auth/register` returns 201 while `POST /api/v1/api/v1/auth/register` returns 404.
+
+### 2. Health-Check Endpoint Inconsistency (`/api/v1/health` vs `/health`)
+- **Initial Flaw Discovered**: Frontend health polling or Swagger testing attempted `GET /api/v1/health` resulting in 404, while startup logs announced `GET http://localhost:5000/health`.
+- **Root Cause**: `GET /health` is an unversioned infrastructure health check mounted directly at root (`app.get('/health')`) outside `/api/v1`. Swagger documentation mapped `/health` under the default `/api/v1` server scope.
+- **Correction**: Configured explicit path-level server override in OpenAPI spec: `/health` sets `servers: [{ url: '/', description: 'Root URL' }]`, ensuring Swagger UI calls `http://localhost:5000/health`. Updated frontend integration guides to specify root health checking.
+- **Verification**: Tested `GET /health` returns 200 with `{ status: 'UP', database: { connected: true } }`, and confirmed `GET /api/v1/health` returns 404 without duplicating routes.
+
+### 3. Missing OpenAPI Route Definitions
+- **Initial Flaw Discovered**: Several existing endpoints (`/statements/:accountId`, `/admin/users`, `/admin/accounts`, `/admin/users/:userId/status`, `/admin/accounts/:accountId/status`) were completely missing from `swagger.js`, making them undocumented and untestable in Swagger UI.
+- **Correction**: Added complete OpenAPI documentation with schemas, path parameters, and query parameters for all registered Express endpoints.
+- **Verification**: Complete 25-endpoint route verification table passed with 100% success rate.
+
+### 4. PostgreSQL SSL Mode Deprecation Warning
+- **Initial Flaw Discovered**: On connecting to Neon PostgreSQL, the driver logged `WARNING: sslmode=require is treated as verify-full`.
+- **Root Cause**: `pg-connection-string` deprecated `sslmode=require` as an ambiguous alias in favor of explicit `verify-full`.
+- **Correction**: Updated `DATABASE_URL`, `DIRECT_URL`, `TEST_DATABASE_URL`, and `TEST_DIRECT_URL` in `.env` and `.env.example` to explicitly use `sslmode=verify-full&channel_binding=require`. Added regex normalization in `src/config/env.js` `sanitizeUrl()` so any `sslmode=require` is automatically upgraded to `sslmode=verify-full` while maintaining strict `rejectUnauthorized: true` certificate validation.
+- **Verification**: Database connection test runs with zero deprecation warnings.
+
 

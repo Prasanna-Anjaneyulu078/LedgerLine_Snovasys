@@ -1,7 +1,9 @@
 # LedgerLine: API Documentation
 
-Base URL: `/api/v1`  
-Interactive Swagger UI: `http://localhost:5000/api-docs`
+- **Axios Base URL**: `http://localhost:5000/api/v1` (Local) / `/api/v1` (Production)
+- **API Service Paths**: Paths are relative to `baseURL` (`/auth/register`, `/accounts`, etc.)
+- **Health Check Endpoint**: `http://localhost:5000/health` (Unversioned root endpoint outside `/api/v1`)
+- **Interactive Swagger UI**: `http://localhost:5000/api-docs`
 
 ---
 
@@ -9,7 +11,7 @@ Interactive Swagger UI: `http://localhost:5000/api-docs`
 
 ### Register User
 - **Method**: `POST`
-- **Path**: `/api/v1/auth/register`
+- **Service Path**: `/auth/register` (Full URL: `/api/v1/auth/register`)
 - **Rate Limit**: 20 requests / 15 minutes
 - **Authorization**: Public
 - **Request Body**:

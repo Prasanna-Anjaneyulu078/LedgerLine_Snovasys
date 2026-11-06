@@ -18,6 +18,8 @@ const isAdminSslRequired =
   adminConnectionString.includes('ssl=true');
 
 let adminPoolInstance = null;
+let isSchemaVerified = false;
+let cachedHash = null;
 
 export function getAdminPool() {
   if (!adminPoolInstance || adminPoolInstance.ended) {
@@ -49,19 +51,23 @@ export async function cleanDatabase() {
     }
 
     // 2. Schema check: Verify required tables exist; if missing, auto-run test migrations
-    const tableCheckRes = await client.query(`
-      SELECT table_name FROM information_schema.tables 
-      WHERE table_schema = 'public' 
-        AND table_name IN ('users', 'accounts', 'transactions', 'ledger_entries', 'idempotency_keys', 'audit_events');
-    `);
-    const existingTables = new Set(tableCheckRes.rows.map((r) => r.table_name));
-    const requiredTables = ['users', 'accounts', 'transactions', 'ledger_entries', 'idempotency_keys', 'audit_events'];
-    const missingTables = requiredTables.filter((t) => !existingTables.has(t));
+    if (!isSchemaVerified) {
+      const tableCheckRes = await client.query(`
+        SELECT table_name FROM information_schema.tables 
+        WHERE table_schema = 'public' 
+          AND table_name IN ('users', 'accounts', 'transactions', 'ledger_entries', 'idempotency_keys', 'audit_events');
+      `);
+      const existingTables = new Set(tableCheckRes.rows.map((r) => r.table_name));
+      const requiredTables = ['users', 'accounts', 'transactions', 'ledger_entries', 'idempotency_keys', 'audit_events'];
+      const missingTables = requiredTables.filter((t) => !existingTables.has(t));
 
-    if (missingTables.length > 0) {
-      client.release();
-      await runMigrations({ isTest: true });
-      return cleanDatabase();
+      if (missingTables.length > 0) {
+        client.release();
+        await runMigrations({ isTest: true });
+        isSchemaVerified = true;
+        return cleanDatabase();
+      }
+      isSchemaVerified = true;
     }
 
     // 3. Truncate in safe dependency order without outer transaction block to prevent deadlocks
@@ -98,7 +104,10 @@ export async function seedTestFixtures() {
   try {
     await client.query('BEGIN;');
 
-    const hash = await bcrypt.hash('Test@123456', 10);
+    if (!cachedHash) {
+      cachedHash = await bcrypt.hash('Test@123456', 10);
+    }
+    const hash = cachedHash;
 
     // 1. Create Users
     const adminRes = await client.query(`

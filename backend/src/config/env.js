@@ -3,7 +3,15 @@ import { z } from 'zod';
 
 dotenv.config();
 
-const sanitizeUrl = (val) => (typeof val === 'string' ? val.trim().replace(/^["']|["']$/g, '') : val);
+const sanitizeUrl = (val) => {
+  if (typeof val !== 'string') return val;
+  let clean = val.trim().replace(/^["']|["']$/g, '');
+  // Explicitly configure sslmode=verify-full to enforce strict certificate verification and eliminate pg deprecation warnings
+  if (clean.includes('sslmode=require')) {
+    clean = clean.replace(/sslmode=require/g, 'sslmode=verify-full');
+  }
+  return clean;
+};
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
