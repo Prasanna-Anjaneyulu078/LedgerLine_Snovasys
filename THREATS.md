@@ -4,6 +4,23 @@ This document analyzes security, integrity, and concurrency threats to LedgerLin
 
 ---
 
+## Security Verification Matrix (Day 2 Hardening)
+
+| Threat Category | Scenario / Attack Vector | Mitigation Architecture | Verification Test Suite | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Duplicate Requests** | Same-key sequential retry replay | PostgreSQL `idempotency_keys` table with `UNIQUE(user_id, idempotency_key)` + cached HTTP response payload | `tests/integration/idempotency.test.js` (Test A) | **VERIFIED** |
+| **Duplicate Requests** | Same-key concurrent retry race (`Promise.all`) | Atomic in-flight lock row reservation, unique constraint serialization, exactly one transaction committed | `tests/integration/idempotency.test.js` (Test B) | **VERIFIED** |
+| **Payload Manipulation** | Same key with altered amount/destination | SHA-256 hash comparison across canonical operation and parameters; mismatch triggers `409 Conflict` | `tests/integration/idempotency.test.js` (Test C) | **VERIFIED** |
+| **Race Conditions** | Racing withdrawals exceeding balance | PostgreSQL `BEGIN ... FOR UPDATE` row locks + DB constraint `CHECK (balance >= 0)`; exactly 1 succeeds | `tests/integration/concurrency.test.js` (Test D) | **VERIFIED** |
+| **Deadlocks** | Simultaneous opposite transfers (A→B & B→A) | Deterministic UUID lock ordering (`ORDER BY id ASC FOR UPDATE`) eliminates circular waits (`40P01`) | `tests/integration/concurrency.test.js` (Test E) | **VERIFIED** |
+| **Broken Access / IDOR** | Cross-user account inspection, withdrawal, transfer | Server-side `authorizeAccountAccess` middleware + source account owner verification against `req.user.id` (`403`) | `tests/integration/authorization.test.js` (Test F) | **VERIFIED** |
+| **Auditor Misuse** | Auditor attempts deposit, withdrawal, or transfer | Strict RBAC blocking auditors from money-moving endpoints (`403 Forbidden`); read-only inspection allowed | `tests/integration/authorization.test.js` (Test G) | **VERIFIED** |
+| **Privilege Escalation** | Public registration role injection (`role: ADMIN`) | Strict Zod validation (`.strict()`) + controller whitelisting + server-enforced `role = 'ACCOUNT_HOLDER'` | `tests/integration/auth.test.js` (Test H) | **VERIFIED** |
+| **Ledger Tampering** | SQL `UPDATE` / `DELETE` on `ledger_entries` | Dual-layer: restricted runtime role (`REVOKE UPDATE, DELETE`) + PostgreSQL engine trigger `trg_prevent_ledger_modification` | `tests/integration/ledger_immutability.test.js` | **VERIFIED** |
+| **Account Probing & IDOR**| Public account-number transfer manipulation | Format regex, source ownership validation, deterministic UUID resolution, and refusal audit logging | `tests/integration/account_number_transfer.test.js` | **VERIFIED** |
+
+---
+
 ## 1. Threat Scenarios & Mitigations
 
 ### Threat 1: Race Condition Overdraft (Double-Spending)

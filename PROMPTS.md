@@ -184,6 +184,63 @@ This improves usability without compromising the existing database design or fin
      - Privileged Route Access: Verified that regular users and auditors cannot access admin endpoints (`403 Forbidden`).
 - **Verification**: Executed automated test suite against Neon PostgreSQL test database (`TEST_DATABASE_URL`). All 18 auth tests and 30 API verification tests passed with 100% success rate.
 
+---
+
+## Session 7: 2026-11-07 — Day 2: Concurrency, Idempotency & Authorization Hardening
+
+### 1. Idempotency Key Scoping & Concurrent Retry Serialization
+- **Context & Review**:
+  Review idempotency key mechanics across financial endpoints (`POST /api/v1/transactions/*`). Verify behavior for sequential retries, concurrent retries, tampered payloads, and failed attempts.
+- **Architectural Findings & Hardening**:
+  1. **Key Uniqueness & Scope**: Protected by PostgreSQL unique constraint `uq_user_idempotency_key UNIQUE (user_id, idempotency_key)`. Keys are strictly scoped per authenticated user, preventing cross-user collision.
+  2. **Canonical Payload Hash**: A SHA-256 hash is computed across normalized operation parameters (`op`, `sourceAccountId`, `destinationAccountId`, `amountPaise`). Retrying with modified amount or destination triggers `409 Conflict` (`Idempotency key reuse conflict: request payload differs from original request`).
+  3. **Concurrent Retry Race Serialization**: When identical requests race in parallel (`Promise.all`), PostgreSQL unique constraint on `idempotency_keys` allows exactly one thread to insert the pending key reservation and execute the transaction. Racing concurrent requests either receive `409 Conflict` (due to active in-flight lock or unique violation) or await and retrieve the committed replay. Under no circumstance can a duplicate transaction or duplicate ledger entry be created.
+  4. **Failed Transaction Rollback**: If balance validation fails, the entire transaction rolls back, releasing the in-flight key so the client can retry cleanly.
+- **Automated Verification**: `tests/integration/idempotency.test.js` (Test A sequential retry, Test B concurrent retry with `Promise.all`, Test C changed payload conflict, and failed cleanup retry).
+
+### 2. Balance Race Conditions & `SELECT FOR UPDATE`
+- **Context & Review**:
+  Investigate balance check atomicity under racing withdrawal requests.
+- **Flaws Evaluated**:
+  Without row-level locks, two concurrent withdrawals (e.g. ₹400 and ₹300 against ₹500 balance) read `balance >= amount` simultaneously before either updates, causing negative balance overdraft (-₹200).
+- **Mitigation Architecture**:
+  1. Transaction isolation with `BEGIN ... COMMIT`.
+  2. Immediate row-level locking via `SELECT ... FROM accounts WHERE id = $1 FOR UPDATE`.
+  3. Balance validation occurs exclusively while the row lock is held.
+  4. Engine-level `CHECK (balance >= 0)` constraint as an absolute safety barrier.
+- **Automated Verification**: `tests/integration/concurrency.test.js` (Test D racing withdrawals: exactly one succeeds, the other fails with 400 Insufficient Funds, final balance is either 10,000 or 20,000 paise, and balance never drops below zero).
+
+### 3. Multi-Account Deadlock Elimination (Deterministic Lock Ordering)
+- **Context & Review**:
+  Investigate simultaneous opposite-direction transfers: Account A transfers to Account B while Account B concurrently transfers to Account A.
+- **Flaws Evaluated**:
+  Arbitrary lock order locks Account A on thread 1 and Account B on thread 2, causing circular wait and PostgreSQL deadlock exception `40P01 (deadlock_detected)`.
+- **Mitigation Architecture**:
+  In `accountRepository.findTwoForUpdate(accountId1, accountId2, client)`, the two account UUIDs are sorted lexicographically (`[accountId1, accountId2].sort()`) and queried via `WHERE id = ANY($1::uuid[]) ORDER BY id ASC FOR UPDATE`. Both transactions acquire locks in identical global order.
+- **Automated Verification**: `tests/integration/concurrency.test.js` (Test E opposite transfers: zero deadlocks, both transfers commit, double-entry ledger is balanced: 2 debits = 2 credits = 4,000 paise, and money is conserved).
+
+### 4. Cross-User Account Access (IDOR Prevention) & Auditor Denial
+- **Context & Review**:
+  Verify authorization boundaries preventing regular users from accessing other accounts, and ensuring auditors cannot move money.
+- **Mitigation Architecture**:
+  1. `authorizeAccountAccess` middleware and `transactionService` verify account ownership against `req.user.id`.
+  2. Any cross-user attempt to query balance, view statements, withdraw, or transfer returns `403 Forbidden` with zero database modifications.
+  3. Auditor role has strictly read-only access to `/ledger`, `/audit-events`, `/accounts`, and `/statements`. Any attempt to call `/deposit`, `/withdraw`, or `/transfer` returns `403 Forbidden`.
+- **Automated Verification**: `tests/integration/authorization.test.js` (Test F cross-user IDOR access denial, and Test G auditor money-movement denial with read-only inspection verified).
+
+### 5. Discovered Errors and Runtime Corrections
+- **Seed Fixture Collision**:
+  - *Error*: Initial test assertions checking `transactions WHERE initiated_by = $1` received count `2` instead of `1`.
+  - *Root Cause*: `seedTestFixtures()` seeds an initial deposit transaction (`INIT-ALICE`).
+  - *Fix*: Filtered transaction assertions with `transaction_type = 'TRANSFER'` or checked explicit transaction IDs.
+- **Query Parameter Placeholder Mismatch**:
+  - *Error*: In `concurrency.test.js`, an account balance update query passed 1 parameter with `$2` placeholder, triggering `error: could not determine data type of parameter $1`.
+  - *Fix*: Corrected the placeholder to `$1`.
+- **Ledger Invariant Verification**:
+  - *Error*: In `authorization.test.js`, total ledger entries assertion failed because both Alice and Bob have initial seeded credit entries.
+  - *Fix*: Verified that 0 `DEBIT` entries and 0 `TRANSFER` transactions were created during unauthorized attempts, proving complete database isolation.
+
+
 
 
 

@@ -14,97 +14,170 @@ describe('Concurrency Safety & Race Condition Protection Tests', () => {
     await teardownTestDb();
   });
 
-  test('Concurrent Withdrawals - Two simultaneous withdrawals exceeding available balance cannot overdraw account', async () => {
-    // Alice has 10,000 paise (₹100.00) in her account
-    // Launch two simultaneous withdrawal requests of 6,000 paise (₹60.00) each
-    // Total requested = 12,000 paise > 10,000 paise available!
+  // ========================================================
+  // Test D — Two racing withdrawals
+  // ========================================================
+  test('Test D — Two racing withdrawals exceeding available balance allow at most one success and prevent negative balance', async () => {
+    // 1. Prepare a test account with known balance: ₹500.00 (50,000 paise)
+    // Deposit ₹400.00 into Alice's account (initial 10,000 paise + 40,000 paise = 50,000 paise)
+    const setupDeposit = await testPool.query(
+      'UPDATE accounts SET balance = 50000 WHERE id = $1 RETURNING balance, account_number',
+      [fixtures.aliceAccount.id]
+    );
+    expect(setupDeposit.rows[0].balance).toBe(50000n);
+    const aliceAccNum = setupDeposit.rows[0].account_number;
 
-    const req1 = request(app)
+    // 2. Submit two concurrent withdrawal requests that together exceed the available balance:
+    // Withdrawal A: ₹400.00 (40,000 paise)
+    // Withdrawal B: ₹300.00 (30,000 paise)
+    // Total requested = ₹700.00 (70,000 paise) > ₹500.00 (50,000 paise) available!
+    // Using distinct idempotency keys for the two independent withdrawal requests.
+    const reqA = request(app)
       .post('/api/v1/transactions/withdraw')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
-      .set('Idempotency-Key', 'concurrent-wth-1')
+      .set('Idempotency-Key', 'racing-withdrawal-key-A')
       .send({
-        accountId: fixtures.aliceAccount.id,
-        amount: '60.00',
-        description: 'Concurrent withdrawal #1',
+        accountNumber: aliceAccNum,
+        amount: '400.00',
+        description: 'Racing withdrawal A (₹400.00)',
       });
 
-    const req2 = request(app)
+    const reqB = request(app)
       .post('/api/v1/transactions/withdraw')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
-      .set('Idempotency-Key', 'concurrent-wth-2')
+      .set('Idempotency-Key', 'racing-withdrawal-key-B')
       .send({
-        accountId: fixtures.aliceAccount.id,
-        amount: '60.00',
-        description: 'Concurrent withdrawal #2',
+        accountNumber: aliceAccNum,
+        amount: '300.00',
+        description: 'Racing withdrawal B (₹300.00)',
       });
 
     // Execute in TRUE parallel via Promise.all
-    const [res1, res2] = await Promise.all([req1, req2]);
+    const [resA, resB] = await Promise.all([reqA, reqB]);
 
-    const statuses = [res1.status, res2.status];
-    expect(statuses).toContain(200); // Exactly one succeeded
-    expect(statuses).toContain(400); // Exactly one was refused due to insufficient funds
+    const statuses = [resA.status, resB.status];
+    // Expected: At most one withdrawal succeeds (200), the other fails due to insufficient funds (400)
+    expect(statuses).toContain(200);
+    expect(statuses).toContain(400);
 
-    // CRITICAL: Verify final database balance in PostgreSQL
+    const successfulRes = resA.status === 200 ? resA : resB;
+    const failedRes = resA.status === 400 ? resA : resB;
+    expect(failedRes.body.message).toMatch(/Insufficient funds/i);
+
+    // Database verification:
+    // 1. Verify final balance in PostgreSQL:
     const dbAccount = await testPool.query('SELECT balance FROM accounts WHERE id = $1', [
       fixtures.aliceAccount.id,
     ]);
+    const finalBalance = dbAccount.rows[0].balance;
 
-    // Initial 10000 - 6000 = 4000 paise (₹40.00). Account was NEVER overdrawn!
-    expect(dbAccount.rows[0].balance).toBe(4000n);
+    // If A won: 50,000 - 40,000 = 10,000 paise (₹100.00)
+    // If B won: 50,000 - 30,000 = 20,000 paise (₹200.00)
+    expect([10000n, 20000n]).toContain(finalBalance);
+    // CRITICAL: Guarantee no negative balance
+    expect(finalBalance).toBeGreaterThanOrEqual(0n);
 
-    // Verify ledger entries: Exactly 1 debit of 6000 was inserted
-    const ledgerRows = await testPool.query(
-      "SELECT amount, entry_type FROM ledger_entries WHERE account_id = $1 AND entry_type = 'DEBIT'",
+    // 2. Transaction records reflect the actual outcome: exactly 1 SUCCESS withdrawal
+    const txnRows = await testPool.query(
+      "SELECT id, amount, status FROM transactions WHERE source_account_id = $1 AND transaction_type = 'WITHDRAWAL'",
       [fixtures.aliceAccount.id]
     );
+    expect(txnRows.rows).toHaveLength(1);
+    expect(txnRows.rows[0].status).toBe('SUCCESS');
+    expect(txnRows.rows[0].id).toBe(successfulRes.body.data.transactionId);
 
+    // 3. No partial or duplicate ledger entries: exactly 1 DEBIT ledger entry for this account
+    const ledgerRows = await testPool.query(
+      "SELECT id, amount, balance_after, entry_type FROM ledger_entries WHERE account_id = $1 AND entry_type = 'DEBIT'",
+      [fixtures.aliceAccount.id]
+    );
     expect(ledgerRows.rows).toHaveLength(1);
-    expect(ledgerRows.rows[0].amount).toBe(6000n);
+    expect(ledgerRows.rows[0].balance_after).toBe(finalBalance);
   });
 
-  test('Concurrent Opposite-Direction Transfers - Deterministic locking eliminates deadlocks', async () => {
-    // Alice transfers ₹10.00 to Bob while simultaneously Bob transfers ₹10.00 to Alice
-    // In naive systems, locking Alice then Bob in one thread, and Bob then Alice in another creates DEADLOCK (code 40P01)
-    // Our deterministic row ordering (order by UUID ASC) guarantees both transactions acquire locks in identical order!
+  // ========================================================
+  // Test E — Opposite-direction transfers
+  // ========================================================
+  test('Test E — Opposite-direction transfers complete without deadlocks, with balanced ledger and money conservation', async () => {
+    // Prepare two accounts with known sufficient balances:
+    // Alice Account: ₹500.00 (50,000 paise)
+    // Bob Account: ₹500.00 (50,000 paise)
+    await testPool.query('UPDATE accounts SET balance = 50000 WHERE id = $1', [fixtures.aliceAccount.id]);
+    await testPool.query('UPDATE accounts SET balance = 50000 WHERE id = $1', [fixtures.bobAccount.id]);
 
+    const initialTotalPaise = 50000n + 50000n; // 100,000 paise (₹1000.00)
+
+    // Submit these transfers concurrently:
+    // Transfer 1: Account A → Account B for ₹15.00 (1,500 paise)
+    // Transfer 2: Account B → Account A for ₹25.00 (2,500 paise)
     const reqAliceToBob = request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
-      .set('Idempotency-Key', 'opp-transfer-alice-1')
+      .set('Idempotency-Key', 'opp-transfer-alice-101')
       .send({
-        sourceAccountId: fixtures.aliceAccount.id,
-        destinationAccountId: fixtures.bobAccount.id,
-        amount: '10.00',
-        description: 'Alice to Bob',
+        sourceAccountNumber: fixtures.aliceAccount.account_number,
+        destinationAccountNumber: fixtures.bobAccount.account_number,
+        amount: '15.00',
+        description: 'Alice to Bob transfer (₹15.00)',
       });
 
     const reqBobToAlice = request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.bob}`)
-      .set('Idempotency-Key', 'opp-transfer-bob-1')
+      .set('Idempotency-Key', 'opp-transfer-bob-202')
       .send({
-        sourceAccountId: fixtures.bobAccount.id,
-        destinationAccountId: fixtures.aliceAccount.id,
-        amount: '10.00',
-        description: 'Bob to Alice',
+        sourceAccountNumber: fixtures.bobAccount.account_number,
+        destinationAccountNumber: fixtures.aliceAccount.account_number,
+        amount: '25.00',
+        description: 'Bob to Alice transfer (₹25.00)',
       });
 
+    // Execute concurrently via Promise.all
     const [res1, res2] = await Promise.all([reqAliceToBob, reqBobToAlice]);
 
-    // Both succeed with zero deadlocks
+    // Expected: No avoidable deadlock (PostgreSQL 40P01 eliminated), both succeed with 200 OK
     expect(res1.status).toBe(200);
     expect(res2.status).toBe(200);
+    expect(res1.body.success).toBe(true);
+    expect(res2.body.success).toBe(true);
 
-    // Verify balances in database
+    // Database verification:
+    // 1. Both accounts have correct final balances:
+    // Alice: 50,000 - 1,500 + 2,500 = 51,000 paise (₹510.00)
+    // Bob:   50,000 + 1,500 - 2,500 = 49,000 paise (₹490.00)
     const aliceDb = await testPool.query('SELECT balance FROM accounts WHERE id = $1', [fixtures.aliceAccount.id]);
     const bobDb = await testPool.query('SELECT balance FROM accounts WHERE id = $1', [fixtures.bobAccount.id]);
+    expect(aliceDb.rows[0].balance).toBe(51000n);
+    expect(bobDb.rows[0].balance).toBe(49000n);
 
-    // Alice sent 1000 and received 1000 -> 10000
-    // Bob sent 1000 and received 1000 -> 5000
-    expect(aliceDb.rows[0].balance).toBe(10000n);
-    expect(bobDb.rows[0].balance).toBe(5000n);
+    // 2. Money conservation: Total money across both accounts is conserved
+    const finalTotalPaise = aliceDb.rows[0].balance + bobDb.rows[0].balance;
+    expect(finalTotalPaise).toBe(initialTotalPaise);
+
+    // 3. Exactly 2 SUCCESS transaction records created
+    const txnCheck = await testPool.query(
+      "SELECT id, amount, status FROM transactions WHERE transaction_type = 'TRANSFER' AND status = 'SUCCESS' AND (initiated_by = $1 OR initiated_by = $2)",
+      [fixtures.alice.id, fixtures.bob.id]
+    );
+    expect(txnCheck.rows).toHaveLength(2);
+
+    // 4. Ledger postings are balanced: exactly 4 postings (2 debits, 2 credits)
+    const ledgerCheck = await testPool.query(
+      'SELECT entry_type, amount FROM ledger_entries WHERE transaction_id = ANY($1::uuid[])',
+      [txnCheck.rows.map((t) => t.id)]
+    );
+    expect(ledgerCheck.rows).toHaveLength(4);
+
+    const totalDebited = ledgerCheck.rows
+      .filter((r) => r.entry_type === 'DEBIT')
+      .reduce((sum, r) => sum + r.amount, 0n);
+    const totalCredited = ledgerCheck.rows
+      .filter((r) => r.entry_type === 'CREDIT')
+      .reduce((sum, r) => sum + r.amount, 0n);
+
+    expect(totalDebited).toBe(4000n); // 1500 + 2500
+    expect(totalCredited).toBe(4000n);
+    expect(totalDebited).toBe(totalCredited); // Double-entry balance invariant
   });
 });
 
