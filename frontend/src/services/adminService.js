@@ -19,6 +19,14 @@ export function normalizeUser(u) {
 
 export const adminService = {
   /**
+   * Retrieve authoritative PostgreSQL aggregate telemetry for Admin Dashboard
+   */
+  async getDashboardOverview() {
+    const response = await api.get('/admin/dashboard');
+    return response.data?.data || response.data;
+  },
+
+  /**
    * List all registered users (Admin only)
    * Supports server-side pagination, search, role and status filtering
    */

@@ -3,6 +3,11 @@ import { ApiResponse } from '../../utils/apiResponse.js';
 import { asyncHandler } from '../../utils/asyncHandler.js';
 
 export class AdminController {
+  getDashboardOverview = asyncHandler(async (req, res) => {
+    const result = await adminService.getDashboardOverview();
+    res.status(200).json(ApiResponse.success(result, 'Admin dashboard telemetry retrieved successfully'));
+  });
+
   getAllUsers = asyncHandler(async (req, res) => {
     const result = await adminService.getAllUsers(req.query);
     res.status(200).json(ApiResponse.success(result, 'System users retrieved successfully'));
