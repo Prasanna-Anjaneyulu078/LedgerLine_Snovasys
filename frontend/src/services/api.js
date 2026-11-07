@@ -37,17 +37,68 @@ api.interceptors.response.use(
   }
 );
 
+/**
+ * Extracts and sanitizes human-readable error messages across all HTTP status codes:
+ * - 400 Validation errors
+ * - 401 Unauthorized
+ * - 403 Forbidden
+ * - 404 Not Found
+ * - 409 Conflict
+ * - 429 Rate Limiting
+ * - 500 Server Errors
+ * - Network Failures
+ */
 export function getErrorMessage(error) {
-  if (error?.response?.data?.message) {
-    return error.response.data.message;
+  // Network failures / connection refused
+  if (error?.code === 'ERR_NETWORK' || !error?.response) {
+    return 'Network connection failure: Unable to reach the LedgerLine backend server. Please verify your connection.';
   }
-  if (error?.response?.data?.error) {
-    return error.response.data.error;
+
+  const { status, data } = error.response;
+
+  // 1. Zod / Application structured validation errors array
+  if (Array.isArray(data?.errors) && data.errors.length > 0) {
+    return data.errors.map((e) => e.message || `${e.field}: ${e.rule}`).join('; ');
   }
+
+  // 2. Specific status code messages
+  if (status === 429) {
+    return 'Rate limit exceeded: Too many requests. Please wait a few moments before retrying.';
+  }
+
+  if (status === 409) {
+    return data?.message || 'Operation conflict detected: An identical request is processing or resource already exists.';
+  }
+
+  if (status === 403) {
+    return data?.message || 'Access forbidden: You do not have permission to execute this operation.';
+  }
+
+  if (status === 401) {
+    return data?.message || 'Authentication required: Invalid or expired session credentials.';
+  }
+
+  if (status === 404) {
+    return data?.message || 'Requested financial record or account was not found.';
+  }
+
+  if (status >= 500) {
+    return 'An internal ledger processing error occurred. The operation was safely aborted.';
+  }
+
+  if (data?.message) {
+    return data.message;
+  }
+
+  if (data?.error) {
+    return typeof data.error === 'string' ? data.error : JSON.stringify(data.error);
+  }
+
   if (error?.message) {
     return error.message;
   }
-  return 'An unexpected network or server error occurred. Please try again.';
+
+  return 'An unexpected error occurred while communicating with the ledger.';
 }
 
 export function generateIdempotencyKey() {

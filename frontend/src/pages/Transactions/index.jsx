@@ -63,9 +63,9 @@ const Transactions = () => {
       setAccounts(accs || []);
 
       if (accs && accs.length > 0) {
-        setFormAccountId(accs[0].id);
+        setFormAccountId(accs[0].accountNumber || accs[0].id);
         if (accs.length > 1) {
-          setFormDestAccountId(accs[1].id);
+          setFormDestAccountId(accs[1].accountNumber || accs[1].id);
         }
       }
     } catch (err) {
@@ -113,7 +113,7 @@ const Transactions = () => {
     setFormError(null);
     try {
       await transactionService.deposit({
-        accountId: formAccountId,
+        accountNumber: formAccountId,
         amount: parseFloat(formAmount),
         description: formDescription || 'Account deposit',
       });
@@ -138,7 +138,7 @@ const Transactions = () => {
     setFormError(null);
     try {
       await transactionService.withdraw({
-        accountId: formAccountId,
+        accountNumber: formAccountId,
         amount: parseFloat(formAmount),
         description: formDescription || 'Account withdrawal',
       });
@@ -167,8 +167,8 @@ const Transactions = () => {
     setFormError(null);
     try {
       await transactionService.transfer({
-        sourceAccountId: formAccountId,
-        destinationAccountId: formDestAccountId,
+        sourceAccountNumber: formAccountId,
+        destinationAccountNumber: formDestAccountId,
         amount: parseFloat(formAmount),
         description: formDescription || 'Inter-account transfer',
       });
@@ -266,12 +266,12 @@ const Transactions = () => {
   ];
 
   const accountOptions = accounts.map((acc) => ({
-    value: acc.id,
+    value: acc.accountNumber || acc.id,
     label: `${acc.accountNumber} (${acc.accountType} - ${formatCurrency(acc.balance)})`,
   }));
 
   const allDestOptions = accounts.map((acc) => ({
-    value: acc.id,
+    value: acc.accountNumber || acc.id,
     label: `${acc.accountNumber} - ${acc.holderName} (${acc.accountType})`,
   }));
 

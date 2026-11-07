@@ -29,15 +29,15 @@ const Register = () => {
       return;
     }
 
-    if (password.length < 6) {
-      setErrorMsg('Password must contain at least 6 characters.');
+    if (password.length < 8) {
+      setErrorMsg('Password must contain at least 8 characters with uppercase, lowercase, number, and special character.');
       return;
     }
 
     setIsSubmitting(true);
     setErrorMsg(null);
 
-    const result = await register(name, email, password, confirmPassword);
+    const result = await register(name, email, password);
     setIsSubmitting(false);
 
     if (result.success) {

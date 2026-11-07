@@ -123,7 +123,7 @@ const Accounts = () => {
 
                 <div className="account-actions-row">
                   <Link
-                    to={`/statements/${acc.id}`}
+                    to={`/statements/${acc.accountNumber || acc.id}`}
                     className="account-statement-link"
                   >
                     View Statement &rarr;
@@ -136,7 +136,7 @@ const Accounts = () => {
                         className="btn-secondary"
                         style={{ height: '32px', padding: '0 8px', fontSize: '0.75rem' }}
                         onClick={() =>
-                          navigate(`/transactions?action=deposit&account=${acc.id}`)
+                          navigate(`/transactions?action=deposit&account=${acc.accountNumber || acc.id}`)
                         }
                       >
                         Deposit
@@ -146,7 +146,7 @@ const Accounts = () => {
                         className="btn-secondary"
                         style={{ height: '32px', padding: '0 8px', fontSize: '0.75rem' }}
                         onClick={() =>
-                          navigate(`/transactions?action=withdraw&account=${acc.id}`)
+                          navigate(`/transactions?action=withdraw&account=${acc.accountNumber || acc.id}`)
                         }
                       >
                         Withdraw

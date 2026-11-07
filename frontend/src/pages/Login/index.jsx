@@ -8,8 +8,8 @@ import FormInput from '../../components/FormInput/index.jsx';
 import './index.css';
 
 const Login = () => {
-  const [email, setEmail] = useState('rahul.sharma@ledgerline.com');
-  const [password, setPassword] = useState('password123');
+  const [email, setEmail] = useState('alice@example.com');
+  const [password, setPassword] = useState('Alice@123456');
   const [errorMsg, setErrorMsg] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -123,12 +123,12 @@ const Login = () => {
               className="demo-chip"
               onClick={() =>
                 handleSelectDemoUser(
-                  'rahul.sharma@ledgerline.com',
-                  'password123'
+                  'alice@example.com',
+                  'Alice@123456'
                 )
               }
             >
-              <span className="demo-chip-name">Rahul Sharma</span>
+              <span className="demo-chip-name">Alice Sharma</span>
               <span className="demo-chip-role">Account Holder</span>
             </button>
             <button
@@ -136,12 +136,12 @@ const Login = () => {
               className="demo-chip"
               onClick={() =>
                 handleSelectDemoUser(
-                  'admin.kavita@ledgerline.com',
-                  'admin123'
+                  'admin@ledgerline.internal',
+                  'Admin@123456'
                 )
               }
             >
-              <span className="demo-chip-name">Kavita Iyer</span>
+              <span className="demo-chip-name">System Admin</span>
               <span className="demo-chip-role">System Admin</span>
             </button>
             <button
@@ -149,12 +149,12 @@ const Login = () => {
               className="demo-chip"
               onClick={() =>
                 handleSelectDemoUser(
-                  'auditor.arun@ledgerline.com',
-                  'audit123'
+                  'auditor@ledgerline.internal',
+                  'Auditor@123456'
                 )
               }
             >
-              <span className="demo-chip-name">Arun Varma</span>
+              <span className="demo-chip-name">Compliance Auditor</span>
               <span className="demo-chip-role">Compliance Auditor</span>
             </button>
           </div>

@@ -38,7 +38,7 @@ const Statements = () => {
         const accs = await accountService.getAccounts();
         setAccounts(accs || []);
         if (!selectedAccountId && accs && accs.length > 0) {
-          setSelectedAccountId(accs[0].id);
+          setSelectedAccountId(accs[0].accountNumber || accs[0].id);
         } else if (urlAccountId) {
           setSelectedAccountId(urlAccountId);
         }
@@ -222,7 +222,7 @@ const Statements = () => {
               style={{ width: '280px', height: '36px' }}
             >
               {accounts.map((acc) => (
-                <option key={acc.id} value={acc.id}>
+                <option key={acc.id} value={acc.accountNumber || acc.id}>
                   {acc.accountNumber} — {acc.accountType} ({formatCurrency(acc.balance)})
                 </option>
               ))}
