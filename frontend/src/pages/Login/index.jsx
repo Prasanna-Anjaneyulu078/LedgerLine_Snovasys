@@ -7,6 +7,13 @@ import AuthLayout from '../../layouts/AuthLayout/index.jsx';
 import FormInput from '../../components/FormInput/index.jsx';
 import './index.css';
 
+const isSafeInternalPath = (path) =>
+  typeof path === 'string' &&
+  path.startsWith('/') &&
+  !path.startsWith('//') &&
+  !path.includes('\\') &&
+  !path.includes(':');
+
 const Login = () => {
   const [email, setEmail] = useState('alice@example.com');
   const [password, setPassword] = useState('Alice@123456');
@@ -21,7 +28,7 @@ const Login = () => {
   React.useEffect(() => {
     if (isAuthenticated && user && !authError) {
       const intendedDestination = location.state?.from?.pathname;
-      if (intendedDestination && !intendedDestination.includes('/login')) {
+      if (intendedDestination && isSafeInternalPath(intendedDestination) && !intendedDestination.includes('/login')) {
         navigate(intendedDestination, { replace: true });
       } else {
         const dest = getRoleDashboardRoute(user.role);
@@ -47,9 +54,9 @@ const Login = () => {
     setIsSubmitting(false);
 
     if (result.success && result.user) {
-      // Automatic role-based redirect
+      // Automatic role-based redirect with internal path validation
       const intendedDestination = location.state?.from?.pathname;
-      if (intendedDestination && !intendedDestination.includes('/login')) {
+      if (intendedDestination && isSafeInternalPath(intendedDestination) && !intendedDestination.includes('/login')) {
         navigate(intendedDestination, { replace: true });
       } else {
         const dest = getRoleDashboardRoute(result.user.role);
