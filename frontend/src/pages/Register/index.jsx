@@ -99,7 +99,7 @@ const Register = () => {
 
         <form onSubmit={handleSubmit}>
           <FormInput
-            label="Full Legal / Entity Name"
+            label="Full Name"
             id="register-name"
             name="name"
             type="text"
@@ -110,7 +110,7 @@ const Register = () => {
           />
 
           <FormInput
-            label="Corporate / Official Email Address"
+            label="Email Address"
             id="register-email"
             name="email"
             type="email"
