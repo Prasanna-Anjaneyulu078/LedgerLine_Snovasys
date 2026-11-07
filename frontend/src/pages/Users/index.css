@@ -16,3 +16,134 @@
   flex-wrap: wrap;
   gap: 1rem;
 }
+
+.users-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 1rem 1.25rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.users-search-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 240px;
+  max-width: 380px;
+}
+
+.users-search-icon {
+  position: absolute;
+  left: 0.875rem;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.users-search-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 0.875rem 0 2.5rem;
+  font-size: 0.8125rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background-color: #FFFFFF;
+  color: var(--text-color);
+  transition: all 0.15s ease;
+}
+
+.users-search-input:focus {
+  border-color: var(--primary-color);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+.users-filter-selects {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.users-select {
+  height: 38px;
+  padding: 0 0.875rem;
+  font-size: 0.8125rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  background-color: #FFFFFF;
+  color: var(--text-color);
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.users-select:focus {
+  border-color: var(--primary-color);
+  outline: none;
+}
+
+.users-pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-top: none;
+  border-bottom-left-radius: var(--border-radius);
+  border-bottom-right-radius: var(--border-radius);
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.users-pagination-info {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.users-pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.users-pagination-btn {
+  height: 34px;
+  padding: 0 1rem;
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  color: var(--text-color);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  transition: all 0.15s ease;
+}
+
+.users-pagination-btn:hover:not(:disabled) {
+  background-color: var(--surface-hover);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.users-pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: var(--border-color);
+}
+
+.users-page-indicator {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-color);
+  padding: 0 0.5rem;
+}

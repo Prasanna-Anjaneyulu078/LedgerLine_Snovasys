@@ -56,41 +56,65 @@ export class UserRepository {
   /**
    * Retrieve all users with optional filtering and pagination
    */
-  async findAll({ limit = 50, offset = 0, role = null, isActive = null } = {}, client = pool) {
+  async findAll({ page = 1, limit = 4, offset = null, search = null, role = null, isActive = null, status = null } = {}, client = pool) {
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 4));
+    const offsetNum = offset !== null && offset !== undefined
+      ? Math.max(0, parseInt(offset, 10) || 0)
+      : (pageNum - 1) * limitNum;
+
     const conditions = [];
     const params = [];
 
-    if (role) {
-      params.push(role);
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      params.push(`%${search.trim()}%`);
+      conditions.push(`(full_name ILIKE $${params.length} OR email ILIKE $${params.length})`);
+    }
+
+    if (role && typeof role === 'string' && role.trim() !== '') {
+      params.push(role.trim().toUpperCase());
       conditions.push(`role = $${params.length}`);
     }
 
-    if (isActive !== null && isActive !== undefined) {
-      params.push(isActive);
+    let activeFilter = isActive;
+    if (activeFilter === null || activeFilter === undefined) {
+      if (status === 'ACTIVE') activeFilter = true;
+      else if (status === 'SUSPENDED') activeFilter = false;
+    }
+    if (activeFilter !== null && activeFilter !== undefined && activeFilter !== '') {
+      const boolVal = activeFilter === true || activeFilter === 'true';
+      params.push(boolVal);
       conditions.push(`is_active = $${params.length}`);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    params.push(limit, offset);
+    const countSql = `SELECT count(*) as total FROM users ${whereClause};`;
+    const countRes = await client.query(countSql, params);
+    const totalUsers = Number(countRes.rows[0]?.total || 0);
+
+    const queryParams = [...params, limitNum, offsetNum];
     const sql = `
       SELECT id, full_name, email, role, is_active, created_at, updated_at
       FROM users
       ${whereClause}
-      ORDER BY created_at DESC
-      LIMIT $${params.length - 1} OFFSET $${params.length};
+      ORDER BY created_at DESC, id DESC
+      LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length};
     `;
 
-    const countSql = `SELECT count(*) as total FROM users ${whereClause};`;
+    const rowsRes = await client.query(sql, queryParams);
 
-    const [rowsRes, countRes] = await Promise.all([
-      client.query(sql, params),
-      client.query(countSql, params.slice(0, -2)),
-    ]);
+    const totalPages = totalUsers > 0 ? Math.ceil(totalUsers / limitNum) : 0;
 
     return {
       users: rowsRes.rows,
-      total: Number(countRes.rows[0].total),
+      total: totalUsers,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        totalUsers,
+        totalPages,
+      },
     };
   }
 

@@ -20,12 +20,25 @@ export function normalizeUser(u) {
 export const adminService = {
   /**
    * List all registered users (Admin only)
+   * Supports server-side pagination, search, role and status filtering
    */
   async getUsers(query = {}) {
     const response = await api.get('/admin/users', { params: query });
     const payload = response.data?.data || response.data;
     const rawList = payload?.users || (Array.isArray(payload) ? payload : []);
-    return rawList.map(normalizeUser);
+    const normalizedUsers = rawList.map(normalizeUser);
+    const pagination = payload?.pagination || {
+      page: Number(query.page) || 1,
+      limit: Number(query.limit) || 4,
+      totalUsers: payload?.total ?? normalizedUsers.length,
+      totalPages: Math.ceil((payload?.total ?? normalizedUsers.length) / (Number(query.limit) || 4)),
+    };
+
+    const result = normalizedUsers;
+    result.users = normalizedUsers;
+    result.pagination = pagination;
+    result.total = pagination.totalUsers;
+    return result;
   },
 
   /**
