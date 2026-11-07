@@ -11,6 +11,8 @@ export class LedgerService {
     const result = await ledgerRepository.findAll(query);
     return {
       ...result,
+      totalCreditsFormatted: result.totalCreditsPaise ? formatRupees(result.totalCreditsPaise) : '0.00',
+      totalDebitsFormatted: result.totalDebitsPaise ? formatRupees(result.totalDebitsPaise) : '0.00',
       entries: result.entries.map((e) => ({
         ...e,
         amountPaise: e.amount.toString(),

@@ -50,12 +50,23 @@ export function normalizeAuditEvent(ev) {
 export const ledgerService = {
   /**
    * Global double-entry ledger entries (Admin / Auditor)
+   * Carries authoritative PostgreSQL database-aggregated credit and debit totals
    */
   async getGlobalLedger(query = {}) {
     const response = await api.get('/ledger', { params: query });
     const payload = response.data?.data || response.data;
     const rawList = payload?.entries || payload?.ledger || (Array.isArray(payload) ? payload : []);
-    return rawList.map(normalizeLedgerEntry);
+    const normalized = rawList.map(normalizeLedgerEntry);
+
+    const result = normalized;
+    result.entries = normalized;
+    result.total = payload?.total ?? normalized.length;
+    result.totalCreditsPaise = payload?.totalCreditsPaise;
+    result.totalCreditsFormatted = payload?.totalCreditsFormatted;
+    result.totalDebitsPaise = payload?.totalDebitsPaise;
+    result.totalDebitsFormatted = payload?.totalDebitsFormatted;
+    result.pagination = payload?.pagination;
+    return result;
   },
 
   /**
@@ -77,7 +88,13 @@ export const ledgerService = {
     const response = await api.get('/audit-events', { params: query });
     const payload = response.data?.data || response.data;
     const rawList = payload?.events || (Array.isArray(payload) ? payload : []);
-    return rawList.map(normalizeAuditEvent);
+    const normalized = rawList.map(normalizeAuditEvent);
+
+    const result = normalized;
+    result.events = normalized;
+    result.total = payload?.total ?? normalized.length;
+    result.pagination = payload?.pagination;
+    return result;
   },
 };
 

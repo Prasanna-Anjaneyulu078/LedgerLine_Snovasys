@@ -1258,6 +1258,60 @@ Stop after the final report and wait for my approval.
 
 ---
 
+### Phase 8: Complete Admin Dashboard Audit, Fake Data Removal, and Backend API Integration
+
+**Date:** 2026-11-08
+
+#### 1. Objective
+Perform a comprehensive audit of the entire LedgerLine Admin Dashboard and admin-related frontend functionality. Identify and remove every fake, hardcoded, mock, or placeholder business-data source. Connect all frontend views to authoritative PostgreSQL database records via existing and extended backend APIs. Fill backend API gaps using the existing route → controller → service → repository architecture, ensure strict financial accuracy and database-level aggregation, enforce role-based access control, and verify with automated integration tests.
+
+#### 2. Original AI Prompt
+*Verbatim prompt from conversation history:*
+```text
+# Task: Complete Admin Dashboard Audit, Fake Data Removal, and Backend API Integration
+
+## Objective
+
+Perform a comprehensive analysis of the entire LedgerLine Admin Dashboard and all admin-related frontend functionality.
+
+Identify and remove every fake, hardcoded, static, dummy, placeholder, or mock business-data source. Replace it with actual data retrieved from the PostgreSQL database through the existing backend APIs.
+
+Ensure that all relevant Admin backend endpoints are properly integrated into the frontend Admin Dashboard and its related pages.
+
+The goal is to make the Admin Panel fully functional and database-driven, not just visually complete.
+```
+
+#### 3. AI Suggestion
+- Suggested updating frontend components to compute aggregated totals using client-side JavaScript `.reduce()`.
+- Suggested executing parallel queries on a single checked-out `client` connection with `Promise.all`.
+
+#### 4. Human Review and Correction
+- Rejected client-side `.reduce()` on paginated records: Financial totals must be computed globally at the PostgreSQL database level using `SUM()` and `COUNT()` with `FILTER` clauses to ensure accuracy across all records and prevent floating-point drift.
+- Corrected connection management in `AdminService.getDashboardOverview`: Replaced parallel execution on a single checked-out `client` with `pool.query` to adhere to PostgreSQL connection multiplexing rules and eliminate deprecation warnings.
+- Fixed broken navigation links: Updated `AdminDashboard` link pointing to `/transactions` (which threw 403 Forbidden for Admin) to `/admin/transactions`. Created dedicated `/admin/statements` and `/admin/statements/:accountId` routes guarded by `ADMIN` role.
+- Added comprehensive server-side filtering, searching, and pagination to `accountRepository.findAll`, `transactionRepository.findAll`, `ledgerRepository.findAll`, and `auditRepository.findAll`.
+
+#### 5. Final Implementation
+- `backend/src/modules/admin/admin.service.js`: Added inactive users, inactive accounts, unsuccessful transactions, and full transaction type distribution queries with database-level aggregation.
+- `backend/src/repositories/account.repository.js`: Added search across `account_number`, `owner_name`, `owner_email`, status and type filtering, and server-side pagination returning `{ accounts, total, pagination }`.
+- `backend/src/repositories/ledger.repository.js`: Added SQL aggregates `SUM(amount) FILTER (WHERE entry_type = 'CREDIT'/'DEBIT')` returning authoritative `totalCreditsPaise` and `totalDebitsPaise`.
+- `backend/src/repositories/transaction.repository.js`: Added search and pagination returning `{ transactions, total, pagination }`.
+- `frontend/src/routes/AppRoutes.jsx`: Added `/admin/statements` and `/admin/statements/:accountId` protected routes for ADMIN.
+- `frontend/src/pages/AdminDashboard/index.jsx`: Fixed `/admin/transactions` link, rendered inactive users/accounts and unsuccessful transaction counts, and added database-aggregated Transaction Type Distribution table.
+- `frontend/src/pages/AccountManagement/index.jsx`: Integrated server-side search, status and type filtering, pagination, and direct statement viewing.
+- `frontend/src/pages/Ledger/index.jsx`: Replaced client-side `.reduce()` with database-aggregated `totalCreditsFormatted` and `totalDebitsFormatted`.
+- `backend/tests/integration/admin_dashboard.test.js`: Comprehensive integration test suite verifying admin telemetry, user management, account controls, ledger aggregates, and statement inspection.
+
+#### 6. Verification
+- Backend integration suite `tests/integration/admin_dashboard.test.js`: Passed with 12/12 tests.
+- Full backend test suite: 10/10 test suites passed.
+- Frontend production build: Succeeded with zero errors (`npm run build --prefix frontend`).
+
+#### 7. Related Commit
+- Pending user approval.
+
+---
+
 ## Documentation Notes
 
 - All original prompts are genuine, verbatim records extracted from active conversation history.

@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   BookOpen,
   ShieldCheck,
   RefreshCw,
   Lock,
-  ArrowDownLeft,
-  ArrowUpRight,
   Filter,
   RotateCcw,
 } from 'lucide-react';
@@ -22,40 +20,49 @@ import './index.css';
 
 const Ledger = () => {
   const { role } = useAuth();
-  const [ledgerEntries, setLedgerEntries] = useState([]);
+  const [ledgerData, setLedgerData] = useState({
+    entries: [],
+    total: 0,
+    totalCreditsFormatted: '₹0.00',
+    totalDebitsFormatted: '₹0.00',
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [filterType, setFilterType] = useState('ALL');
 
-  const fetchLedger = async () => {
+  const fetchLedger = useCallback(async (type = filterType) => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await ledgerService.getGlobalLedger();
-      setLedgerEntries(data || []);
+      const query = {};
+      if (type && type !== 'ALL') query.entryType = type;
+      const data = await ledgerService.getGlobalLedger(query);
+      const list = data?.entries || (Array.isArray(data) ? data : []);
+
+      setLedgerData({
+        entries: list,
+        total: data?.total ?? list.length,
+        totalCreditsFormatted: data?.totalCreditsFormatted
+          ? (data.totalCreditsFormatted.startsWith('₹') ? data.totalCreditsFormatted : `₹${data.totalCreditsFormatted}`)
+          : '₹0.00',
+        totalDebitsFormatted: data?.totalDebitsFormatted
+          ? (data.totalDebitsFormatted.startsWith('₹') ? data.totalDebitsFormatted : `₹${data.totalDebitsFormatted}`)
+          : '₹0.00',
+      });
     } catch (err) {
       setError('Unable to load institutional global ledger entries.');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [filterType]);
 
   useEffect(() => {
-    fetchLedger();
-  }, []);
+    fetchLedger(filterType);
+  }, [filterType]);
 
-  const totalCredits = ledgerEntries
-    .filter((e) => e.entryType === 'CREDIT')
-    .reduce((sum, e) => sum + (e.amount || 0), 0);
-
-  const totalDebits = ledgerEntries
-    .filter((e) => e.entryType === 'DEBIT')
-    .reduce((sum, e) => sum + (e.amount || 0), 0);
-
-  const filteredEntries = ledgerEntries.filter((e) => {
-    if (filterType !== 'ALL' && e.entryType !== filterType) return false;
-    return true;
-  });
+  const handleFilterChange = (newType) => {
+    setFilterType(newType);
+  };
 
   const columns = [
     {
@@ -162,7 +169,7 @@ const Ledger = () => {
             <button
               type="button"
               className="btn-secondary"
-              onClick={fetchLedger}
+              onClick={() => fetchLedger(filterType)}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
               <RefreshCw size={14} />
@@ -171,24 +178,24 @@ const Ledger = () => {
           </div>
         </div>
 
-        {/* Double-Entry Reconciliation Card */}
+        {/* Double-Entry Reconciliation Card with Authoritative Database Aggregates */}
         <div className="ledger-reconciliation-card">
           <div className="rec-item">
             <span className="rec-label">Total Cumulative Credits</span>
             <span className="rec-value tabular-nums" style={{ color: 'var(--success-color)' }}>
-              {formatCurrency(totalCredits)}
+              {ledgerData.totalCreditsFormatted}
             </span>
           </div>
           <div className="rec-item">
             <span className="rec-label">Total Cumulative Debits</span>
             <span className="rec-value tabular-nums" style={{ color: 'var(--danger-color)' }}>
-              {formatCurrency(totalDebits)}
+              {ledgerData.totalDebitsFormatted}
             </span>
           </div>
           <div className="rec-item">
             <span className="rec-label">Total Ledger Postings</span>
             <span className="rec-value tabular-nums">
-              {ledgerEntries.length} entries
+              {ledgerData.total} entries
             </span>
           </div>
           <div className="rec-item">
@@ -218,7 +225,7 @@ const Ledger = () => {
                 id="ledger-entry-type-filter"
                 className="ledger-filter-select"
                 value={filterType}
-                onChange={(e) => setFilterType(e.target.value)}
+                onChange={(e) => handleFilterChange(e.target.value)}
               >
                 <option value="ALL">All Entries (Debits & Credits)</option>
                 <option value="CREDIT">Credits Only (+Cr)</option>
@@ -230,7 +237,7 @@ const Ledger = () => {
               <button
                 type="button"
                 className="ledger-filter-reset-btn"
-                onClick={() => setFilterType('ALL')}
+                onClick={() => handleFilterChange('ALL')}
                 title="Reset active filter"
               >
                 <RotateCcw size={12} />
@@ -241,15 +248,15 @@ const Ledger = () => {
         </div>
 
         {isLoading ? (
-          <LoadingState message="Auditing global double-entry ledger register..." />
+          <LoadingState message="Auditing global double-entry ledger register from PostgreSQL..." />
         ) : error ? (
-          <ErrorState message={error} onRetry={fetchLedger} />
+          <ErrorState message={error} onRetry={() => fetchLedger(filterType)} />
         ) : (
           <DataTable
             columns={columns}
-            data={filteredEntries}
+            data={ledgerData.entries}
             title="Double-Entry General Ledger"
-            subtitle={`${filteredEntries.length} chronological journal entries`}
+            subtitle={`${ledgerData.total} chronological journal entries registered in database`}
             searchPlaceholder="Search by reference or account..."
             searchField="transactionReference"
             emptyMessage="No ledger postings found matching selected criteria."

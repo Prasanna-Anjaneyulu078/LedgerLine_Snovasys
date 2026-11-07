@@ -25,6 +25,9 @@ const AuditorDashboard = () => {
   const [ledgerEntries, setLedgerEntries] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [auditEvents, setAuditEvents] = useState([]);
+  const [totalLedgerEntries, setTotalLedgerEntries] = useState(0);
+  const [totalTransactionsCount, setTotalTransactionsCount] = useState(0);
+  const [totalAuditEventsCount, setTotalAuditEventsCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -37,9 +40,12 @@ const AuditorDashboard = () => {
         transactionService.getTransactions(),
         ledgerService.getAuditEvents(),
       ]);
-      setLedgerEntries(l || []);
-      setTransactions(t || []);
-      setAuditEvents(a || []);
+      setLedgerEntries(l?.entries || l || []);
+      setTotalLedgerEntries(l?.total ?? (l?.length || 0));
+      setTransactions(t?.transactions || t || []);
+      setTotalTransactionsCount(t?.total ?? (t?.length || 0));
+      setAuditEvents(a?.events || a || []);
+      setTotalAuditEventsCount(a?.total ?? (a?.length || 0));
     } catch (err) {
       setError('Unable to load institutional compliance data.');
     } finally {
@@ -50,14 +56,6 @@ const AuditorDashboard = () => {
   useEffect(() => {
     loadData();
   }, []);
-
-  const totalCredits = ledgerEntries
-    .filter((e) => e.entryType === 'CREDIT')
-    .reduce((sum, e) => sum + (e.amount || 0), 0);
-
-  const totalDebits = ledgerEntries
-    .filter((e) => e.entryType === 'DEBIT')
-    .reduce((sum, e) => sum + (e.amount || 0), 0);
 
   const ledgerColumns = [
     {
@@ -163,19 +161,19 @@ const AuditorDashboard = () => {
             />
             <StatCard
               title="Total Ledger Entries"
-              value={ledgerEntries.length.toString()}
+              value={totalLedgerEntries.toString()}
               icon={BookOpen}
               subtitle="Append-only committed journal rows"
             />
             <StatCard
               title="Total Transactions"
-              value={transactions.length.toString()}
+              value={totalTransactionsCount.toString()}
               icon={ArrowLeftRight}
               subtitle="Deposits, withdrawals & transfers"
             />
             <StatCard
               title="Security Events"
-              value={auditEvents.length.toString()}
+              value={totalAuditEventsCount.toString()}
               icon={ShieldAlert}
               subtitle="Logged regulatory security actions"
             />

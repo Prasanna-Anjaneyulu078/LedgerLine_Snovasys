@@ -53,12 +53,16 @@ const AdminDashboard = () => {
   const overview = dashboardData?.overview || {
     totalUsers: 0,
     activeUsers: 0,
+    inactiveUsers: 0,
     totalAccounts: 0,
     activeAccounts: 0,
+    inactiveAccounts: 0,
     totalVaultBalanceFormatted: '₹0.00',
     totalTransactions: 0,
     successfulTransactions: 0,
     refusedTransactions: 0,
+    failedTransactions: 0,
+    unsuccessfulTransactions: 0,
     totalDepositsFormatted: '₹0.00',
     totalWithdrawalsFormatted: '₹0.00',
     totalTransferVolumeFormatted: '₹0.00',
@@ -66,6 +70,7 @@ const AdminDashboard = () => {
   };
 
   const trends = dashboardData?.transactionTrends || [];
+  const typeDistribution = dashboardData?.transactionTypeDistribution || [];
   const recentTransactions = dashboardData?.recentTransactions || [];
 
   // Compute maximum volume across trends for proportional SVG/CSS bar heights
@@ -237,13 +242,13 @@ const AdminDashboard = () => {
               title="Total System Users"
               value={overview.totalUsers.toString()}
               icon={Users}
-              subtitle={`${overview.activeUsers} active identities in PostgreSQL`}
+              subtitle={`${overview.activeUsers} active, ${overview.inactiveUsers} inactive in PostgreSQL`}
             />
             <StatCard
               title="Total Accounts"
               value={overview.totalAccounts.toString()}
               icon={Wallet}
-              subtitle={`${overview.activeAccounts} active operational vaults`}
+              subtitle={`${overview.activeAccounts} active, ${overview.inactiveAccounts} inactive/held`}
             />
             <StatCard
               title="Total Vault Assets"
@@ -257,7 +262,7 @@ const AdminDashboard = () => {
               title="Total Transactions"
               value={overview.totalTransactions.toString()}
               icon={Layers}
-              subtitle={`${overview.successfulTransactions} successful (${overview.refusedTransactions} refused)`}
+              subtitle={`${overview.successfulTransactions} successful (${overview.unsuccessfulTransactions} unsuccessful)`}
             />
             <StatCard
               title="Total Deposits"
@@ -424,6 +429,30 @@ const AdminDashboard = () => {
                   </span>
                 </div>
               </div>
+
+              {typeDistribution.length > 0 && (
+                <div style={{ marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '12px' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Transaction Type Distribution (Database Reconciled)
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
+                    {typeDistribution.map((td) => (
+                      <div key={td.type} style={{ padding: '8px 10px', background: 'var(--bg-secondary)', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                          <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>{td.type}</span>
+                          <span style={{ fontSize: '0.6875rem', color: 'var(--text-secondary)' }}>{td.count} total</span>
+                        </div>
+                        <div style={{ fontSize: '0.8125rem', fontWeight: 600, fontFamily: 'monospace' }}>
+                          {td.volumeFormatted}
+                        </div>
+                        <div style={{ fontSize: '0.6875rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                          {td.successfulCount} success · {td.refusedCount} refused
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -433,7 +462,7 @@ const AdminDashboard = () => {
               <h3 className="admin-data-section-title">
                 Recent Institutional Transactions
               </h3>
-              <Link to="/transactions" className="admin-data-section-link">
+              <Link to="/admin/transactions" className="admin-data-section-link">
                 View All Transactions &rarr;
               </Link>
             </div>

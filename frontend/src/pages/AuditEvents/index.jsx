@@ -142,8 +142,7 @@ const AuditEvents = () => {
             data={events}
             title="Institutional Event Register"
             subtitle={`${events.length} chronological security events`}
-            searchPlaceholder="Search by actor or action..."
-            searchField="actorEmail"
+            searchPlaceholder="Search by actor, action, or resource..."
           />
         )}
       </div>

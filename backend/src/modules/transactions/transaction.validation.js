@@ -154,6 +154,7 @@ export const transactionIdParamSchema = z.object({
 });
 
 export const transactionQuerySchema = z.object({
+  page: z.coerce.number().min(1).optional(),
   limit: z.coerce.number().min(1).max(100).default(50).optional(),
   offset: z.coerce.number().min(0).default(0).optional(),
   accountId: z.string().uuid().optional(),
@@ -162,5 +163,6 @@ export const transactionQuerySchema = z.object({
   type: z.enum(['DEPOSIT', 'WITHDRAWAL', 'TRANSFER']).optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
+  search: z.string().trim().optional(),
 });
 

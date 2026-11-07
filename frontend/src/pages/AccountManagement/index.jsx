@@ -1,9 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Wallet, ShieldAlert, RefreshCw, FileText } from 'lucide-react';
+import { Wallet, ShieldAlert, RefreshCw, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import adminService from '../../services/adminService.js';
 import { formatCurrency } from '../../utils/formatCurrency.js';
-import { formatDate } from '../../utils/formatDate.js';
 import { getErrorMessage } from '../../services/api.js';
 import DashboardLayout from '../../layouts/DashboardLayout/index.jsx';
 import DataTable from '../../components/DataTable/index.jsx';
@@ -14,8 +13,20 @@ import LoadingState from '../../components/LoadingState/index.jsx';
 import ErrorState from '../../components/ErrorState/index.jsx';
 import './index.css';
 
+const PAGE_SIZE = 6;
+
 const AccountManagement = () => {
   const [accounts, setAccounts] = useState([]);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: PAGE_SIZE,
+    totalAccounts: 0,
+    totalPages: 0,
+  });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -25,22 +36,68 @@ const AccountManagement = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [modalError, setModalError] = useState(null);
 
-  const fetchAccounts = async () => {
+  const fetchAccounts = useCallback(async (
+    page = currentPage,
+    search = searchTerm,
+    status = statusFilter,
+    type = typeFilter
+  ) => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await adminService.getAccounts();
-      setAccounts(data || []);
+      const query = {
+        page,
+        limit: PAGE_SIZE,
+      };
+      if (search && search.trim()) query.search = search.trim();
+      if (status) query.status = status;
+      if (type) query.accountType = type;
+
+      const data = await adminService.getAccounts(query);
+      const list = data?.accounts || (Array.isArray(data) ? data : []);
+      setAccounts(list);
+
+      if (data?.pagination) {
+        setPagination(data.pagination);
+      } else {
+        const total = data?.total ?? list.length;
+        setPagination({
+          page,
+          limit: PAGE_SIZE,
+          totalAccounts: total,
+          totalPages: total > 0 ? Math.ceil(total / PAGE_SIZE) : 0,
+        });
+      }
     } catch (err) {
-      setError('Unable to fetch institutional accounts from backend.');
+      setError('Unable to fetch institutional accounts from backend database.');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentPage, searchTerm, statusFilter, typeFilter]);
 
   useEffect(() => {
-    fetchAccounts();
-  }, []);
+    fetchAccounts(currentPage, searchTerm, statusFilter, typeFilter);
+  }, [currentPage, searchTerm, statusFilter, typeFilter]);
+
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleStatusFilterChange = (e) => {
+    setStatusFilter(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleTypeFilterChange = (e) => {
+    setTypeFilter(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || (pagination.totalPages > 0 && newPage > pagination.totalPages)) return;
+    setCurrentPage(newPage);
+  };
 
   const handleOpenStatusModal = (acc) => {
     setSelectedAccountForStatus(acc);
@@ -56,7 +113,7 @@ const AccountManagement = () => {
     try {
       await adminService.updateAccountStatus(selectedAccountForStatus.id, targetStatus);
       setSelectedAccountForStatus(null);
-      await fetchAccounts();
+      await fetchAccounts(currentPage, searchTerm, statusFilter, typeFilter);
     } catch (err) {
       setModalError(getErrorMessage(err));
     } finally {
@@ -123,7 +180,7 @@ const AccountManagement = () => {
             Change Status
           </button>
           <Link
-            to={`/statements/${row.id}`}
+            to={`/admin/statements/${row.id}`}
             className="btn-secondary"
             style={{ height: '30px', padding: '0 8px', fontSize: '0.75rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
           >
@@ -139,6 +196,11 @@ const AccountManagement = () => {
     { value: 'FROZEN', label: 'FROZEN — Regulatory hold, debits blocked' },
     { value: 'CLOSED', label: 'CLOSED — Terminated account ledger' },
   ];
+
+  const totalAccounts = pagination.totalAccounts;
+  const totalPages = pagination.totalPages;
+  const startItem = totalAccounts === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const endItem = Math.min(currentPage * PAGE_SIZE, totalAccounts);
 
   return (
     <DashboardLayout
@@ -158,7 +220,7 @@ const AccountManagement = () => {
           <button
             type="button"
             className="btn-secondary"
-            onClick={fetchAccounts}
+            onClick={() => fetchAccounts(currentPage, searchTerm, statusFilter, typeFilter)}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
           >
             <RefreshCw size={14} />
@@ -166,19 +228,103 @@ const AccountManagement = () => {
           </button>
         </div>
 
+        {/* Filter and Search Bar */}
+        <div className="account-mgmt-filter-bar">
+          <div className="account-mgmt-search-container">
+            <Search size={15} className="account-mgmt-search-icon" />
+            <input
+              type="text"
+              className="account-mgmt-search-input"
+              placeholder="Search by account number or holder..."
+              value={searchTerm}
+              onChange={handleSearchChange}
+            />
+          </div>
+
+          <div className="account-mgmt-filter-selects">
+            <select
+              value={statusFilter}
+              onChange={handleStatusFilterChange}
+              className="account-mgmt-select"
+              aria-label="Filter by status"
+            >
+              <option value="">All Statuses</option>
+              <option value="ACTIVE">Active</option>
+              <option value="FROZEN">Frozen (Held)</option>
+              <option value="CLOSED">Closed</option>
+            </select>
+
+            <select
+              value={typeFilter}
+              onChange={handleTypeFilterChange}
+              className="account-mgmt-select"
+              aria-label="Filter by account type"
+            >
+              <option value="">All Types</option>
+              <option value="SAVINGS">Savings</option>
+              <option value="CHECKING">Checking</option>
+              <option value="OPERATIONAL">Operational</option>
+            </select>
+          </div>
+        </div>
+
         {isLoading ? (
-          <LoadingState message="Retrieving institutional accounts..." />
+          <LoadingState message="Retrieving institutional accounts from PostgreSQL..." />
         ) : error ? (
-          <ErrorState message={error} onRetry={fetchAccounts} />
+          <ErrorState message={error} onRetry={() => fetchAccounts(currentPage, searchTerm, statusFilter, typeFilter)} />
         ) : (
-          <DataTable
-            columns={columns}
-            data={accounts}
-            title="Institutional Account Portfolio"
-            subtitle={`${accounts.length} total active and held accounts`}
-            searchPlaceholder="Search by number or holder..."
-            searchField="accountNumber"
-          />
+          <div>
+            <DataTable
+              columns={columns}
+              data={accounts}
+              title="Institutional Account Portfolio"
+              subtitle={
+                totalAccounts > 0
+                  ? `Showing page ${currentPage} of ${Math.max(1, totalPages)} (${totalAccounts} total registered accounts in PostgreSQL database)`
+                  : '0 accounts found'
+              }
+              emptyMessage="No institutional accounts found matching criteria."
+            />
+
+            {/* Pagination Controls */}
+            <div className="account-mgmt-pagination-bar">
+              <div className="account-mgmt-pagination-info">
+                {totalAccounts > 0 ? (
+                  <span>
+                    Showing <strong>{startItem}</strong> to <strong>{endItem}</strong> of <strong>{totalAccounts}</strong> accounts
+                  </span>
+                ) : (
+                  <span>0 accounts</span>
+                )}
+              </div>
+
+              <div className="account-mgmt-pagination-actions">
+                <button
+                  type="button"
+                  className="account-mgmt-pagination-btn"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage <= 1 || isLoading}
+                >
+                  <ChevronLeft size={16} />
+                  <span>Previous</span>
+                </button>
+
+                <span className="account-mgmt-page-indicator">
+                  Page {currentPage} of {Math.max(1, totalPages)}
+                </span>
+
+                <button
+                  type="button"
+                  className="account-mgmt-pagination-btn"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage >= totalPages || isLoading}
+                >
+                  <span>Next</span>
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* STATUS CHANGE CONFIRMATION MODAL */}

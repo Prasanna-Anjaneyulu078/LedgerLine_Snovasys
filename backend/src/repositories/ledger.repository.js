@@ -83,28 +83,73 @@ export class LedgerRepository {
   }
 
   /**
-   * Find global ledger records (auditor view)
+   * Find global ledger records (auditor / admin view)
+   * With authoritative database-aggregated credit and debit totals
    */
-  async findAll({ limit = 50, offset = 0 } = {}, client = pool) {
-    const sql = `
-      SELECT le.id, le.transaction_id, le.account_id, le.entry_type, le.amount, le.balance_after, le.created_at,
-             a.account_number, t.transaction_reference, t.transaction_type
+  async findAll({ limit = 50, offset = null, page = null, entryType = null, search = null } = {}, client = pool) {
+    const pageNum = page ? Math.max(1, parseInt(page, 10) || 1) : null;
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 50));
+    const offsetNum = offset !== null && offset !== undefined
+      ? Math.max(0, parseInt(offset, 10) || 0)
+      : pageNum
+      ? (pageNum - 1) * limitNum
+      : 0;
+
+    const conditions = [];
+    const params = [];
+
+    if (entryType && entryType !== 'ALL' && typeof entryType === 'string' && entryType.trim() !== '') {
+      params.push(entryType.trim().toUpperCase());
+      conditions.push(`le.entry_type = $${params.length}`);
+    }
+
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      params.push(`%${search.trim()}%`);
+      conditions.push(`(t.transaction_reference ILIKE $${params.length} OR a.account_number ILIKE $${params.length} OR t.description ILIKE $${params.length})`);
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const summarySql = `
+      SELECT
+        count(*)::int as total,
+        COALESCE(SUM(le.amount) FILTER (WHERE le.entry_type = 'CREDIT'), 0)::text as total_credits_paise,
+        COALESCE(SUM(le.amount) FILTER (WHERE le.entry_type = 'DEBIT'), 0)::text as total_debits_paise
       FROM ledger_entries le
       JOIN accounts a ON le.account_id = a.id
       JOIN transactions t ON le.transaction_id = t.id
-      ORDER BY le.created_at DESC
-      LIMIT $1 OFFSET $2;
+      ${whereClause};
     `;
-    const countSql = 'SELECT count(*) as total FROM ledger_entries;';
+    const summaryRes = await client.query(summarySql, params);
+    const summary = summaryRes.rows[0];
+    const totalEntries = Number(summary?.total || 0);
 
-    const [rowsRes, countRes] = await Promise.all([
-      client.query(sql, [limit, offset]),
-      client.query(countSql),
-    ]);
+    const queryParams = [...params, limitNum, offsetNum];
+    const sql = `
+      SELECT le.id, le.transaction_id, le.account_id, le.entry_type, le.amount, le.balance_after, le.created_at,
+             a.account_number, t.transaction_reference, t.transaction_type, t.description
+      FROM ledger_entries le
+      JOIN accounts a ON le.account_id = a.id
+      JOIN transactions t ON le.transaction_id = t.id
+      ${whereClause}
+      ORDER BY le.created_at DESC, le.id DESC
+      LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length};
+    `;
+
+    const rowsRes = await client.query(sql, queryParams);
+    const totalPages = totalEntries > 0 ? Math.ceil(totalEntries / limitNum) : 0;
 
     return {
       entries: rowsRes.rows,
-      total: Number(countRes.rows[0].total),
+      total: totalEntries,
+      totalCreditsPaise: summary.total_credits_paise,
+      totalDebitsPaise: summary.total_debits_paise,
+      pagination: {
+        page: pageNum || Math.floor(offsetNum / limitNum) + 1,
+        limit: limitNum,
+        totalEntries,
+        totalPages,
+      },
     };
   }
 

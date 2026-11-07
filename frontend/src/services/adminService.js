@@ -61,12 +61,25 @@ export const adminService = {
 
   /**
    * List all institutional accounts system-wide (Admin only)
+   * Supports server-side pagination, search, status, and account type filtering
    */
   async getAccounts(query = {}) {
     const response = await api.get('/admin/accounts', { params: query });
     const payload = response.data?.data || response.data;
     const rawList = payload?.accounts || (Array.isArray(payload) ? payload : []);
-    return rawList.map(normalizeAccount);
+    const normalized = rawList.map(normalizeAccount);
+    const pagination = payload?.pagination || {
+      page: Number(query.page) || 1,
+      limit: Number(query.limit) || 10,
+      totalAccounts: payload?.total ?? normalized.length,
+      totalPages: Math.ceil((payload?.total ?? normalized.length) / (Number(query.limit) || 10)),
+    };
+
+    const result = normalized;
+    result.accounts = normalized;
+    result.pagination = pagination;
+    result.total = pagination.totalAccounts;
+    return result;
   },
 
   /**

@@ -170,6 +170,26 @@ const AppRoutes = () => {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/admin/statements"
+        element={
+          <ProtectedRoute>
+            <RoleBasedRoute allowedRoles={['ADMIN']}>
+              <Statements />
+            </RoleBasedRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/statements/:accountId"
+        element={
+          <ProtectedRoute>
+            <RoleBasedRoute allowedRoles={['ADMIN']}>
+              <Statements />
+            </RoleBasedRoute>
+          </ProtectedRoute>
+        }
+      />
 
       {/* Auditor Routes */}
       <Route

@@ -79,30 +79,47 @@ export class TransactionRepository {
   async findAll(
     {
       limit = 50,
-      offset = 0,
+      offset = null,
+      page = null,
       accountId = null,
       status = null,
       type = null,
       startDate = null,
       endDate = null,
+      search = null,
     } = {},
     client = pool
   ) {
+    const pageNum = page ? Math.max(1, parseInt(page, 10) || 1) : null;
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 50));
+    const offsetNum = offset !== null && offset !== undefined
+      ? Math.max(0, parseInt(offset, 10) || 0)
+      : pageNum
+      ? (pageNum - 1) * limitNum
+      : 0;
+
     const conditions = [];
     const params = [];
+
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      params.push(`%${search.trim()}%`);
+      conditions.push(
+        `(t.transaction_reference ILIKE $${params.length} OR t.description ILIKE $${params.length} OR sa.account_number ILIKE $${params.length} OR da.account_number ILIKE $${params.length} OR u.full_name ILIKE $${params.length} OR u.email ILIKE $${params.length})`
+      );
+    }
 
     if (accountId) {
       params.push(accountId);
       conditions.push(`(t.source_account_id = $${params.length} OR t.destination_account_id = $${params.length})`);
     }
 
-    if (status) {
-      params.push(status);
+    if (status && status !== 'ALL' && typeof status === 'string' && status.trim() !== '') {
+      params.push(status.trim().toUpperCase());
       conditions.push(`t.status = $${params.length}`);
     }
 
-    if (type) {
-      params.push(type);
+    if (type && type !== 'ALL' && typeof type === 'string' && type.trim() !== '') {
+      params.push(type.trim().toUpperCase());
       conditions.push(`t.transaction_type = $${params.length}`);
     }
 
@@ -118,7 +135,18 @@ export class TransactionRepository {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    params.push(limit, offset);
+    const countSql = `
+      SELECT count(*) as total
+      FROM transactions t
+      LEFT JOIN accounts sa ON t.source_account_id = sa.id
+      LEFT JOIN accounts da ON t.destination_account_id = da.id
+      JOIN users u ON t.initiated_by = u.id
+      ${whereClause};
+    `;
+    const countRes = await client.query(countSql, params);
+    const totalTransactions = Number(countRes.rows[0]?.total || 0);
+
+    const queryParams = [...params, limitNum, offsetNum];
     const sql = `
       SELECT t.id, t.transaction_reference, t.transaction_type, t.source_account_id,
              t.destination_account_id, t.amount, t.status, t.initiated_by, t.description, t.created_at,
@@ -130,20 +158,22 @@ export class TransactionRepository {
       LEFT JOIN accounts da ON t.destination_account_id = da.id
       JOIN users u ON t.initiated_by = u.id
       ${whereClause}
-      ORDER BY t.created_at DESC
-      LIMIT $${params.length - 1} OFFSET $${params.length};
+      ORDER BY t.created_at DESC, t.id DESC
+      LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length};
     `;
 
-    const countSql = `SELECT count(*) as total FROM transactions t ${whereClause};`;
-
-    const [rowsRes, countRes] = await Promise.all([
-      client.query(sql, params),
-      client.query(countSql, params.slice(0, -2)),
-    ]);
+    const rowsRes = await client.query(sql, queryParams);
+    const totalPages = totalTransactions > 0 ? Math.ceil(totalTransactions / limitNum) : 0;
 
     return {
       transactions: rowsRes.rows,
-      total: Number(countRes.rows[0].total),
+      total: totalTransactions,
+      pagination: {
+        page: pageNum || Math.floor(offsetNum / limitNum) + 1,
+        limit: limitNum,
+        totalTransactions,
+        totalPages,
+      },
     };
   }
 

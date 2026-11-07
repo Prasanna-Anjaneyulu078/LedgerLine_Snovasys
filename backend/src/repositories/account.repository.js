@@ -78,43 +78,67 @@ export class AccountRepository {
   /**
    * Find all accounts system-wide (admin/auditor view)
    */
-  async findAll({ limit = 50, offset = 0, status = null, accountType = null } = {}, client = pool) {
+  async findAll({ limit = 50, offset = null, page = null, status = null, accountType = null, search = null } = {}, client = pool) {
+    const pageNum = page ? Math.max(1, parseInt(page, 10) || 1) : null;
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 50));
+    const offsetNum = offset !== null && offset !== undefined
+      ? Math.max(0, parseInt(offset, 10) || 0)
+      : pageNum
+      ? (pageNum - 1) * limitNum
+      : 0;
+
     const conditions = [];
     const params = [];
 
-    if (status) {
-      params.push(status);
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      params.push(`%${search.trim()}%`);
+      conditions.push(`(a.account_number ILIKE $${params.length} OR u.full_name ILIKE $${params.length} OR u.email ILIKE $${params.length})`);
+    }
+
+    if (status && status !== 'ALL' && typeof status === 'string' && status.trim() !== '') {
+      params.push(status.trim().toUpperCase());
       conditions.push(`a.status = $${params.length}`);
     }
 
-    if (accountType) {
-      params.push(accountType);
+    if (accountType && accountType !== 'ALL' && typeof accountType === 'string' && accountType.trim() !== '') {
+      params.push(accountType.trim().toUpperCase());
       conditions.push(`a.account_type = $${params.length}`);
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    params.push(limit, offset);
+    const countSql = `
+      SELECT count(*) as total
+      FROM accounts a
+      JOIN users u ON a.owner_id = u.id
+      ${whereClause};
+    `;
+    const countRes = await client.query(countSql, params);
+    const totalAccounts = Number(countRes.rows[0]?.total || 0);
+
+    const queryParams = [...params, limitNum, offsetNum];
     const sql = `
       SELECT a.id, a.account_number, a.owner_id, a.account_type, a.currency, a.balance, a.status, a.created_at, a.updated_at,
              u.full_name as owner_name, u.email as owner_email
       FROM accounts a
       JOIN users u ON a.owner_id = u.id
       ${whereClause}
-      ORDER BY a.created_at DESC
-      LIMIT $${params.length - 1} OFFSET $${params.length};
+      ORDER BY a.created_at DESC, a.id DESC
+      LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length};
     `;
 
-    const countSql = `SELECT count(*) as total FROM accounts a ${whereClause};`;
-
-    const [rowsRes, countRes] = await Promise.all([
-      client.query(sql, params),
-      client.query(countSql, params.slice(0, -2)),
-    ]);
+    const rowsRes = await client.query(sql, queryParams);
+    const totalPages = totalAccounts > 0 ? Math.ceil(totalAccounts / limitNum) : 0;
 
     return {
       accounts: rowsRes.rows,
-      total: Number(countRes.rows[0].total),
+      total: totalAccounts,
+      pagination: {
+        page: pageNum || Math.floor(offsetNum / limitNum) + 1,
+        limit: limitNum,
+        totalAccounts,
+        totalPages,
+      },
     };
   }
 

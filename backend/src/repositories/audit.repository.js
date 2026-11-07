@@ -32,17 +32,34 @@ export class AuditRepository {
   async findAll(
     {
       limit = 50,
-      offset = 0,
+      offset = null,
+      page = null,
       actorId = null,
       action = null,
       resourceType = null,
       startDate = null,
       endDate = null,
+      search = null,
     } = {},
     client = pool
   ) {
+    const pageNum = page ? Math.max(1, parseInt(page, 10) || 1) : null;
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 50));
+    const offsetNum = offset !== null && offset !== undefined
+      ? Math.max(0, parseInt(offset, 10) || 0)
+      : pageNum
+      ? (pageNum - 1) * limitNum
+      : 0;
+
     const conditions = [];
     const params = [];
+
+    if (search && typeof search === 'string' && search.trim() !== '') {
+      params.push(`%${search.trim()}%`);
+      conditions.push(
+        `(u.email ILIKE $${params.length} OR u.full_name ILIKE $${params.length} OR ae.action ILIKE $${params.length} OR ae.resource_type ILIKE $${params.length} OR ae.resource_id ILIKE $${params.length})`
+      );
+    }
 
     if (actorId) {
       params.push(actorId);
@@ -71,7 +88,16 @@ export class AuditRepository {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    params.push(limit, offset);
+    const countSql = `
+      SELECT count(*) as total
+      FROM audit_events ae
+      LEFT JOIN users u ON ae.actor_id = u.id
+      ${whereClause};
+    `;
+    const countRes = await client.query(countSql, params);
+    const totalEvents = Number(countRes.rows[0]?.total || 0);
+
+    const queryParams = [...params, limitNum, offsetNum];
     const sql = `
       SELECT ae.id, ae.actor_id, ae.action, ae.resource_type, ae.resource_id,
              ae.metadata, ae.ip_address, ae.created_at,
@@ -79,20 +105,22 @@ export class AuditRepository {
       FROM audit_events ae
       LEFT JOIN users u ON ae.actor_id = u.id
       ${whereClause}
-      ORDER BY ae.created_at DESC
-      LIMIT $${params.length - 1} OFFSET $${params.length};
+      ORDER BY ae.created_at DESC, ae.id DESC
+      LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length};
     `;
 
-    const countSql = `SELECT count(*) as total FROM audit_events ae ${whereClause};`;
-
-    const [rowsRes, countRes] = await Promise.all([
-      client.query(sql, params),
-      client.query(countSql, params.slice(0, -2)),
-    ]);
+    const rowsRes = await client.query(sql, queryParams);
+    const totalPages = totalEvents > 0 ? Math.ceil(totalEvents / limitNum) : 0;
 
     return {
       events: rowsRes.rows,
-      total: Number(countRes.rows[0].total),
+      total: totalEvents,
+      pagination: {
+        page: pageNum || Math.floor(offsetNum / limitNum) + 1,
+        limit: limitNum,
+        totalEvents,
+        totalPages,
+      },
     };
   }
 }

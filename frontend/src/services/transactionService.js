@@ -124,12 +124,24 @@ export const transactionService = {
 
   /**
    * Retrieve list of transactions
+   * Supports server-side filtering, search, and pagination
    */
   async getTransactions(query = {}) {
     const response = await api.get('/transactions', { params: query });
     const payload = response.data?.data || response.data;
     const rawList = payload?.transactions || (Array.isArray(payload) ? payload : []);
-    return rawList.map(normalizeTransaction);
+    const normalized = rawList.map(normalizeTransaction);
+
+    const result = normalized;
+    result.transactions = normalized;
+    result.total = payload?.total ?? normalized.length;
+    result.pagination = payload?.pagination || {
+      page: Number(query.page) || 1,
+      limit: Number(query.limit) || 50,
+      totalTransactions: payload?.total ?? normalized.length,
+      totalPages: Math.ceil((payload?.total ?? normalized.length) / (Number(query.limit) || 50)),
+    };
+    return result;
   },
 
   /**

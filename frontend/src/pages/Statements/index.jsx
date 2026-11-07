@@ -72,7 +72,7 @@ const Statements = () => {
   const handleAccountChange = (e) => {
     const newId = e.target.value;
     setSelectedAccountId(newId);
-    const basePath = role === 'AUDITOR' ? '/auditor/statements' : '/statements';
+    const basePath = role === 'ADMIN' ? '/admin/statements' : role === 'AUDITOR' ? '/auditor/statements' : '/statements';
     navigate(`${basePath}/${newId}`);
   };
 
@@ -206,7 +206,7 @@ const Statements = () => {
   return (
     <DashboardLayout
       title="Official Account Statement"
-      breadcrumbs="LedgerLine / Account Statement"
+      breadcrumbs={`${role === 'ADMIN' ? 'Admin' : role === 'AUDITOR' ? 'Auditor' : 'Account'} / Statements`}
     >
       <div className="statements-page">
         {/* Account Selector & Actions Header */}

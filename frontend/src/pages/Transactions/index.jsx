@@ -278,7 +278,7 @@ const Transactions = () => {
   return (
     <DashboardLayout
       title="Transaction Management"
-      breadcrumbs="LedgerLine / Transactions"
+      breadcrumbs={`${role === 'ADMIN' ? 'Admin' : role === 'AUDITOR' ? 'Auditor' : 'Account'} / Transactions`}
     >
       <div className="transactions-page">
         {/* Header Bar */}
