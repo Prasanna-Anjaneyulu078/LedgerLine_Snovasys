@@ -101,7 +101,7 @@ const Sidebar = ({ isMobileOpen, onCloseMobile }) => {
                 <span>Transactions</span>
               </NavLink>
               <NavLink
-                to="/statements/acc_001"
+                to="/statements"
                 className={({ isActive }) =>
                   `sidebar-nav-item ${isActive ? 'active' : ''}`
                 }
@@ -215,7 +215,7 @@ const Sidebar = ({ isMobileOpen, onCloseMobile }) => {
                 <span>Transactions</span>
               </NavLink>
               <NavLink
-                to="/auditor/statements/acc_001"
+                to="/auditor/statements"
                 className={({ isActive }) =>
                   `sidebar-nav-item ${isActive ? 'active' : ''}`
                 }

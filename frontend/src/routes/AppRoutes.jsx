@@ -89,6 +89,16 @@ const AppRoutes = () => {
         }
       />
       <Route
+        path="/statements"
+        element={
+          <ProtectedRoute>
+            <RoleBasedRoute allowedRoles={['ACCOUNT_HOLDER']}>
+              <Statements />
+            </RoleBasedRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/statements/:accountId"
         element={
           <ProtectedRoute>
@@ -188,6 +198,16 @@ const AppRoutes = () => {
           <ProtectedRoute>
             <RoleBasedRoute allowedRoles={['AUDITOR']}>
               <Transactions />
+            </RoleBasedRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/auditor/statements"
+        element={
+          <ProtectedRoute>
+            <RoleBasedRoute allowedRoles={['AUDITOR']}>
+              <Statements />
             </RoleBasedRoute>
           </ProtectedRoute>
         }
