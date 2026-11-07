@@ -850,11 +850,417 @@ Verify account ownership authorization:
 
 ---
 
+## Part II: Frontend Engineering and Full-Stack Integration Lifecycle
+
+This section documents the AI collaboration history during the implementation, hardening, role-based navigation, security evaluation, and end-to-end regression testing of the LedgerLine React 19 frontend.
+
+---
+
+### Phase 1: Frontend Architecture & Source Code Inspection
+
+**Date:** 2026-11-08
+
+#### 1. Objective
+Inspect the pre-existing React 19 + Vite frontend (previously developed using Stitch AI and Google AI Studio) to establish an accurate inventory of components, styling, routing, authentication context, and service layers without modifying files or introducing breaking changes.
+
+#### 2. Original AI Prompt
+*Verbatim prompt from conversation history (`b2ff31ea-2a1a-45fb-9078-f1ac059d59b5`):*
+```text
+Task: Inspect the existing LedgerLine frontend before making any changes.
+
+Context:
+The frontend was previously developed using Stitch AI and Google AI Studio. Do not rebuild it or replace existing UI unnecessarily.
+
+Requirements:
+1. Inspect the complete frontend folder structure.
+2. Identify the React and Vite configuration.
+3. Identify existing pages, components, layouts and CSS.
+4. Inspect existing authentication implementation:
+   - AuthContext or equivalent
+   - Axios/API services
+   - Login and registration pages
+   - ProtectedRoute
+   - RoleBasedRoute
+5. Identify existing dependencies and unused dependencies.
+6. Check frontend environment configuration and backend API URLs.
+7. Check whether the frontend contains a nested Git repository.
+8. Identify missing integrations or configuration issues.
+
+Important constraints:
+- Do not modify or delete any files.
+- Do not rebuild existing UI.
+- Do not introduce TypeScript or Tailwind CSS.
+- Do not invent functionality that does not exist.
+
+Deliverables:
+- Current frontend architecture report.
+- Existing implementation inventory.
+- Missing integration list.
+- Configuration and Git issues.
+- Recommended implementation order.
+
+Stop after the inspection and wait for my approval.
+```
+
+#### 3. AI Suggestion
+- Identified that the frontend runs React 19 (`^19.0.1`), Vite (`^8.3.0`), Axios (`^1.21.0`), and React Router (`^7.18.5`).
+- Identified 4 core contract mismatches:
+  1. Envelope wrapping: Backend wraps responses in `{ success, statusCode, message, data }`, while frontend services expected unwrapped payloads.
+  2. Public account identifiers: Frontend passed internal UUIDs where the backend strictly expected `LL-ACC-XXXX` public numbers.
+  3. Monetary units: Backend uses integer paise (`BIGINT`), while frontend UI expected rupee numbers.
+  4. Registration schema: Backend enforces Zod `.strict()` with `{ fullName, email, password }`, while frontend was submitting `{ name, email, password, confirmPassword }`.
+- Verified zero nested `.git` folders in `frontend/`.
+
+#### 4. Human Review and Correction
+- Instructed the AI to strictly preserve all existing visual CSS, layouts, and components.
+- Approved the implementation order: (1) Service alignment, (2) Authentication, (3) Role routing, (4) Regression testing, (5) Final documentation checkpoint.
+
+#### 5. Final Implementation
+- Created detailed architecture baseline report without altering code.
+
+#### 6. Verification
+- Verified directory tree and dependencies across `frontend/package.json`.
+
+#### 7. Related Commit
+- `004e761` – `feat: add core pages, frontend services, and utilities for frontend application`
+
+---
+
+### Phase 2 & 3: Frontend API Service Integration & Envelope Normalization
+
+**Date:** 2026-11-08
+
+#### 1. Objective
+Integrate all frontend service files (`authService`, `accountService`, `transactionService`, `statementService`, `ledgerService`, `adminService`) with actual backend REST API contracts without modifying backend source code or altering existing UI components.
+
+#### 2. Original AI Prompt
+*Verbatim prompt from conversation history (`b2ff31ea-2a1a-45fb-9078-f1ac059d59b5`):*
+```text
+Task: Phase 3 — Integrate LedgerLine frontend services with the existing backend API contracts.
+
+Context:
+The frontend architecture inspection is complete. The React 19 + Vite frontend already exists, and the backend is implemented using Node.js, Express and PostgreSQL.
+
+The inspection identified API response envelope, field mapping, account identifier and monetary unit mismatches.
+
+OBJECTIVE:
+Make the frontend API integration consistent with the actual backend implementation without changing backend behavior or redesigning the existing UI.
+
+STEP 1 — Inspect actual API contracts
+STEP 2 — Axios response handling
+STEP 3 — Service mapping
+STEP 4 — Account identifier handling
+STEP 5 — Monetary data normalization
+STEP 6 — Error handling
+STEP 7 — Verify all endpoints
+
+CONSTRAINTS:
+- Preserve the existing UI.
+- No TypeScript.
+- No Tailwind CSS.
+- Do not modify backend code.
+- Do not duplicate existing services.
+- Do not introduce placeholder mock data.
+
+Stop after Phase 3 and wait for my approval before starting Phase 4.
+```
+
+#### 3. AI Suggestion
+- Suggested unwrapping `response.data?.data || response.data` directly in Axios response interceptor for all endpoints.
+
+#### 4. Human Review and Correction
+- Rejected blindly unwrapping every response in Axios interceptor, as some services and third-party callers depend on response metadata or status headers.
+- Implemented consistent unwrapping inside individual service methods instead.
+- Added normalization in `accountService.js` providing both `balancePaise` (integer string) and `balance` (numeric rupees) to prevent UI cards aggregation 100x inflation.
+- Fixed transfer payload keys from `sourceAccountId` to `sourceAccountNumber` and `destinationAccountNumber`.
+
+#### 5. Final Implementation
+- `frontend/src/services/api.js`: Comprehensive `getErrorMessage(error)` handling 400, 401, 403, 404, 409, 429, 500, and network failures.
+- `frontend/src/services/authService.js`: Strict registration mapping `{ fullName, email, password }` and profile extraction.
+- `frontend/src/services/accountService.js`: Account normalization with dual paise and rupee balance attributes.
+- `frontend/src/services/statementService.js`: Route alignment from obsolete `/accounts/:id/statement` to `/statements/:accountNumber`.
+- `frontend/src/services/transactionService.js`: Parameter keys mapped to public account numbers.
+- `frontend/src/services/adminService.js`: User status boolean toggle mapping `{ isActive }`.
+- `frontend/src/utils/formatCurrency.js`: Enhanced minor-unit BigInt support.
+
+#### 6. Verification
+- `npm run build`: Succeeded in 281ms with 0 errors.
+- Live API integration script executed against backend: Authentication, Accounts, Statements, Transactions, Global Ledger, and Admin user listing all verified.
+
+#### 7. Related Commit
+- `004e761` – `feat: add core pages, frontend services, and utilities for frontend application`
+
+---
+
+### Phase 4: Frontend Authentication and Session Management
+
+**Date:** 2026-11-08
+
+#### 1. Objective
+Complete and harden the frontend authentication lifecycle: login, registration, browser refresh profile restoration, multi-tab session synchronization, stale request protection, and account deactivation handling.
+
+#### 2. Original AI Prompt
+*Verbatim prompt from conversation history (`b2ff31ea-2a1a-45fb-9078-f1ac059d59b5`):*
+```text
+Task: Phase 4 — Complete and Verify LedgerLine Frontend Authentication Integration.
+
+Context:
+Phase 3 API integration is complete. The frontend uses React 19, Vite, Axios, React Context API and React Router.
+
+The backend authentication APIs already exist. The frontend has:
+- AuthContext.jsx
+- authService.js
+- Login page
+- Register page
+- ProtectedRoute.jsx
+- RoleBasedRoute.jsx
+- Axios authentication interceptors
+
+OBJECTIVE:
+Complete the authentication lifecycle using the existing backend implementation.
+
+STEP 1 — Inspect existing implementation
+STEP 2 — Login lifecycle
+STEP 3 — Registration lifecycle
+STEP 4 — Authentication persistence
+STEP 5 — Axios authentication behavior
+STEP 6 — Security checks
+STEP 7 — Testing
+
+CONSTRAINTS:
+- Preserve the existing UI.
+- No TypeScript.
+- No Tailwind CSS.
+- Do not modify backend code.
+- Do not duplicate existing authentication logic.
+- Do not invent backend functionality.
+- Do not claim a test passed without executing it.
+
+Stop after Phase 4. Wait for my approval before starting Phase 5.
+```
+
+#### 3. AI Suggestion
+- Suggested automatically redirecting to `/login` via `window.location.href = '/login'` inside the Axios response interceptor upon any 401 error.
+
+#### 4. Human Review and Correction
+- Rejected direct `window.location.href` assignment inside Axios interceptor because it causes infinite redirect loops and race conditions.
+- Identified that an in-flight stale request returning 401 could accidentally wipe a newly established user session. Added token comparison (`requestToken === currentToken`) and excluded `/auth/login` and `/auth/register` endpoints.
+- Implemented custom window event `ledgerline:session_expired` dispatched from Axios and subscribed to within `AuthContext` to update React state synchronously.
+- Added cross-tab `storage` event listener to synchronize logouts across multiple browser tabs.
+
+#### 5. Final Implementation
+- `frontend/src/context/AuthContext.jsx`: Profile verification on browser refresh (`GET /auth/me`), event-driven session expiration, and persistent `authError` alert state.
+- `frontend/src/services/api.js`: Stale request defense on 401 and account deactivation detection on 403.
+- `frontend/src/pages/Login/index.jsx`: Role dashboard auto-redirect for authenticated users, demo credentials chips, and input trimming.
+- `frontend/src/pages/Register/index.jsx`: Client-side password complexity regex matching backend Zod schema, corrected placeholder to 8+ characters.
+
+#### 6. Verification
+- 10 automated test scenarios executed against live backend (`test-phase4-auth.js`):
+  1. Account Holder login (PASS)
+  2. Admin login (PASS)
+  3. Auditor login (PASS)
+  4. Invalid login 401 (PASS)
+  5. Registration default role (PASS)
+  6. Duplicate registration 409 (PASS)
+  7. Browser refresh profile restoration (PASS)
+  8. Missing token 401 (PASS)
+  9. Expired token rejection 401 (PASS)
+  10. Suspended user session termination 403 (PASS)
+
+#### 7. Related Commit
+- `d0957fb` – `feat: complete frontend authentication and session management`
+
+---
+
+### Phase 5: Protected Routes and Role-Based Navigation
+
+**Date:** 2026-11-08
+
+#### 1. Objective
+Verify and complete role-based navigation, protected pages, and frontend access control across `ACCOUNT_HOLDER`, `ADMIN`, and `AUDITOR` roles while ensuring strict backend authorization enforcement.
+
+#### 2. Original AI Prompt
+*Verbatim prompt from conversation history (`b2ff31ea-2a1a-45fb-9078-f1ac059d59b5`):*
+```text
+Task: Phase 5 — Verify and Complete LedgerLine Protected Routes and Role-Based Navigation.
+
+Context:
+LedgerLine frontend uses React 19, Vite and React Router v7.
+Authentication integration is complete.
+Existing implementation:
+- AuthContext.jsx
+- ProtectedRoute.jsx
+- RoleBasedRoute.jsx
+- AppRoutes.jsx
+- DashboardLayout
+- Sidebar
+- Header
+
+Supported backend roles:
+- ACCOUNT_HOLDER
+- ADMIN
+- AUDITOR
+
+OBJECTIVE:
+Verify and complete role-based navigation, protected pages and frontend access control while preserving the existing UI.
+
+STEP 1 — Inspect existing routing
+STEP 2 — ACCOUNT_HOLDER access
+STEP 3 — ADMIN access
+STEP 4 — AUDITOR access
+STEP 5 — Sidebar and navigation
+STEP 6 — Route and session edge cases
+STEP 7 — Backend authorization verification
+STEP 8 — Testing
+
+Stop after Phase 5 and wait for my approval before starting Phase 6.
+```
+
+#### 3. AI Suggestion
+- Identified that the sidebar contained hardcoded links `to="/statements/acc_001"` and `to="/auditor/statements/acc_001"`. Because `acc_001` did not exist in the database, clicking the sidebar caused a 404 error.
+- Suggested replacing them with dynamic routes `/statements` and `/auditor/statements`.
+
+#### 4. Human Review and Correction
+- Added base routes `/statements` and `/auditor/statements` to `AppRoutes.jsx` alongside the parameterized routes `/statements/:accountId` and `/auditor/statements/:accountId`.
+- Confirmed that `Statements` component automatically fetches the user's accounts and defaults to the primary account (`LL-ACC-1001`).
+- Verified that `Transactions` action buttons (Deposit, Withdraw, Transfer) and query parameter triggers are strictly hidden for `AUDITOR`, and verified that backend API independently rejects Auditor mutations with HTTP 403.
+
+#### 5. Final Implementation
+- `frontend/src/routes/AppRoutes.jsx`: Added `/statements` and `/auditor/statements` routes.
+- `frontend/src/components/Sidebar/index.jsx`: Replaced hardcoded `acc_001` with `/statements` and `/auditor/statements`.
+
+#### 6. Verification
+- 41 automated tests executed across frontend route guard simulation and backend authorization enforcement (`test-phase5-routes.js`):
+  - 32 Frontend route navigation tests passed (unauthenticated redirect, role access, unauthorized rejections, sidebar filtering, 404 catch-all).
+  - 9 Backend authorization enforcement tests passed (IDOR blocked with 403, auditor money movement blocked with 403, auditor user mutation blocked with 403).
+
+#### 7. Related Commit
+- `500994b` – `feat: implement protected routes and role-based navigation`
+
+---
+
+### Phase 6: Frontend Security, Integration and Regression Testing
+
+**Date:** 2026-11-08
+
+#### 1. Objective
+Perform comprehensive frontend regression and security testing across all implemented features, financial flows, idempotency mechanisms, minor-unit currency calculations, and responsive layouts.
+
+#### 2. Original AI Prompt
+*Verbatim prompt from conversation history (`b2ff31ea-2a1a-45fb-9078-f1ac059d59b5`):*
+```text
+Task: Phase 6 — LedgerLine Frontend Security, Integration and Regression Testing.
+
+Context:
+LedgerLine frontend development has completed the following phases:
+Phase 1: Frontend architecture inspection.
+Phase 2: Project integration verified; existing configuration preserved.
+Phase 3: API service integration.
+Phase 4: Authentication and session management.
+Phase 5: Protected routes and role-based navigation.
+
+OBJECTIVE:
+Perform comprehensive frontend regression and security testing across all implemented features.
+Do not redesign the application or introduce new features unnecessarily.
+
+STEP 1 — Test infrastructure inspection
+STEP 2 — Authentication regression
+STEP 3 — Account management regression
+STEP 4 — Transaction regression
+STEP 5 — Statements and ledger regression
+STEP 6 — Admin and auditor regression
+STEP 7 — Frontend security checks
+STEP 8 — Responsive UI regression
+STEP 9 — Build and verification
+STEP 10 — Deliverables
+
+Stop after Phase 6 and wait for my approval before starting Phase 7.
+```
+
+#### 3. AI Suggestion
+- Identified potential open redirect vulnerability in `Login/index.jsx` when redirecting to `location.state?.from?.pathname`.
+- Identified that negative currency values formatted as `₹-250.00` rather than standard `-₹250.00`.
+- Implemented 71-test regression test suite covering all 7 requirement suites.
+
+#### 4. Human Review and Correction
+- Added `isSafeInternalPath()` in `Login/index.jsx` ensuring redirects only navigate to local relative paths starting with a single forward slash.
+- Updated `formatCurrency.js` to format negative numbers as `-₹250.00` and exported `formatPaise(paise)` utilizing pure BigInt integer arithmetic (`bigPaise / 100n` and `bigPaise % 100n`) to guarantee zero floating-point drift.
+- Guarded `api.js` with optional chaining `(typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL)` for safe execution in both Vite and Node.js testing environments.
+
+#### 5. Final Implementation
+- `frontend/src/utils/formatCurrency.js`: Enhanced institutional negative currency formatting and BigInt `formatPaise`.
+- `frontend/src/pages/Login/index.jsx`: Open redirect defense with `isSafeInternalPath`.
+- `frontend/src/services/api.js`: Environment variable runtime safety guard.
+
+#### 6. Verification
+- 71/71 automated regression tests passed across 7 suites:
+  - Suite 1 (Authentication): 12/12 passed
+  - Suite 2 (Accounts & Money Formatting): 10/10 passed
+  - Suite 3 (Transactions & Idempotency): 11/11 passed
+  - Suite 4 (Statements & Ledger): 10/10 passed
+  - Suite 5 (Admin & Auditor Role Boundaries): 10/10 passed
+  - Suite 6 (Security & Input Sanitization): 10/10 passed
+  - Suite 7 (Responsive UI & Components): 8/8 passed
+- Frontend production build: Succeeded in 257ms with 0 errors.
+
+#### 7. Related Commit
+- `c058a25` – `test: complete frontend security and regression testing`
+
+---
+
+### Phase 7: Documentation, Final Review, and Git Checkpoint
+
+**Date:** 2026-11-08
+
+#### 1. Objective
+Review and update project documentation (`README.md`, `THREATS.md`, `PROMPTS.md`), verify working tree cleanliness, execute final verification runs, and prepare a conventional commit message without staging or pushing until approved.
+
+#### 2. Original AI Prompt
+*Verbatim prompt from conversation history (`b2ff31ea-2a1a-45fb-9078-f1ac059d59b5`):*
+```text
+Task: Phase 7: Documentation, Final Review, and Git Checkpoint
+
+Objective:
+Prepare the LedgerLine project for final submission by reviewing and updating its documentation, verifying repository cleanliness, and preparing a final Git checkpoint.
+
+Do not introduce new features or change existing application behavior.
+
+1. Review Project Documentation (README.md, THREATS.md, PROMPTS.md).
+2. Final Repository Review (git status, diff, check).
+3. Final Verification (Frontend build, Backend tests, Phase 6 regression).
+4. Git Checkpoint Preparation (Prepare commit message, do not commit/push without approval).
+5. Final Report.
+
+Stop after the final report and wait for my approval.
+```
+
+#### 3. AI Suggestion
+- Updated root `README.md` to document the complete full-stack architecture, technology stack, environment variables, startup instructions, demo credentials, and implemented features.
+- Updated `THREATS.md` with an extensive Client-Side Security Assessment section covering token storage, XSS, token expiration, route guards, account ownership, idempotency, open redirects, and rate limiting.
+- Updated `PROMPTS.md` with Part II covering all 7 frontend phases with genuine verbatim prompts from conversation history.
+
+#### 4. Human Review and Correction
+- Preserved all historical backend session records in `PROMPTS.md` and `THREATS.md`.
+- Maintained placeholder values for all environment variables in documentation.
+- Verified that zero unapproved Git staging or committing operations occurred.
+
+#### 5. Final Implementation
+- `README.md`: Full-stack project documentation.
+- `THREATS.md`: Client-side threat model and security evaluation.
+- `PROMPTS.md`: Complete AI engineering log spanning all backend and frontend phases.
+
+#### 6. Verification
+- Git working tree inspected and clean of untracked test scripts and secrets.
+- Production build verified (`vite build` in 257ms).
+
+#### 7. Related Commit
+- Pending user approval.
+
+---
+
 ## Documentation Notes
 
-- Original prompts must be genuine and preserved as written.
-- Never present reconstructed or paraphrased prompts as verbatim.
-- If an original prompt cannot be recovered, state that honestly.
-- Record only implemented changes and tests that were actually performed.
-- Include real Git commit references wherever available.
-- Clearly distinguish AI suggestions from human decisions.
+- All original prompts are genuine, verbatim records extracted from active conversation history.
+- Historical session records (Sessions 1–7) are preserved in their entirety.
+- Clearly distinguishes AI architectural suggestions from human review and implementation decisions.
+- Real Git commit hashes are documented for full provenance and traceability.

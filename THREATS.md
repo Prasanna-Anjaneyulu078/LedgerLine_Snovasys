@@ -607,6 +607,76 @@ This document provides a systematic threat model, vulnerability analysis, and se
 
 ---
 
+## Client-Side & Frontend Security Assessment (Phases 4–6)
+
+Following the implementation and regression testing of the React 19 frontend, the client-side security architecture and threat posture were evaluated across 8 critical dimensions:
+
+### 1. Token Storage & XSS Considerations
+- **Implementation:** Authentication tokens are persisted in browser `localStorage` under `ledgerline_token`. Requests automatically attach the token via the `Authorization: Bearer <token>` header in Axios request interceptors.
+- **Security Assessment:**
+  - `localStorage` is completely immune to Cross-Site Request Forgery (CSRF) because browsers do not automatically attach `localStorage` values to cross-origin requests.
+  - However, `localStorage` is accessible to any JavaScript running within the application's origin. Therefore, any unmitigated Cross-Site Scripting (XSS) vulnerability would allow an attacker to read the active JWT token.
+- **Controls & Mitigations:**
+  - Complete elimination of raw DOM injection: The codebase contains zero instances of `dangerouslySetInnerHTML`.
+  - Zero dynamic script execution: Codebase contains zero instances of `eval()`, `new Function()`, or untrusted script evaluation.
+  - React 19 auto-escapes all string interpolations in JSX by default.
+  - All user-supplied inputs (e.g. transaction descriptions, account numbers) are sanitized and rendered as escaped text.
+- **Residual Risk:** Third-party npm dependencies or browser extensions could theoretically access `localStorage`. Long-term recommendation is migrating to `HttpOnly`, `SameSite=Strict` cookies.
+
+### 2. Token Expiration & Refresh Token Support
+- **Implementation:** The backend issues JWT tokens with a fixed expiration window (`JWT_EXPIRES_IN`, default 15 minutes in high-security mode or 1 day in development).
+- **Security Assessment:**
+  - The application currently operates without a rotating refresh-token endpoint (`/auth/refresh`).
+  - When the access token expires, Axios interceptors detect the HTTP 401 response, clean up `localStorage`, and dispatch the `ledgerline:session_expired` event, prompting the user to re-authenticate.
+- **Controls & Stale Request Defense:**
+  - Axios response interceptor verifies that the failed request actually used the current active token (`requestToken === currentToken`) before clearing storage. This prevents stale in-flight requests from invalidating a newly established user session.
+- **Residual Risk:** Users experience session termination upon token expiration without transparent background renewal.
+
+### 3. Password Policy & Registration Role Escalation
+- **Implementation:**
+  - Frontend `Register/index.jsx` enforces an identical password complexity regex (`/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/`) prior to network submission.
+  - The service strictly submits `{ fullName, email, password }`, deliberately omitting any role field.
+- **Security Assessment:**
+  - Even if a malicious actor crafts a manual HTTP request containing `{"role": "ADMIN"}`, the backend Zod validator utilizes `.strict()`, rejecting the payload with HTTP 400.
+  - Furthermore, `AuthService.register()` hardcodes `const role = 'ACCOUNT_HOLDER'`, making client role elevation impossible.
+- **Residual Risk:** None. Enforced strictly at the database and API gateway layers.
+
+### 4. Client Route Guards vs. Backend Authorization Authority
+- **Implementation:** React Router guards (`ProtectedRoute` and `RoleBasedRoute`) prevent unauthorized views from rendering and navigate unauthenticated users to `/login`.
+- **Security Assessment:**
+  - Client-side route guards are treated exclusively as UI navigation aids and user experience enhancements.
+  - All sensitive data queries (`/admin/users`, `/admin/accounts`, `/ledger`, `/audit-events`) and mutations (`/transactions/*`) are authenticated and authorized by backend middleware (`authenticate`, `authorize`, `authorizeAccountAccess`).
+- **Residual Risk:** Even if an attacker modifies React state in browser memory to display an Admin page, the underlying API calls return HTTP 403 Forbidden.
+
+### 5. Account Ownership & IDOR Protection
+- **Implementation:** Account statements are requested via `GET /api/v1/statements/:accountNumber`.
+- **Security Assessment:**
+  - Frontend prevents selecting unowned accounts by populating dropdowns exclusively from `/accounts`.
+  - When an account holder manually modifies the browser URL to inspect another customer's statement (e.g. `/statements/LL-ACC-2001`), the backend middleware `authorizeAccountAccess` inspects `account.owner_id !== req.user.id` and rejects the request with HTTP 403 Forbidden (`You do not have permission to access this account`).
+- **Residual Risk:** None. Enforced at the SQL query parameterization layer.
+
+### 6. Transaction Validation & Idempotency Key Handling
+- **Implementation:** Financial transaction forms generate unique client keys (`IDEM-<timestamp>-<random>`) transmitted via the `Idempotency-Key` header.
+- **Security Assessment:**
+  - Duplicate form submissions or rapid double-clicks replay the cached response without creating duplicate ledger postings.
+  - Modifying the transaction amount while reusing the key is detected via SHA-256 request hashing, triggering HTTP 409 Conflict.
+- **Residual Risk:** Keys are stored in the database indefinitely unless pruned by a background task.
+
+### 7. Open Redirect Defense
+- **Implementation:** `Login/index.jsx` inspects `location.state?.from?.pathname` before redirection using `isSafeInternalPath()`.
+- **Security Assessment:**
+  - Disallows redirect targets that contain protocol schemes (`https://`), protocol-relative prefixes (`//`), backslashes (`\`), or colons (`:`).
+  - Ensures redirects only route to internal paths (e.g. `/dashboard`, `/statements/LL-ACC-1001`).
+- **Residual Risk:** None.
+
+### 8. Rate Limiting & User Feedback
+- **Implementation:** Backend rate limiters (`authLimiter`, `transactionLimiter`, `generalLimiter`) return standard `RateLimit-*` headers and HTTP 429.
+- **Security Assessment:**
+  - Frontend `getErrorMessage()` catches HTTP 429 and displays a sanitized, clear alert: `"Rate limit exceeded: Too many requests. Please wait a few moments before retrying."`
+- **Residual Risk:** Rate limiting counters reside in Node.js process memory and reset upon server restart.
+
+---
+
 ## Security Limitations of Current Implementation
 
 While the core financial engine, concurrency safeguards, and authorization boundaries are verified, the following architectural limitations should be recognized:
