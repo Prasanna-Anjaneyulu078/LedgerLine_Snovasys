@@ -13,13 +13,29 @@ const Login = () => {
   const [errorMsg, setErrorMsg] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { login } = useAuth();
+  const { login, user, isAuthenticated, authError } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
+  // If already authenticated and not experiencing a session error, navigate to appropriate dashboard
+  React.useEffect(() => {
+    if (isAuthenticated && user && !authError) {
+      const intendedDestination = location.state?.from?.pathname;
+      if (intendedDestination && !intendedDestination.includes('/login')) {
+        navigate(intendedDestination, { replace: true });
+      } else {
+        const dest = getRoleDashboardRoute(user.role);
+        navigate(dest, { replace: true });
+      }
+    }
+  }, [isAuthenticated, user, authError, navigate, location.state]);
+
+  const activeError = errorMsg || authError;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!email || !password) {
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail || !password) {
       setErrorMsg('Please enter both your email address and password.');
       return;
     }
@@ -27,7 +43,7 @@ const Login = () => {
     setIsSubmitting(true);
     setErrorMsg(null);
 
-    const result = await login(email, password);
+    const result = await login(trimmedEmail, password);
     setIsSubmitting(false);
 
     if (result.success && result.user) {
@@ -60,10 +76,10 @@ const Login = () => {
           </p>
         </div>
 
-        {errorMsg && (
+        {activeError && (
           <div className="login-error-banner">
             <AlertCircle size={16} />
-            <span>{errorMsg}</span>
+            <span>{activeError}</span>
           </div>
         )}
 

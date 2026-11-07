@@ -13,36 +13,82 @@ export const useAuth = () => {
 };
 
 const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(() => {
+    try {
+      const savedUser = localStorage.getItem('ledgerline_user');
+      return savedUser ? JSON.parse(savedUser) : null;
+    } catch {
+      return null;
+    }
+  });
   const [token, setToken] = useState(() => localStorage.getItem('ledgerline_token') || null);
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState(null);
 
+  // Initialize and verify authentication state on mount/refresh
   useEffect(() => {
     const initializeAuth = async () => {
       const storedToken = localStorage.getItem('ledgerline_token');
       if (!storedToken) {
+        setUser(null);
+        setToken(null);
         setIsLoading(false);
         return;
       }
 
       try {
         const data = await authService.getCurrentUser();
-        if (data?.user) {
+        if (data?.user && data.user.isActive) {
           setUser(data.user);
+          setToken(storedToken);
           localStorage.setItem('ledgerline_user', JSON.stringify(data.user));
         } else {
           logout();
+          if (data?.user && !data.user.isActive) {
+            setAuthError('Your user account has been deactivated. Please contact an administrator.');
+          }
         }
       } catch (err) {
-        // Token expired or invalid
+        // Token expired, malformed, or user deactivated
         logout();
+        if (err.response?.status === 403) {
+          setAuthError('Your user account has been deactivated. Please contact an administrator.');
+        } else if (err.response?.status === 401) {
+          setAuthError('Your authentication session has expired. Please log in again.');
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
     initializeAuth();
+  }, []);
+
+  // Listen for session expiration events dispatched by Axios interceptors
+  useEffect(() => {
+    const handleSessionExpired = (event) => {
+      logout();
+      if (event?.detail?.reason === 'deactivated') {
+        setAuthError('Your user account has been deactivated. Please contact an administrator.');
+      } else if (event?.detail?.reason === 'unauthorized') {
+        setAuthError('Your authentication session has expired. Please log in again.');
+      }
+    };
+
+    const handleStorageChange = (event) => {
+      if (event.key === 'ledgerline_token' && !event.newValue) {
+        setUser(null);
+        setToken(null);
+      }
+    };
+
+    window.addEventListener('ledgerline:session_expired', handleSessionExpired);
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('ledgerline:session_expired', handleSessionExpired);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   const login = async (email, password) => {

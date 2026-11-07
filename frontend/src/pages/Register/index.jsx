@@ -6,6 +6,10 @@ import AuthLayout from '../../layouts/AuthLayout/index.jsx';
 import FormInput from '../../components/FormInput/index.jsx';
 import './index.css';
 
+const PASSWORD_COMPLEXITY_REGEX =
+  /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()_+\-=\[\]{};':"\\|,.<>\/?]).{8,}$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const Register = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -14,13 +18,33 @@ const Register = () => {
   const [errorMsg, setErrorMsg] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { register } = useAuth();
+  const { register, user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+
+  // If already authenticated, navigate to dashboard
+  React.useEffect(() => {
+    if (isAuthenticated && user) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, user, navigate]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!name || !email || !password || !confirmPassword) {
-      setErrorMsg('All fields are required.');
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+
+    if (!trimmedName || !trimmedEmail || !password || !confirmPassword) {
+      setErrorMsg('All registration fields are required.');
+      return;
+    }
+
+    if (trimmedName.length < 2) {
+      setErrorMsg('Full name must be at least 2 characters.');
+      return;
+    }
+
+    if (!EMAIL_REGEX.test(trimmedEmail)) {
+      setErrorMsg('Please enter a valid email address.');
       return;
     }
 
@@ -29,15 +53,17 @@ const Register = () => {
       return;
     }
 
-    if (password.length < 8) {
-      setErrorMsg('Password must contain at least 8 characters with uppercase, lowercase, number, and special character.');
+    if (!PASSWORD_COMPLEXITY_REGEX.test(password)) {
+      setErrorMsg(
+        'Password must contain at least 8 characters with at least one uppercase letter, one lowercase letter, one number, and one special character.'
+      );
       return;
     }
 
     setIsSubmitting(true);
     setErrorMsg(null);
 
-    const result = await register(name, email, password);
+    const result = await register(trimmedName, trimmedEmail, password);
     setIsSubmitting(false);
 
     if (result.success) {
@@ -101,7 +127,7 @@ const Register = () => {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="At least 6 characters"
+            placeholder="Min. 8 characters (upper, lower, digit, symbol)"
             required
           />
 

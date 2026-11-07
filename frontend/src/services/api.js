@@ -26,11 +26,44 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response && error.response.status === 401) {
-      // Clear token if expired or unauthorized
-      if (!window.location.pathname.includes('/login')) {
-        localStorage.removeItem('ledgerline_token');
-        localStorage.removeItem('ledgerline_user');
+    if (error.response) {
+      const { status, data, config } = error.response;
+      const isAuthEndpoint = config?.url?.includes('/auth/login') || config?.url?.includes('/auth/register');
+
+      // 401 Unauthorized handling (token expired, revoked, or invalid)
+      if (status === 401 && !isAuthEndpoint) {
+        const requestToken = config?.headers?.Authorization?.replace(/^Bearer\s+/i, '');
+        const currentToken = localStorage.getItem('ledgerline_token');
+
+        // Only clear session if the failed request actually used the currently stored token.
+        // This prevents accidental removal of a newly established session due to a stale in-flight request.
+        if (!requestToken || requestToken === currentToken) {
+          localStorage.removeItem('ledgerline_token');
+          localStorage.removeItem('ledgerline_user');
+          window.dispatchEvent(
+            new CustomEvent('ledgerline:session_expired', {
+              detail: { reason: 'unauthorized', message: data?.message || 'Authentication session has expired.' },
+            })
+          );
+        }
+      }
+
+      // 403 Forbidden handling - specifically for deactivated/suspended accounts
+      if (status === 403) {
+        const msg = String(data?.message || '').toLowerCase();
+        if (msg.includes('deactivated') || msg.includes('suspended')) {
+          const requestToken = config?.headers?.Authorization?.replace(/^Bearer\s+/i, '');
+          const currentToken = localStorage.getItem('ledgerline_token');
+          if (!requestToken || requestToken === currentToken) {
+            localStorage.removeItem('ledgerline_token');
+            localStorage.removeItem('ledgerline_user');
+            window.dispatchEvent(
+              new CustomEvent('ledgerline:session_expired', {
+                detail: { reason: 'deactivated', message: data?.message || 'User account is deactivated.' },
+              })
+            );
+          }
+        }
       }
     }
     return Promise.reject(error);
