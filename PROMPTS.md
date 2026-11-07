@@ -223,7 +223,7 @@ Inspect the actual backend API routes and create `FRONTEND_INTEGRATION_PLAN.md`.
   - Mandated database-level immutability enforcement combining a PostgreSQL trigger and runtime role privilege revocation.
 
 #### 5. Final Implementation
-- `CHALLENGE_CHECKLIST.md`: Formalized compliance requirements for database-level immutability and statement separation.
+- `README.md` (Challenge Compliance Matrix): Formalized compliance requirements for database-level immutability and statement separation (originally drafted in `CHALLENGE_CHECKLIST.md`).
 - `FRONTEND_INTEGRATION_PLAN.md`: Documented API contracts for statements, accounts, and audit events.
 - `backend/src/database/migrations/006_create_audit_events.sql`: Audit event schema tracking refused actions, actor IDs, and IP addresses.
 - `backend/src/modules/statements/statement.service.js`: Dedicated statement aggregation pulling committed records from `ledger_entries` and refused events from `audit_events`.

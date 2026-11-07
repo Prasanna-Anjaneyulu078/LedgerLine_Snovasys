@@ -44,7 +44,7 @@ This log tracks genuine engineering suggestions, identified design trade-offs, d
 - **Initial Suggestion**: Rely solely on repository-level methods (omitting `UPDATE` / `DELETE` queries) to guarantee append-only ledger entries.
 - **Flaw Discovered**: Application-level restrictions protect against normal API flows, but do not prevent direct accidental SQL updates or rogue scripts executed directly against the database.
 - **Correction**: Documented the recommendation to install a database trigger or role-based SQL privilege revocation (`REVOKE UPDATE, DELETE ON ledger_entries FROM ...`) to enforce immutability at the PostgreSQL engine level.
-- **Verification**: Reflected in `CHALLENGE_CHECKLIST.md` under Section 2.
+- **Verification**: Reflected in root `README.md` (Challenge Compliance Matrix) and enforced via `007_prevent_ledger_modification.sql` and `tests/integration/ledger_immutability.test.js`.
 
 ---
 
