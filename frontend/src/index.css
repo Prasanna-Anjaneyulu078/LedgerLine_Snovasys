@@ -1,0 +1,131 @@
+/* ==========================================================================
+   LedgerLine Financial Management - Global Design System & CSS Reset
+   Strict Plain CSS Architecture - Zero CSS Frameworks
+   ========================================================================== */
+
+:root {
+  /* Core Brand & Institutional Foundation */
+  --primary-color: #2563EB;
+  --primary-hover: #1D4ED8;
+  --primary-active: #1E40AF;
+  --primary-light: #EFF6FF;
+
+  --sidebar-color: #1E293B;
+  --sidebar-hover: #334155;
+  --sidebar-active: #0F172A;
+  --sidebar-text: #F8FAFC;
+  --sidebar-muted: #94A3B8;
+
+  --background-color: #F8FAFC;
+  --surface-color: #FFFFFF;
+  --surface-secondary: #F1F5F9;
+  --surface-hover: #F8FAFC;
+
+  --text-color: #1E293B;
+  --text-secondary: #64748B;
+  --text-tertiary: #94A3B8;
+  --text-inverse: #FFFFFF;
+
+  /* Semantic State Colors */
+  --success-color: #16A34A;
+  --success-bg: #DCFCE7;
+  --success-text: #166534;
+  --success-border: #BBF7D0;
+
+  --danger-color: #DC2626;
+  --danger-bg: #FEE2E2;
+  --danger-text: #991B1B;
+  --danger-border: #FECACA;
+
+  --warning-color: #D97706;
+  --warning-bg: #FEF3C7;
+  --warning-text: #92400E;
+  --warning-border: #FDE68A;
+
+  --neutral-bg: #F1F5F9;
+  --neutral-text: #475569;
+  --neutral-border: #E2E8F0;
+
+  /* Structural Rules & Elevation */
+  --border-color: #E2E8F0;
+  --border-radius: 8px;
+  --border-radius-sm: 4px;
+  --border-radius-lg: 12px;
+  --border-radius-pill: 9999px;
+
+  --shadow-sm: 0 1px 3px 0 rgba(30, 41, 59, 0.04);
+  --shadow-md: 0 4px 12px 0 rgba(30, 41, 59, 0.08);
+  --shadow-lg: 0 12px 28px -4px rgba(30, 41, 59, 0.16);
+
+  /* Fonts */
+  --font-display: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-body: 'Hanken Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  /* Spacing */
+  --sidebar-width: 260px;
+  --header-height: 64px;
+}
+
+/* CSS Reset */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  background-color: var(--background-color);
+  color: var(--text-color);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Typography Standards */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  color: var(--text-color);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+p, span, label, input, button, select, textarea {
+  font-family: var(--font-body);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* Focus Outline System */
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px var(--primary-color);
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: var(--border-radius-pill);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}

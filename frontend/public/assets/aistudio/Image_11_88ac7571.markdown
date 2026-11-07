@@ -1,0 +1,246 @@
+---
+name: LedgerLine Financial Management
+colors:
+  surface: '#f7f9fb'
+  surface-dim: '#d8dadc'
+  surface-bright: '#f7f9fb'
+  surface-container-lowest: '#ffffff'
+  surface-container-low: '#f2f4f6'
+  surface-container: '#eceef0'
+  surface-container-high: '#e6e8ea'
+  surface-container-highest: '#e0e3e5'
+  on-surface: '#191c1e'
+  on-surface-variant: '#45474c'
+  inverse-surface: '#2d3133'
+  inverse-on-surface: '#eff1f3'
+  outline: '#75777d'
+  outline-variant: '#c5c6cd'
+  surface-tint: '#545f73'
+  primary: '#091426'
+  on-primary: '#ffffff'
+  primary-container: '#1e293b'
+  on-primary-container: '#8590a6'
+  inverse-primary: '#bcc7de'
+  secondary: '#0051d5'
+  on-secondary: '#ffffff'
+  secondary-container: '#316bf3'
+  on-secondary-container: '#fefcff'
+  tertiary: '#041528'
+  on-tertiary: '#ffffff'
+  tertiary-container: '#1a2a3e'
+  on-tertiary-container: '#8191a9'
+  error: '#ba1a1a'
+  on-error: '#ffffff'
+  error-container: '#ffdad6'
+  on-error-container: '#93000a'
+  primary-fixed: '#d8e3fb'
+  primary-fixed-dim: '#bcc7de'
+  on-primary-fixed: '#111c2d'
+  on-primary-fixed-variant: '#3c475a'
+  secondary-fixed: '#dbe1ff'
+  secondary-fixed-dim: '#b4c5ff'
+  on-secondary-fixed: '#00174b'
+  on-secondary-fixed-variant: '#003ea8'
+  tertiary-fixed: '#d3e4fe'
+  tertiary-fixed-dim: '#b7c8e1'
+  on-tertiary-fixed: '#0b1c30'
+  on-tertiary-fixed-variant: '#38485d'
+  background: '#f7f9fb'
+  on-background: '#191c1e'
+  surface-variant: '#e0e3e5'
+typography:
+  display:
+    fontFamily: Manrope
+    fontSize: 2.25rem
+    fontWeight: '700'
+    lineHeight: 2.75rem
+    letterSpacing: -0.02em
+  headline-lg:
+    fontFamily: Manrope
+    fontSize: 1.75rem
+    fontWeight: '600'
+    lineHeight: 2.25rem
+    letterSpacing: -0.015em
+  headline-lg-mobile:
+    fontFamily: Manrope
+    fontSize: 1.5rem
+    fontWeight: '600'
+    lineHeight: 2rem
+    letterSpacing: -0.01em
+  headline-md:
+    fontFamily: Manrope
+    fontSize: 1.25rem
+    fontWeight: '600'
+    lineHeight: 1.75rem
+    letterSpacing: -0.01em
+  headline-sm:
+    fontFamily: Manrope
+    fontSize: 1.125rem
+    fontWeight: '600'
+    lineHeight: 1.5rem
+  body-lg:
+    fontFamily: Hanken Grotesk
+    fontSize: 1rem
+    fontWeight: '400'
+    lineHeight: 1.5rem
+  body-md:
+    fontFamily: Hanken Grotesk
+    fontSize: 0.875rem
+    fontWeight: '400'
+    lineHeight: 1.375rem
+  body-sm:
+    fontFamily: Hanken Grotesk
+    fontSize: 0.75rem
+    fontWeight: '400'
+    lineHeight: 1.125rem
+  label-lg:
+    fontFamily: Hanken Grotesk
+    fontSize: 0.875rem
+    fontWeight: '600'
+    lineHeight: 1.25rem
+    letterSpacing: 0.01em
+  label-md:
+    fontFamily: Hanken Grotesk
+    fontSize: 0.75rem
+    fontWeight: '600'
+    lineHeight: 1rem
+    letterSpacing: 0.02em
+  label-sm:
+    fontFamily: Hanken Grotesk
+    fontSize: 0.6875rem
+    fontWeight: '600'
+    lineHeight: 0.875rem
+    letterSpacing: 0.04em
+  numeric-metric:
+    fontFamily: Manrope
+    fontSize: 1.875rem
+    fontWeight: '700'
+    lineHeight: 2.25rem
+    letterSpacing: -0.02em
+  tabular-data:
+    fontFamily: Hanken Grotesk
+    fontSize: 0.8125rem
+    fontWeight: '500'
+    lineHeight: 1.25rem
+rounded:
+  sm: 0.25rem
+  DEFAULT: 0.5rem
+  md: 0.75rem
+  lg: 1rem
+  xl: 1.5rem
+  full: 9999px
+spacing:
+  gutter: 1.5rem
+  gutter-mobile: 0.75rem
+  margin: 2rem
+  margin-mobile: 1rem
+  space-xs: 0.25rem
+  space-sm: 0.5rem
+  space-md: 1rem
+  space-lg: 1.5rem
+  space-xl: 2rem
+  space-2xl: 3rem
+---
+
+## Brand & Style
+
+This design system establishes an architectural, high-trust visual environment tailored for institutional financial tracking, ledger compliance, and role-based operational accounting. It strips away ornamental fintech gimmicks, gamified micro-interactions, and speculative crypto aesthetics in favor of authoritative precision, legibility, and information density.
+
+The aesthetic blends structural minimalism with corporate modern rigor:
+- **Tone:** Methodical, transparent, audit-ready, and restrained.
+- **Visual Personality:** Crisp metric presentation, strict tabular structures, subtle border delineations, and high typographic discipline.
+- **Experience Goals:** Eliminate cognitive friction during high-frequency data entry, ledger reconciliation, and multi-tiered role authorization across administrative, auditor, and member roles.
+
+## Colors
+
+The palette leverages a slate-anchored foundation to establish an institutional baseline, accented by functional status signifiers and an action blue.
+
+- **Primary Canvas & Structural Shell:**
+  - **Sidebar & Structural Dark Surfaces:** `#1E293B` serves as the primary ground for administrative navigation, establishing visual weight and permanent anchoring.
+  - **Application Background:** `#F8FAFC` provides a low-strain, clean foundation across content viewports.
+  - **Card Surfaces & Table Rows:** `#FFFFFF` separates operational work surfaces cleanly from canvas neutral.
+- **Text & Content Hierarchy:**
+  - **Primary Body & Titles:** `#1E293B` guarantees strict AAA contrast against light cards.
+  - **Secondary Supporting Text:** `#64748B` defines meta fields, timestamps, and column header keys.
+  - **Structural Borders & Dividing Rules:** `#E2E8F0` keeps data boundaries crisp without heavy visual weight.
+- **Action & Semantic Roles:**
+  - **Interactive Primary Blue:** `#2563EB` handles active primary buttons, links, selected states, and progressive indicators.
+  - **Ledger Success:** `#16A34A` strictly designates credited entries, balanced states, and approved reconciliations.
+  - **Audit Danger:** `#DC2626` alerts against discrepancies, ledger imbalances, rejected entries, and destructive actions.
+  - **Pending Warning:** `#D97706` flags unverified items, escrow holds, and awaiting signatures.
+
+## Typography
+
+The type system prioritizes balanced geometric legibility for numeric figures and rapid scanning of complex statements.
+
+- **Headline Font (`Manrope`):** Deployed for high-level dashboard summaries, key metrics, and module titles. Its geometric neutrality anchors financial totals without distortion.
+- **Body & Data Font (`Hanken Grotesk`):** Provides high legibility at micro-scales. Ideal for dense transaction ledgers, audit notes, balance reconciliation tables, and input controls.
+- **Tabular Figures:** All numeric displays (balances, account keys, transaction rows) must enforce `font-variant-numeric: tabular-nums` to ensure strict vertical column alignment across debits and credits.
+- **Hierarchy Rules:** Section labels and table headers must be rendered in `label-sm` or `label-md` with upper-case styling and positive letter-spacing (`0.02em` - `0.04em`) to establish clear data compartmentalization.
+
+## Layout & Spacing
+
+This design system uses a structured desktop-first layout designed for audit workflows, scaling gracefully down to portable form factors.
+
+- **Grid Architecture:** 
+  - Standard viewport runs on a 12-column responsive fluid grid inside a 1440px maximum content frame.
+  - Persistent left-docked navigation sidebar occupies a fixed `260px` track on desktop screens.
+  - 16px (`gutter-mobile`) to 24px (`gutter`) column gaps provide consistent vertical rhythm across dashboard widgets.
+- **Density Guidelines:**
+  - High information density is standard: transaction rows feature compact vertical heights (40px–48px) with internal padding set to `space-sm` and `space-md`.
+  - Analytical metric cards utilize `space-lg` internal padding to isolate core figures from surrounding metadata.
+- **Breakpoints:**
+  - **Desktop (>= 1280px):** Permanent `260px` dark sidebar; dynamic 12-column grid; metric cards arrayed in 4-column formations.
+  - **Tablet (768px - 1279px):** Collapsed icon-only sidebar (`72px`); 8-column layout; metric cards arrayed in 2-column pairs; data tables gain horizontal overflow containers with sticky header rows.
+  - **Mobile (< 768px):** Off-canvas drawer navigation; 4-column grid; `margin-mobile` applied; tables switch to responsive summary cards or strict horizontal scroll with frozen account IDs.
+
+## Elevation & Depth
+
+Visual hierarchy is maintained via low-contrast outlines and minimal ambient diffusion rather than deep stacked drop shadows.
+
+- **Level 0 (Base Canvas):** Background canvas (`#F8FAFC`) with no elevation.
+- **Level 1 (Card & Ledger Surfaces):** Surface white (`#FFFFFF`) with a continuous 1px outline of `#E2E8F0` and an ultra-subtle ambient drop shadow: `0 1px 3px 0 rgba(30, 41, 59, 0.04)`.
+- **Level 2 (Interactive Flyouts & Menus):** Dropdowns, filter menus, and action sheets utilize `0 4px 12px 0 rgba(30, 41, 59, 0.08)` bordered by `1px solid #E2E8F0`.
+- **Level 3 (Modal Dialogs & Reconciliation Audits):** Modal overlays carry `0 12px 28px -4px rgba(30, 41, 59, 0.16)` centered on a tinted `#1E293B` backdrop at 40% opacity.
+- **Active Selection & Focus Depth:** Zero-spread dual-ring focus system using `box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #2563EB` to guarantee non-obtrusive, accessible focus rings.
+
+## Shapes
+
+The design system adopts a balanced, disciplined corner profile (`roundedness: 2` = 0.5rem / 8px).
+
+- **Default Radii (0.5rem / 8px):** Cards, input fields, operational buttons, metric panels, and modals.
+- **Sub-Component Radii (0.25rem / 4px):** Checkboxes, status badges, chip indicators, and internal action bars.
+- **Pill Shapes:** Restricted strictly to user profile avatars and high-visibility live status indicators (e.g., "Active Ledger", "Reconciled").
+- **Structural Integrity:** Tables maintain squared exterior boundaries aligned with card containers, applying the 8px radius only to the overarching card frame.
+
+## Components
+
+### Buttons
+- **Primary:** Solid `#2563EB` with `#FFFFFF` text. Hover state at `#1D4ED8`. Active state `#1E40AF`. 0.5rem radius, height 40px, font `label-lg`.
+- **Secondary / Outline:** White surface, 1px border of `#E2E8F0`, text `#1E293B`. Hover state shifts surface to `#F8FAFC` and border to `#CBD5E1`.
+- **Destructive:** Borderless or faint red tint (`#FEF2F2`) with `#DC2626` text; primary destructive uses solid `#DC2626` with `#FFFFFF` text.
+- **Subtle / Ghost:** Padding 0.5rem 0.75rem, transparent background, text `#64748B`, hover background `#F1F5F9` with text `#1E293B`.
+
+### Status Badges & Chips
+- Compact dimensions: height 22px–24px, 0.25rem radius, font `label-sm`, letter spacing `0.02em`.
+- **Success (Balanced/Credited):** `#DCFCE7` background, `#166534` text, optional 1px border `#BBF7D0`.
+- **Warning (Escrow/Pending):** `#FEF3C7` background, `#92400E` text, optional 1px border `#FDE68A`.
+- **Danger (Discrepancy/Failed):** `#FEE2E2` background, `#991B1B` text, optional 1px border `#FECACA`.
+- **Neutral (Archived/Draft):** `#F1F5F9` background, `#475569` text, optional 1px border `#E2E8F0`.
+
+### Data Tables & Ledgers
+- **Header:** Height 40px, surface `#F8FAFC`, bottom border 1px `#E2E8F0`. Text is `label-sm`, `#64748B`, uppercase.
+- **Row Rows:** Height 44px–48px, surface `#FFFFFF`, bottom border 1px `#E2E8F0`. Hover color `#F8FAFC`.
+- **Alignment Rules:** Text left-aligned; status codes center-aligned; numeric values, balance totals, debits, and credits strictly right-aligned with tabular figures enabled.
+
+### Form Inputs & Selectors
+- **Input Fields:** Height 40px, border 1px `#E2E8F0`, surface `#FFFFFF`, text `#1E293B`, placeholder `#94A3B8`.
+- **Focus State:** Border changes to `#2563EB` with double-ring focus offset.
+- **Field Labels:** Positioned above input with `space-xs` gap, styled with `label-md` and `#1E293B`. Optional helper or error text rendered in `body-sm`.
+
+### Metric Cards
+- Surface `#FFFFFF`, border 1px `#E2E8F0`, padding `space-lg`, radius 0.5rem.
+- Composed of: Top section featuring category title (`label-md`, `#64748B`) and optional icon; middle section featuring primary total (`numeric-metric`, `#1E293B`); bottom section highlighting change metrics or comparison periods with semantic coloring.
+
+### Selection Controls
+- **Checkboxes & Radios:** 16px × 16px, border 1.5px `#CBD5E1`, border-radius 4px (checkbox) or circle (radio). Active state fills `#2563EB` with white checkmark/dot.

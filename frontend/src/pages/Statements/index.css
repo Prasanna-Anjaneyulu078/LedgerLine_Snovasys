@@ -1,0 +1,90 @@
+.statements-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.statement-account-header {
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 1.5rem 1.75rem;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+}
+
+.statement-selector-area {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.statement-account-summary {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  background-color: #F8FAFC;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  padding: 1rem 1.25rem;
+  margin-top: 1rem;
+  width: 100%;
+}
+
+.statement-sum-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.statement-sum-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.statement-sum-val {
+  font-family: var(--font-display);
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--text-color);
+}
+
+.refused-attempts-container {
+  margin-top: 1.5rem;
+}
+
+.refused-alert-box {
+  background-color: var(--danger-bg);
+  border: 1px solid var(--danger-border);
+  border-radius: var(--border-radius);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.refused-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--danger-text);
+  margin-bottom: 0.25rem;
+}
+
+.refused-alert-desc {
+  font-size: 0.75rem;
+  color: #7F1D1D;
+}
+
+@media (max-width: 900px) {
+  .statement-account-summary {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

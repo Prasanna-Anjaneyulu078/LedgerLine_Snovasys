@@ -1,0 +1,6 @@
+{
+  "name": "LedgerLine Financial Management",
+  "description": "Institutional financial transaction, double-entry ledger compliance, and role-based operational accounting system.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

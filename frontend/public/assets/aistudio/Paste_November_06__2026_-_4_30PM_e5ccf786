@@ -1,0 +1,1595 @@
+# LedgerLine — Complete Frontend Implementation Prompt
+
+You are a senior frontend engineer specializing in React.js, Vite, JavaScript/JSX, responsive UI development, reusable component architecture, REST API integration, authentication, and pixel-accurate implementation of Google Stitch AI designs.
+
+I want you to build the **complete LedgerLine frontend application** using the provided Google Stitch AI designs and integrate it with the existing LedgerLine backend.
+
+This is a first-time frontend implementation. Do not assume that the existing project already contains the required frontend architecture or components.
+
+The project is a financial transaction and ledger management application developed for the Snovasys Fresher Hiring Challenge.
+
+There are three user roles:
+
+- `ACCOUNT_HOLDER`
+- `ADMIN`
+- `AUDITOR`
+
+The Google Stitch design is the source of truth for the UI/UX.
+
+The existing backend implementation, API documentation, database structure, and business rules are the source of truth for application functionality.
+
+**Do not invent backend functionality, API endpoints, permissions, or transaction rules.**
+
+---
+
+# 1. PRIMARY OBJECTIVE
+
+Build the complete LedgerLine frontend application.
+
+Implement:
+
+- Login page
+- Account Holder registration page
+- Account Holder dashboard
+- Admin dashboard
+- Auditor dashboard
+- Accounts management
+- Transactions
+- Deposits
+- Withdrawals
+- Transfers
+- Account statements
+- Global ledger
+- Audit events
+- User management
+- Profile page
+- Unauthorized page
+- Responsive navigation
+- Authentication and authorization
+- Backend API integration
+- Loading, empty, success, and error states
+
+Implement every distinct page and screen available in the provided Stitch designs.
+
+Do not implement only the login page or dashboard.
+
+Do not redesign the Stitch UI unnecessarily.
+
+Preserve the design's layout, typography, colors, spacing, cards, tables, forms, buttons, icons, navigation, and responsive behavior.
+
+Do not create a generic AI-generated banking dashboard. Keep the application simple, clean, professional, and suitable for a student-built financial ledger management system.
+
+---
+
+# 2. TECHNOLOGY REQUIREMENTS
+
+Use ONLY:
+
+- React.js
+- Vite
+- JavaScript
+- JSX
+- Plain CSS
+- React Router DOM
+- Axios
+- React Context API
+- Lucide React
+
+Use these file extensions:
+
+```text
+.js
+.jsx
+.css
+```
+
+Do not use:
+
+- TypeScript
+- TSX
+- Tailwind CSS
+- Sass
+- SCSS
+- Styled Components
+- CSS-in-JS
+- Material UI
+- Bootstrap
+- Chakra UI
+- Ant Design
+- Next.js
+- Redux
+
+Do not introduce unnecessary dependencies.
+
+Use React Context API only for genuinely shared application state, especially authentication.
+
+Use local React state for page-specific interactions.
+
+---
+
+# 3. REACT FUNCTIONAL COMPONENT REQUIREMENT
+
+Use React Functional Components ONLY.
+
+Example:
+
+```jsx
+import React from "react";
+import "./index.css";
+
+const Dashboard = () => {
+  return (
+    <div className="dashboard">
+      <h1>Dashboard</h1>
+    </div>
+  );
+};
+
+export default Dashboard;
+```
+
+Do not create React class components.
+
+Use hooks only when required:
+
+- useState
+- useEffect
+- useMemo
+- useCallback
+- useRef
+- useContext
+
+Avoid unnecessary hooks and excessive component complexity.
+
+---
+
+# 4. COMPONENT EXPORT RULE — CRITICAL
+
+Every React component file must export its primary component as the final line of code.
+
+Required format:
+
+```jsx
+const ComponentName = () => {
+  return (
+    <div>
+      {/* Component UI */}
+    </div>
+  );
+};
+
+export default ComponentName;
+```
+
+Nothing must appear after:
+
+```jsx
+export default ComponentName;
+```
+
+Apply this requirement to all component and page files.
+
+Do not put imports, constants, helper functions, CSS imports, comments, or executable code after the default export.
+
+Prefer default exports.
+
+---
+
+# 5. FIRST — INSPECT THE COMPLETE PROJECT
+
+Before modifying anything, inspect the existing project.
+
+Inspect:
+
+1. Complete directory structure.
+2. Root `package.json`.
+3. Existing frontend and backend directories.
+4. Existing Vite configuration.
+5. Existing React dependencies.
+6. Existing backend API implementation.
+7. Backend API documentation and Swagger configuration.
+8. Authentication response structure.
+9. User roles and authorization middleware.
+10. Account and transaction response structures.
+11. Ledger and statement response structures.
+12. Existing CSS and assets.
+13. Existing environment variables and API configuration.
+14. Existing frontend code, if any.
+
+The expected project structure may be:
+
+```text
+LedgerLine/
+├── backend/
+├── frontend/
+├── README.md
+└── ...
+```
+
+Keep the frontend inside:
+
+```text
+frontend/
+```
+
+Do not move backend files into the frontend.
+
+Do not overwrite or modify backend functionality unless a specific frontend integration issue requires a change and I explicitly authorize it.
+
+Do not delete working backend code, migrations, tests, configuration, or documentation.
+
+---
+
+# 6. LEDGERLINE APPLICATION DESIGN
+
+LedgerLine is a transaction and ledger management application.
+
+The interface should communicate:
+
+- Account balances
+- Financial transactions
+- Deposits and withdrawals
+- Money transfers
+- Transaction history
+- Account statements
+- Ledger entries
+- Audit information
+- User and account administration
+
+Use the Stitch designs as the visual reference.
+
+Keep the UI simple and understandable.
+
+Do not introduce unnecessary banking features such as:
+
+- Loan applications
+- Credit cards
+- Investment management
+- Payment gateway integrations
+- Cryptocurrency
+- Stock trading
+- External bank linking
+- Banking marketing pages
+
+These features are outside the current project scope.
+
+---
+
+# 7. USER ROLES AND AUTHENTICATION
+
+Implement three backend-defined roles:
+
+```text
+ACCOUNT_HOLDER
+ADMIN
+AUDITOR
+```
+
+Use a single login page for all three roles.
+
+The user must not manually select a role during login.
+
+After successful login:
+
+1. Receive the authentication response from the backend.
+2. Identify the authenticated user's role from the actual response.
+3. Store the authentication state securely according to the backend's authentication mechanism.
+4. Fetch the current user using the appropriate authenticated endpoint.
+5. Redirect the user to the correct role-specific dashboard.
+
+Expected role-based landing pages:
+
+```text
+ACCOUNT_HOLDER → /dashboard
+ADMIN          → /admin/dashboard
+AUDITOR        → /auditor/dashboard
+```
+
+Do not implement manual role switching.
+
+Do not trust a role stored in local storage as authorization.
+
+The backend remains responsible for enforcing permissions.
+
+## Registration security
+
+Implement a public registration page for ACCOUNT_HOLDER users only.
+
+Registration form:
+
+- Full name
+- Email
+- Password
+- Confirm password
+
+Add phone number only if the existing backend registration API supports it.
+
+Important:
+
+- Do not display a role selector.
+- Do not allow users to register themselves as ADMIN.
+- Do not allow users to register themselves as AUDITOR.
+- Do not send a privileged role from the registration form.
+- The backend must assign `ACCOUNT_HOLDER` server-side.
+- ADMIN and AUDITOR accounts must be provisioned through the existing secure seed or administrative process.
+
+Use the actual backend registration request and response structure.
+
+Do not invent additional registration endpoints.
+
+---
+
+# 8. ROLE-BASED APPLICATION ACCESS
+
+Implement role-based navigation and protected frontend routes.
+
+Frontend route restrictions improve navigation, but they are not a replacement for backend authorization.
+
+## ACCOUNT_HOLDER
+
+Navigation:
+
+```text
+Dashboard
+My Accounts
+Transactions
+Statements
+Profile
+Logout
+```
+
+Permissions and UI:
+
+- View only owned accounts.
+- View account balances.
+- View own transaction history.
+- Deposit into eligible owned accounts.
+- Withdraw from eligible owned accounts.
+- Transfer between permitted accounts.
+- View account statements.
+- View successful and refused transaction attempts where supported.
+- View transaction details.
+- Update profile only if supported by the backend.
+
+Do not display other users' accounts or information.
+
+## ADMIN
+
+Navigation:
+
+```text
+Dashboard
+Users
+Accounts
+Transactions
+Global Ledger
+Audit Events
+Profile
+Logout
+```
+
+Permissions and UI:
+
+- View users.
+- View accounts.
+- View transactions.
+- View global ledger entries.
+- View audit events.
+- Update user status through the supported admin API.
+- Update account status through the supported admin API.
+- Perform deposits, withdrawals, or transfers only if the existing backend explicitly authorizes those operations for ADMIN.
+
+Do not invent administrative adjustment functionality.
+
+Do not create edit/delete ledger functionality.
+
+## AUDITOR
+
+Navigation:
+
+```text
+Dashboard
+Global Ledger
+Transactions
+Statements
+Audit Events
+Profile
+Logout
+```
+
+Permissions and UI:
+
+- Read-only access.
+- View global ledger entries.
+- View transaction information permitted by the backend.
+- View audit events.
+- View account balances and statements where authorized.
+- Inspect transaction details.
+- No deposit functionality.
+- No withdrawal functionality.
+- No transfer functionality.
+- No user status modification.
+- No account status modification.
+- No ledger modification.
+
+Do not display transaction action buttons for auditors.
+
+Do not assume an auditor can list every account unless the backend provides that capability.
+
+---
+
+# 9. COMPLETE FRONTEND PAGES
+
+Implement the following pages based on the available Stitch designs.
+
+## Common pages
+
+```text
+Login
+Register
+Profile
+Unauthorized
+```
+
+## Account Holder pages
+
+```text
+Account Holder Dashboard
+My Accounts
+Transactions
+Deposit
+Withdraw
+Transfer
+Account Statement
+Transaction Details
+```
+
+Deposit, Withdraw, and Transfer can be forms or modal interactions within the Transactions page if that matches the Stitch design.
+
+Do not create unnecessary duplicate pages.
+
+## Admin pages
+
+```text
+Admin Dashboard
+User Management
+Account Management
+Transaction Management
+Global Ledger
+Audit Events
+```
+
+## Auditor pages
+
+```text
+Auditor Dashboard
+Global Ledger
+Transactions
+Account Statements
+Audit Events
+```
+
+Where multiple roles use the same screen, reuse the same page component and adapt its data and available actions according to the authenticated role.
+
+Do not duplicate entire pages unnecessarily.
+
+---
+
+# 10. FRONTEND ROUTING
+
+Use React Router DOM.
+
+Create routes based on the application structure.
+
+Suggested route organization:
+
+```text
+/login
+/register
+/unauthorized
+/profile
+
+/dashboard
+/accounts
+/transactions
+/statements/:accountId
+
+/admin/dashboard
+/admin/users
+/admin/accounts
+/admin/transactions
+/admin/ledger
+/admin/audit-events
+
+/auditor/dashboard
+/auditor/transactions
+/auditor/ledger
+/auditor/statements/:accountId
+/auditor/audit-events
+```
+
+Use:
+
+- `ProtectedRoute`
+- `RoleBasedRoute`
+- `AuthLayout`
+- `DashboardLayout`
+
+Requirements:
+
+- Unauthenticated users cannot access protected routes.
+- Account Holders cannot access Admin pages.
+- Account Holders cannot access Auditor pages.
+- Auditors cannot access Admin management pages.
+- Admins cannot access unauthorized pages.
+- Users with an invalid role must be denied access.
+- Redirect users to the appropriate dashboard after login.
+- Preserve the intended redirect destination when appropriate.
+- Handle expired or invalid sessions.
+- Handle logout and clear authentication state.
+
+Never treat hiding a navigation item as sufficient authorization.
+
+---
+
+# 11. RECOMMENDED FRONTEND PROJECT STRUCTURE
+
+Use this architecture consistently:
+
+```text
+frontend/
+│
+├── public/
+│
+├── src/
+│   │
+│   ├── assets/
+│   │   ├── images/
+│   │   └── icons/
+│   │
+│   ├── components/
+│   │   ├── Header/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   ├── Sidebar/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   ├── StatCard/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   ├── DataTable/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   ├── StatusBadge/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   ├── FormInput/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   ├── ConfirmModal/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   ├── LoadingState/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   ├── EmptyState/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   └── ErrorState/
+│   │       ├── index.jsx
+│   │       └── index.css
+│   │
+│   ├── layouts/
+│   │   ├── AuthLayout/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   └── DashboardLayout/
+│   │       ├── index.jsx
+│   │       └── index.css
+│   │
+│   ├── pages/
+│   │   ├── Login/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   ├── Register/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   ├── Dashboard/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   ├── Accounts/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   ├── Transactions/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   ├── Statements/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   ├── Users/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   ├── Ledger/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   ├── AuditEvents/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   ├── Profile/
+│   │   │   ├── index.jsx
+│   │   │   └── index.css
+│   │   │
+│   │   └── Unauthorized/
+│   │       ├── index.jsx
+│   │       └── index.css
+│   │
+│   ├── context/
+│   │   └── AuthContext.jsx
+│   │
+│   ├── routes/
+│   │   ├── AppRoutes.jsx
+│   │   ├── ProtectedRoute.jsx
+│   │   └── RoleBasedRoute.jsx
+│   │
+│   ├── services/
+│   │   ├── api.js
+│   │   ├── authService.js
+│   │   ├── accountService.js
+│   │   ├── transactionService.js
+│   │   ├── ledgerService.js
+│   │   ├── statementService.js
+│   │   └── adminService.js
+│   │
+│   ├── utils/
+│   │   ├── formatCurrency.js
+│   │   ├── formatDate.js
+│   │   └── roleHelpers.js
+│   │
+│   ├── App.jsx
+│   ├── main.jsx
+│   └── index.css
+│
+├── .env
+├── .env.example
+├── package.json
+└── vite.config.js
+```
+
+This is a recommended structure, not a reason to create unnecessary files.
+
+Create only the components and pages actually needed.
+
+Every reusable component and page must have its own folder containing:
+
+```text
+index.jsx
+index.css
+```
+
+Keep the architecture consistent.
+
+---
+
+# 12. SHARED COMPONENTS
+
+Analyze the Stitch designs and create reusable components where appropriate.
+
+Expected reusable components may include:
+
+- Header
+- Sidebar
+- DashboardLayout
+- AuthLayout
+- StatCard
+- DataTable
+- StatusBadge
+- FormInput
+- SelectInput
+- SearchBar
+- FilterBar
+- Pagination
+- ConfirmModal
+- TransactionForm
+- AccountCard
+- LoadingState
+- EmptyState
+- ErrorState
+
+Do not create a component for every small HTML element.
+
+Avoid unnecessary duplication.
+
+---
+
+# 13. DASHBOARD REQUIREMENTS
+
+Create role-specific dashboard content.
+
+## Account Holder Dashboard
+
+Display only information returned for the authenticated user.
+
+Possible sections:
+
+- Welcome message
+- Total available balance
+- My accounts
+- Recent transactions
+- Recent transaction status
+- Quick actions for Deposit, Withdraw, and Transfer
+
+Do not calculate a financial total from unrelated or unauthorized account data.
+
+## Admin Dashboard
+
+Possible sections:
+
+- Total users
+- Total accounts
+- Transaction summary
+- Recent transactions
+- Account status information
+- Recent audit activity
+
+Use only available backend data.
+
+Do not fabricate statistics.
+
+## Auditor Dashboard
+
+Possible sections:
+
+- Ledger overview
+- Recent ledger entries
+- Transaction activity
+- Recent audit events
+- Read-only account/statement information where supported
+
+Do not show transaction creation controls.
+
+All dashboard statistics must be based on real API responses or clearly identified loading/empty states.
+
+---
+
+# 14. BACKEND API INTEGRATION
+
+The backend is already implemented.
+
+Inspect the actual Swagger documentation and backend source before integrating APIs.
+
+Use Axios.
+
+Create a centralized API instance in:
+
+```text
+src/services/api.js
+```
+
+Configure:
+
+- Base URL from environment variables
+- Authentication headers according to backend requirements
+- Common response handling
+- Error handling
+- Authentication expiration handling
+
+Use:
+
+```text
+VITE_API_BASE_URL
+```
+
+Do not hardcode deployment URLs.
+
+Create separate service modules for:
+
+- Authentication
+- Accounts
+- Transactions
+- Ledger
+- Statements
+- Admin
+
+## Existing documented API endpoints
+
+Use these endpoints only after verifying their actual request and response structures.
+
+### Authentication
+
+```text
+POST /api/v1/auth/register
+POST /api/v1/auth/login
+GET  /api/v1/auth/me
+```
+
+### Accounts
+
+```text
+GET /api/v1/accounts
+GET /api/v1/accounts/:id/balance
+GET /api/v1/accounts/:id/statement
+```
+
+### Transactions
+
+```text
+POST /api/v1/transactions/deposit
+POST /api/v1/transactions/withdraw
+POST /api/v1/transactions/transfer
+
+GET /api/v1/transactions
+GET /api/v1/transactions/:id
+```
+
+### Ledger
+
+```text
+GET /api/v1/ledger
+GET /api/v1/ledger/:id
+```
+
+### Audit
+
+```text
+GET /api/v1/audit-events
+```
+
+### Admin
+
+```text
+GET   /api/v1/admin/users
+GET   /api/v1/admin/accounts
+
+PATCH /api/v1/admin/users/:id/status
+PATCH /api/v1/admin/accounts/:id/status
+```
+
+Do not assume the frontend route and backend API route are the same.
+
+Do not invent endpoints such as:
+
+```text
+/api/v1/admin/transactions
+/api/v1/admin/adjustments
+/api/v1/users/profile
+```
+
+unless they actually exist in the backend.
+
+If a required screen has no supporting endpoint, do not fabricate a successful API integration. Report the missing capability and use an explicitly labeled UI placeholder only if necessary.
+
+---
+
+# 15. FINANCIAL DATA HANDLING
+
+This application handles financial transactions.
+
+Follow these rules strictly.
+
+## Currency
+
+- Display currency in INR.
+- Use the Indian number format.
+- Display values with two decimal places where appropriate.
+- Inspect whether the backend returns amounts in paise or rupees.
+- If the backend stores amounts in paise, convert them for display only.
+- Never modify the original API amount unexpectedly.
+
+Use a shared currency formatting utility.
+
+## Transaction forms
+
+Deposit:
+
+- Select an eligible account.
+- Enter amount.
+- Enter description/reference if supported.
+- Confirm transaction.
+
+Withdrawal:
+
+- Select an eligible account.
+- Enter amount.
+- Enter description/reference if supported.
+- Confirm transaction.
+
+Transfer:
+
+- Select source account.
+- Select permitted destination account.
+- Enter amount.
+- Enter description/reference if supported.
+- Confirm transaction.
+
+Use the actual backend validation rules.
+
+Show clear success and failure messages.
+
+Prevent accidental duplicate submissions while a transaction is processing.
+
+Do not create fake transaction success responses.
+
+## Amount precision
+
+Never use floating-point arithmetic to calculate financial balances.
+
+Do not calculate or modify authoritative balances in the frontend.
+
+The backend is the source of truth for balances and transaction results.
+
+Do not convert amounts between rupees and paise without verifying the backend contract.
+
+---
+
+# 16. IDEMPOTENCY AND TRANSACTION SAFETY
+
+The backend supports idempotent transaction requests.
+
+Inspect its implementation and API contract.
+
+If it requires an `Idempotency-Key` header:
+
+- Generate a unique key for each new transaction attempt.
+- Send it using the documented header.
+- Reuse the same key when retrying the same request after a network interruption.
+- Do not reuse the key for a different transaction.
+- Prevent repeated clicks from creating unintended duplicate requests.
+
+Do not implement frontend logic that bypasses backend idempotency.
+
+The frontend must never attempt to implement financial transaction atomicity itself.
+
+The backend remains responsible for:
+
+- Transaction integrity
+- Balance validation
+- Concurrency control
+- Double-entry ledger postings
+- Idempotency enforcement
+- Account authorization
+
+---
+
+# 17. STATEMENTS AND LEDGER
+
+## Account Statements
+
+Use the actual documented endpoint:
+
+```text
+GET /api/v1/accounts/:id/statement
+```
+
+Display the response according to the actual backend response structure.
+
+Where supported, show:
+
+- Transaction reference
+- Date and time
+- Transaction type
+- Debit
+- Credit
+- Transaction status
+- Running balance
+- Initiator
+
+Distinguish between:
+
+- Successful committed postings
+- Refused transaction attempts
+
+Do not present refused attempts as successful ledger postings.
+
+Do not calculate authoritative running balances in the frontend.
+
+## Global Ledger
+
+Use:
+
+```text
+GET /api/v1/ledger
+```
+
+Display ledger entries in read-only format.
+
+## Account Ledger
+
+Use:
+
+```text
+GET /api/v1/ledger/:id
+```
+
+only according to its actual backend meaning and authorization rules.
+
+## Ledger security
+
+The ledger is append-only.
+
+Never add:
+
+- Edit ledger entry
+- Delete ledger entry
+- Update ledger entry
+- Manual balance editing
+
+The frontend must not provide any control that modifies existing ledger entries.
+
+---
+
+# 18. ADMIN MANAGEMENT
+
+Implement the Admin Users and Admin Accounts pages.
+
+Users:
+
+```text
+GET /api/v1/admin/users
+PATCH /api/v1/admin/users/:id/status
+```
+
+Accounts:
+
+```text
+GET /api/v1/admin/accounts
+PATCH /api/v1/admin/accounts/:id/status
+```
+
+Requirements:
+
+- Display actual backend data.
+- Display status clearly.
+- Provide status modification only where supported.
+- Use confirmation dialogs for status changes.
+- Refresh the relevant data after successful changes.
+- Show loading and error states.
+- Prevent duplicate status-change requests.
+- Do not invent user deletion or account deletion functionality.
+
+---
+
+# 19. AUTHENTICATION STATE
+
+Use React Context API.
+
+Implement:
+
+```text
+src/context/AuthContext.jsx
+```
+
+It should handle:
+
+- Login
+- Registration
+- Current user
+- Role
+- Authentication loading
+- Logout
+- Session restoration
+- Authentication failure
+
+Inspect the actual backend authentication implementation before choosing token storage.
+
+If the backend uses HTTP-only cookies, use Axios with the correct credentials configuration and do not try to read the cookie in JavaScript.
+
+If the backend uses bearer tokens, follow its documented token response and storage mechanism.
+
+Do not assume that the backend uses cookies or local storage.
+
+Do not store passwords.
+
+Handle expired sessions consistently.
+
+---
+
+# 20. CSS ARCHITECTURE
+
+Use plain CSS only.
+
+Every page and component should have its own:
+
+```text
+index.css
+```
+
+Use:
+
+```text
+src/index.css
+```
+
+for:
+
+- CSS reset
+- Global styles
+- Typography
+- CSS variables
+- Root layout defaults
+
+Use reusable CSS variables.
+
+Suggested LedgerLine design tokens, unless the Stitch design specifies different values:
+
+```css
+:root {
+  --primary-color: #2563EB;
+  --sidebar-color: #1E293B;
+  --background-color: #F8FAFC;
+  --surface-color: #FFFFFF;
+  --text-color: #1E293B;
+  --muted-color: #64748B;
+  --success-color: #16A34A;
+  --danger-color: #DC2626;
+  --warning-color: #D97706;
+  --border-color: #E2E8F0;
+  --border-radius: 8px;
+}
+```
+
+Use the actual Stitch design colors where they differ from these suggested defaults.
+
+Avoid:
+
+- Excessive gradients
+- Glassmorphism
+- Heavy animations
+- Unnecessary charts
+- Oversized decorative elements
+- Excessive shadows
+- Unnecessary visual effects
+
+Keep the interface clean and consistent.
+
+---
+
+# 21. RESPONSIVE DESIGN
+
+Support:
+
+- Desktop
+- Laptop
+- Tablet
+- Mobile
+
+Use plain CSS media queries.
+
+Adapt:
+
+- Sidebar
+- Header
+- Navigation
+- Dashboard grids
+- Cards
+- Tables
+- Forms
+- Modals
+- Typography
+- Spacing
+
+On smaller screens:
+
+- Convert the sidebar into a mobile menu or drawer.
+- Keep navigation accessible.
+- Prevent horizontal overflow.
+- Make forms usable with touch input.
+- Make tables readable through responsive table containers or an appropriate mobile layout.
+- Ensure modals fit within the viewport.
+
+Do not simply shrink the desktop layout.
+
+---
+
+# 22. INTERACTIONS AND APPLICATION STATES
+
+Implement all important UI interactions.
+
+Examples:
+
+- Login and registration
+- Sidebar open/close
+- Mobile navigation
+- Logout
+- Search
+- Filters
+- Pagination, if supported
+- Account selection
+- Transaction forms
+- Confirmation dialogs
+- Table actions
+- Status updates
+- Error notifications
+- Success notifications
+- Loading states
+- Empty states
+
+All important buttons must have meaningful behavior.
+
+Do not leave dead buttons.
+
+For unsupported features, do not simulate successful backend behavior.
+
+---
+
+# 23. SECURITY REQUIREMENTS
+
+Security is a major evaluation area for LedgerLine.
+
+Follow these frontend rules:
+
+1. Never trust frontend role selection.
+2. Never expose privileged registration.
+3. Never treat frontend route protection as backend security.
+4. Never display another user's account information.
+5. Never show transaction actions to auditors.
+6. Never provide ledger edit/delete controls.
+7. Never hardcode database credentials or API secrets.
+8. Never log access tokens or passwords.
+9. Never store passwords in browser storage.
+10. Never fabricate successful transaction responses.
+11. Handle `401`, `403`, and validation errors correctly.
+12. Do not bypass backend validation.
+13. Do not expose internal backend error traces to users.
+14. Do not calculate authoritative financial balances in the browser.
+
+The backend must remain the authority for all security and financial rules.
+
+---
+
+# 24. ERROR HANDLING
+
+Provide consistent user-friendly messages.
+
+Handle:
+
+```text
+400 — Invalid request
+401 — Unauthorized or expired session
+403 — Forbidden
+404 — Resource not found
+409 — Conflict or idempotency conflict
+422 — Validation error, if used by the backend
+429 — Rate limit exceeded
+500 — Internal server error
+Network error — Backend unavailable
+```
+
+Verify the actual backend status codes and response formats.
+
+Do not assume every endpoint returns the same error structure.
+
+Do not expose stack traces or internal database errors in the UI.
+
+---
+
+# 25. IMPLEMENTATION PROCESS
+
+Follow this exact implementation order.
+
+## Step 1 — Inspect the project
+
+Understand the existing frontend, backend, Swagger documentation, API response formats, roles, and authorization.
+
+Do not modify working backend code.
+
+## Step 2 — Analyze Stitch designs
+
+Identify every page, layout, reusable component, interaction, asset, and responsive state.
+
+Create a complete page checklist.
+
+## Step 3 — Create frontend architecture
+
+Set up React + Vite + JavaScript inside `frontend/`.
+
+Create the required folder structure.
+
+## Step 4 — Install dependencies
+
+Install only:
+
+```text
+react-router-dom
+axios
+lucide-react
+```
+
+along with the normal React and Vite dependencies.
+
+Do not add unnecessary packages.
+
+## Step 5 — Implement shared components
+
+Build:
+
+- AuthLayout
+- DashboardLayout
+- Header
+- Sidebar
+- DataTable
+- StatCard
+- StatusBadge
+- FormInput
+- ConfirmModal
+- LoadingState
+- EmptyState
+- ErrorState
+
+Only implement components required by the actual designs.
+
+## Step 6 — Implement authentication
+
+Build:
+
+- Login
+- Register
+- AuthContext
+- ProtectedRoute
+- RoleBasedRoute
+- Session restoration
+- Logout
+
+Verify automatic role detection.
+
+## Step 7 — Implement Account Holder pages
+
+Build:
+
+- Dashboard
+- My Accounts
+- Transactions
+- Deposit
+- Withdraw
+- Transfer
+- Statements
+
+## Step 8 — Implement Admin pages
+
+Build:
+
+- Admin Dashboard
+- Users
+- Accounts
+- Transactions
+- Global Ledger
+- Audit Events
+
+## Step 9 — Implement Auditor pages
+
+Build:
+
+- Auditor Dashboard
+- Transactions
+- Global Ledger
+- Statements
+- Audit Events
+
+Keep all auditor screens read-only.
+
+## Step 10 — Integrate APIs
+
+Connect each page to the actual backend service.
+
+Verify request parameters, authentication, response structures, and errors.
+
+## Step 11 — Implement responsive design
+
+Verify desktop, laptop, tablet, and mobile layouts.
+
+## Step 12 — Verify all interactions
+
+Test navigation, forms, transaction requests, status changes, and error states.
+
+## Step 13 — Visual verification
+
+Compare the React implementation with the Stitch designs and correct visual differences.
+
+## Step 14 — Final testing
+
+Run the frontend build and verify the application in the browser.
+
+---
+
+# 26. COMPONENT AND PAGE FILE RULES
+
+For every component and page:
+
+- Use functional components.
+- Use JavaScript/JSX.
+- Use component-specific CSS.
+- Use meaningful names.
+- Avoid unnecessary hooks.
+- Avoid duplicated code.
+- Avoid unused imports.
+- Avoid unused variables.
+- Avoid invalid JSX.
+- Avoid circular dependencies.
+- Keep the default export as the final line.
+
+Required structure:
+
+```text
+ComponentName/
+├── index.jsx
+└── index.css
+```
+
+Required export:
+
+```jsx
+export default ComponentName;
+```
+
+Nothing must appear after the export.
+
+---
+
+# 27. FINAL VERIFICATION
+
+Before considering the frontend complete, verify all of the following.
+
+## Architecture
+
+- React + Vite.
+- JavaScript and JSX only.
+- Plain CSS only.
+- Component folders contain `index.jsx` and `index.css`.
+- Pages have separate folders.
+- Shared layouts are reused.
+- API services are separate from UI components.
+
+## Authentication
+
+- Login works.
+- Registration works for ACCOUNT_HOLDER only.
+- Role is detected automatically.
+- Session restoration works.
+- Logout works.
+- Protected routes work.
+- Role-based navigation works.
+
+## Account Holder
+
+- Own accounts load.
+- Balances load.
+- Deposits work where permitted.
+- Withdrawals work where permitted.
+- Transfers work where permitted.
+- Statements load.
+- Transaction history is correctly filtered.
+
+## Admin
+
+- Users load.
+- Accounts load.
+- Transactions load where supported.
+- Global ledger loads.
+- Audit events load.
+- Supported status updates work.
+
+## Auditor
+
+- Global ledger loads.
+- Transactions load where permitted.
+- Statements load where permitted.
+- Audit events load.
+- No transaction modification controls are visible.
+
+## Financial integrity
+
+- No frontend balance manipulation.
+- No floating-point financial calculations.
+- Idempotency follows backend requirements.
+- Duplicate submissions are prevented.
+- Refused attempts are not shown as successful postings.
+- Ledger is read-only.
+
+## UI
+
+- All required pages implemented.
+- Stitch design closely reproduced.
+- Desktop responsive.
+- Laptop responsive.
+- Tablet responsive.
+- Mobile responsive.
+- No horizontal overflow.
+- No broken navigation.
+- No dead buttons.
+- Loading, empty, and error states implemented.
+
+## Code
+
+- No TypeScript.
+- No Tailwind.
+- No class components.
+- No unused imports.
+- No unused variables.
+- No broken imports.
+- No unnecessary dependencies.
+- Default export is the final line of every component/page file.
+
+## Build
+
+Run:
+
+```bash
+npm run build
+```
+
+Also run:
+
+```bash
+npm run dev
+```
+
+Verify the frontend in the browser.
+
+Fix all errors introduced by the implementation.
+
+Do not claim that backend integration works unless the relevant API requests have actually been tested.
+
+---
+
+# 28. IMPORTANT IMPLEMENTATION RULES
+
+- Do not stop after implementing the login page.
+- Do not stop after implementing one dashboard.
+- Do not implement only static mockups.
+- Do not invent API endpoints.
+- Do not invent backend permissions.
+- Do not modify the backend unnecessarily.
+- Do not introduce unsupported business features.
+- Do not create public Admin or Auditor registration.
+- Do not allow manual role switching.
+- Do not implement ledger editing or deletion.
+- Do not use fake transaction success responses.
+- Do not leave major controls non-functional.
+- Do not sacrifice security for visual appearance.
+- Do not sacrifice Stitch design accuracy for generic styling.
+
+If a required UI feature cannot be connected because the backend does not support it, document the limitation clearly rather than fabricating functionality.
+
+Implement the complete frontend systematically.
+
+---
+
+# 29. FINAL RESPONSE
+
+After completing the implementation, provide:
+
+1. Summary of the frontend architecture.
+2. All pages implemented.
+3. All reusable components created.
+4. All frontend routes created.
+5. Authentication and role-based access implementation.
+6. Backend API integrations completed.
+7. Dependencies installed.
+8. Confirmation of React + Vite + JavaScript + JSX + Plain CSS.
+9. Confirmation that TypeScript and Tailwind are not used.
+10. Confirmation that every component uses its own folder with `index.jsx` and `index.css`.
+11. Confirmation that every component is functional.
+12. Confirmation that each component's default export is its final line.
+13. Responsive design verification.
+14. Build and test results.
+15. Any backend limitations or Stitch design differences that remain.
+
+**Do not merely provide instructions or sample code. Inspect the existing LedgerLine project and implement the complete frontend directly.**
