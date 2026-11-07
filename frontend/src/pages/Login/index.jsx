@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Lock, AlertCircle, ArrowRight, KeyRound } from 'lucide-react';
+import { AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { getRoleDashboardRoute } from '../../utils/roleHelpers.js';
 import AuthLayout from '../../layouts/AuthLayout/index.jsx';
@@ -15,8 +15,8 @@ const isSafeInternalPath = (path) =>
   !path.includes(':');
 
 const Login = () => {
-  const [email, setEmail] = useState('alice@example.com');
-  const [password, setPassword] = useState('Alice@123456');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -67,17 +67,11 @@ const Login = () => {
     }
   };
 
-  const handleSelectDemoUser = (demoEmail, demoPassword) => {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
-    setErrorMsg(null);
-  };
-
   return (
     <AuthLayout>
       <div className="login-card">
         <div className="login-header">
-          <h2 className="login-title">Sign in to LedgerLine</h2>
+          <h2 className="login-title">Welcome back</h2>
           <p className="login-subtitle">
             Enter your credentials to access the institutional ledger system.
           </p>
@@ -120,7 +114,7 @@ const Login = () => {
               'Authenticating...'
             ) : (
               <>
-                <span>Access Ledger Portal</span>
+                <span>Sign In</span>
                 <ArrowRight size={16} />
               </>
             )}
@@ -128,59 +122,10 @@ const Login = () => {
         </form>
 
         <div className="login-footer-links">
-          <span style={{ color: 'var(--text-secondary)' }}>New Account Holder?</span>
+          <span style={{ color: 'var(--text-secondary)' }}>Don't have an account?</span>
           <Link to="/register" className="login-register-link">
             Create an Account
           </Link>
-        </div>
-
-        {/* Evaluation Quick-Fill Credentials */}
-        <div className="demo-accounts-section">
-          <div className="demo-accounts-title">
-            <span>Evaluation Quick-Select Roles</span>
-            <KeyRound size={13} />
-          </div>
-          <div className="demo-account-chips">
-            <button
-              type="button"
-              className="demo-chip"
-              onClick={() =>
-                handleSelectDemoUser(
-                  'alice@example.com',
-                  'Alice@123456'
-                )
-              }
-            >
-              <span className="demo-chip-name">Alice Sharma</span>
-              <span className="demo-chip-role">Account Holder</span>
-            </button>
-            <button
-              type="button"
-              className="demo-chip"
-              onClick={() =>
-                handleSelectDemoUser(
-                  'admin@ledgerline.internal',
-                  'Admin@123456'
-                )
-              }
-            >
-              <span className="demo-chip-name">System Admin</span>
-              <span className="demo-chip-role">System Admin</span>
-            </button>
-            <button
-              type="button"
-              className="demo-chip"
-              onClick={() =>
-                handleSelectDemoUser(
-                  'auditor@ledgerline.internal',
-                  'Auditor@123456'
-                )
-              }
-            >
-              <span className="demo-chip-name">Compliance Auditor</span>
-              <span className="demo-chip-role">Compliance Auditor</span>
-            </button>
-          </div>
         </div>
       </div>
     </AuthLayout>

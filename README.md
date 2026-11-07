@@ -248,7 +248,8 @@ The database seeder pre-populates the following verified institutional users:
 | **Account Holder** | Bob Sharma | `bob@example.com` | `Bob@123456` | `LL-ACC-2001`, `LL-ACC-2002` |
 | **Compliance Auditor** | Compliance Auditor | `auditor@ledgerline.internal` | `Auditor@123456` | System-wide read-only inspection |
 
-> **Evaluation Quick-Select:** The login page (`/login`) includes quick-select buttons for Alice Sharma (`ACCOUNT_HOLDER`), System Admin (`ADMIN`), and Compliance Auditor (`AUDITOR`) for instant review.
+> [!NOTE]
+> **Evaluation Credentials:** For testing and evaluation, enter any of the pre-seeded credentials above into the `/login` portal to inspect role-specific capabilities and permission boundaries. Demo credentials are deliberately omitted from the public UI for a clean, secure authentication experience.
 
 ---
 
