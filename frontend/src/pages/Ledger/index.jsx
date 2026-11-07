@@ -1,22 +1,23 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
-  BookOpen,
   ShieldCheck,
   RefreshCw,
   Lock,
   Filter,
   RotateCcw,
+  Search,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import ledgerService from '../../services/ledgerService.js';
-import { formatCurrency } from '../../utils/formatCurrency.js';
-import { formatDate } from '../../utils/formatDate.js';
 import DashboardLayout from '../../layouts/DashboardLayout/index.jsx';
-import DataTable from '../../components/DataTable/index.jsx';
-import StatusBadge from '../../components/StatusBadge/index.jsx';
+import GlobalLedgerTable from '../../components/GlobalLedgerTable/index.jsx';
 import LoadingState from '../../components/LoadingState/index.jsx';
 import ErrorState from '../../components/ErrorState/index.jsx';
 import './index.css';
+
+const PAGE_SIZE = 25;
 
 const Ledger = () => {
   const { role } = useAuth();
@@ -25,125 +26,89 @@ const Ledger = () => {
     total: 0,
     totalCreditsFormatted: '₹0.00',
     totalDebitsFormatted: '₹0.00',
+    pagination: null,
   });
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState('ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [filterType, setFilterType] = useState('ALL');
 
-  const fetchLedger = useCallback(async (type = filterType) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const query = {};
-      if (type && type !== 'ALL') query.entryType = type;
-      const data = await ledgerService.getGlobalLedger(query);
-      const list = data?.entries || (Array.isArray(data) ? data : []);
+  const fetchLedger = useCallback(
+    async (page = currentPage, type = filterType, search = searchTerm) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const query = {
+          page,
+          limit: PAGE_SIZE,
+        };
+        if (type && type !== 'ALL') query.entryType = type;
+        if (search && search.trim()) query.search = search.trim();
 
-      setLedgerData({
-        entries: list,
-        total: data?.total ?? list.length,
-        totalCreditsFormatted: data?.totalCreditsFormatted
-          ? (data.totalCreditsFormatted.startsWith('₹') ? data.totalCreditsFormatted : `₹${data.totalCreditsFormatted}`)
-          : '₹0.00',
-        totalDebitsFormatted: data?.totalDebitsFormatted
-          ? (data.totalDebitsFormatted.startsWith('₹') ? data.totalDebitsFormatted : `₹${data.totalDebitsFormatted}`)
-          : '₹0.00',
-      });
-    } catch (err) {
-      setError('Unable to load institutional global ledger entries.');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [filterType]);
+        const data = await ledgerService.getGlobalLedger(query);
+        const list = data?.entries || (Array.isArray(data) ? data : []);
+
+        const totalCount = data?.total ?? list.length;
+        const totalPages = data?.pagination?.totalPages || (totalCount > 0 ? Math.ceil(totalCount / PAGE_SIZE) : 1);
+
+        setLedgerData({
+          entries: list,
+          total: totalCount,
+          totalCreditsFormatted: data?.totalCreditsFormatted
+            ? data.totalCreditsFormatted.startsWith('₹')
+              ? data.totalCreditsFormatted
+              : `₹${data.totalCreditsFormatted}`
+            : '₹0.00',
+          totalDebitsFormatted: data?.totalDebitsFormatted
+            ? data.totalDebitsFormatted.startsWith('₹')
+              ? data.totalDebitsFormatted
+              : `₹${data.totalDebitsFormatted}`
+            : '₹0.00',
+          pagination: data?.pagination || {
+            page,
+            limit: PAGE_SIZE,
+            totalEntries: totalCount,
+            totalPages,
+          },
+        });
+      } catch (err) {
+        setError('Unable to load institutional global ledger entries from backend.');
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [currentPage, filterType, searchTerm]
+  );
 
   useEffect(() => {
-    fetchLedger(filterType);
-  }, [filterType]);
+    fetchLedger(currentPage, filterType, searchTerm);
+  }, [currentPage, filterType, searchTerm]);
 
   const handleFilterChange = (newType) => {
     setFilterType(newType);
+    setCurrentPage(1);
   };
 
-  const columns = [
-    {
-      header: 'Entry ID',
-      accessor: 'id',
-      render: (row) => (
-        <span style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-          {row.id}
-        </span>
-      ),
-    },
-    {
-      header: 'Tx Reference',
-      accessor: 'transactionReference',
-      render: (row) => (
-        <span style={{ fontWeight: 600, color: 'var(--text-color)' }}>
-          {row.transactionReference}
-        </span>
-      ),
-    },
-    {
-      header: 'Account Number',
-      accessor: 'accountNumber',
-      render: (row) => (
-        <span style={{ fontWeight: 600, color: 'var(--primary-color)' }}>
-          {row.accountNumber}
-        </span>
-      ),
-    },
-    {
-      header: 'Entry Type',
-      accessor: 'entryType',
-      align: 'center',
-      render: (row) => <StatusBadge status={row.entryType} />,
-    },
-    {
-      header: 'Amount',
-      accessor: 'amount',
-      align: 'right',
-      render: (row) => {
-        const isCredit = row.entryType === 'CREDIT';
-        const color = isCredit ? 'var(--success-color)' : 'var(--danger-color)';
-        const prefix = isCredit ? '+' : '-';
-        return (
-          <span style={{ fontWeight: 700, color }}>
-            {prefix}
-            {formatCurrency(row.amount)}
-          </span>
-        );
-      },
-    },
-    {
-      header: 'Balance After',
-      accessor: 'balanceAfter',
-      align: 'right',
-      render: (row) => (
-        <span style={{ fontWeight: 700, color: 'var(--text-color)' }}>
-          {formatCurrency(row.balanceAfter)}
-        </span>
-      ),
-    },
-    {
-      header: 'Posting Memo',
-      accessor: 'description',
-      render: (row) => (
-        <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-          {row.description || 'Ledger Posting'}
-        </span>
-      ),
-    },
-    {
-      header: 'Timestamp',
-      accessor: 'timestamp',
-      align: 'right',
-      render: (row) => (
-        <span style={{ color: 'var(--text-secondary)' }}>
-          {formatDate(row.timestamp)}
-        </span>
-      ),
-    },
-  ];
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+    setCurrentPage(1);
+  };
+
+  const handleResetFilters = () => {
+    setFilterType('ALL');
+    setSearchTerm('');
+    setCurrentPage(1);
+  };
+
+  const handlePageChange = (newPage) => {
+    setCurrentPage(newPage);
+  };
+
+  const totalEntries = ledgerData.total;
+  const totalPages = ledgerData.pagination?.totalPages || (totalEntries > 0 ? Math.ceil(totalEntries / PAGE_SIZE) : 1);
+  const startItem = totalEntries === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const endItem = Math.min(currentPage * PAGE_SIZE, totalEntries);
 
   return (
     <DashboardLayout
@@ -151,6 +116,7 @@ const Ledger = () => {
       breadcrumbs={`${role === 'AUDITOR' ? 'Auditor' : 'Admin'} / Global Ledger`}
     >
       <div className="ledger-page">
+        {/* Header Bar */}
         <div className="ledger-header-bar">
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
@@ -169,7 +135,7 @@ const Ledger = () => {
             <button
               type="button"
               className="btn-secondary"
-              onClick={() => fetchLedger(filterType)}
+              onClick={() => fetchLedger(currentPage, filterType, searchTerm)}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
               <RefreshCw size={14} />
@@ -209,7 +175,7 @@ const Ledger = () => {
           </div>
         </div>
 
-        {/* Responsive Ledger Filter Dropdown */}
+        {/* Responsive Ledger Filter & Search Toolbar */}
         <div className="ledger-filter-container">
           <div className="ledger-filter-header">
             <Filter size={15} style={{ color: 'var(--primary-color)' }} />
@@ -217,6 +183,19 @@ const Ledger = () => {
           </div>
 
           <div className="ledger-filter-controls">
+            {/* Live Search Input */}
+            <div className="ledger-search-box">
+              <Search size={15} className="ledger-search-icon" />
+              <input
+                type="text"
+                placeholder="Search by transaction reference or account number..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                aria-label="Search ledger entries"
+              />
+            </div>
+
+            {/* Entry Type Select */}
             <div className="ledger-filter-group">
               <label htmlFor="ledger-entry-type-filter" className="ledger-filter-label">
                 Entry Type:
@@ -226,6 +205,7 @@ const Ledger = () => {
                 className="ledger-filter-select"
                 value={filterType}
                 onChange={(e) => handleFilterChange(e.target.value)}
+                aria-label="Filter by entry type"
               >
                 <option value="ALL">All Entries (Debits & Credits)</option>
                 <option value="CREDIT">Credits Only (+Cr)</option>
@@ -233,12 +213,13 @@ const Ledger = () => {
               </select>
             </div>
 
-            {filterType !== 'ALL' && (
+            {/* Reset Button */}
+            {(filterType !== 'ALL' || searchTerm.trim() !== '') && (
               <button
                 type="button"
                 className="ledger-filter-reset-btn"
-                onClick={() => handleFilterChange('ALL')}
-                title="Reset active filter"
+                onClick={handleResetFilters}
+                title="Reset active filter and search"
               >
                 <RotateCcw size={12} />
                 <span>Reset Filter</span>
@@ -247,20 +228,63 @@ const Ledger = () => {
           </div>
         </div>
 
+        {/* Data Table and Pagination Controls */}
         {isLoading ? (
           <LoadingState message="Auditing global double-entry ledger register from PostgreSQL..." />
         ) : error ? (
-          <ErrorState message={error} onRetry={() => fetchLedger(filterType)} />
+          <ErrorState message={error} onRetry={() => fetchLedger(currentPage, filterType, searchTerm)} />
         ) : (
-          <DataTable
-            columns={columns}
-            data={ledgerData.entries}
-            title="Double-Entry General Ledger"
-            subtitle={`${ledgerData.total} chronological journal entries registered in database`}
-            searchPlaceholder="Search by reference or account..."
-            searchField="transactionReference"
-            emptyMessage="No ledger postings found matching selected criteria."
-          />
+          <div>
+            <GlobalLedgerTable
+              entries={ledgerData.entries}
+              title="Double-Entry General Ledger"
+              subtitle={
+                totalEntries > 0
+                  ? `Showing page ${currentPage} of ${Math.max(1, totalPages)} (${totalEntries} total journal entries registered in PostgreSQL database)`
+                  : '0 journal entries found'
+              }
+              emptyMessage="No ledger postings found matching selected criteria."
+            />
+
+            {/* Server-Side Pagination Bar */}
+            <div className="ledger-pagination-bar">
+              <div className="ledger-pagination-info">
+                {totalEntries > 0 ? (
+                  <span>
+                    Showing <strong>{startItem}</strong> to <strong>{endItem}</strong> of <strong>{totalEntries}</strong> entries
+                  </span>
+                ) : (
+                  <span>0 entries</span>
+                )}
+              </div>
+
+              <div className="ledger-pagination-actions">
+                <button
+                  type="button"
+                  className="ledger-pagination-btn"
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage <= 1 || isLoading}
+                >
+                  <ChevronLeft size={16} />
+                  <span>Previous</span>
+                </button>
+
+                <span className="ledger-page-indicator">
+                  Page {currentPage} of {Math.max(1, totalPages)}
+                </span>
+
+                <button
+                  type="button"
+                  className="ledger-pagination-btn"
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage >= totalPages || isLoading}
+                >
+                  <span>Next</span>
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </DashboardLayout>

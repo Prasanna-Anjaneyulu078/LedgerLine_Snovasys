@@ -17,6 +17,7 @@ import DashboardLayout from '../../layouts/DashboardLayout/index.jsx';
 import StatCard from '../../components/StatCard/index.jsx';
 import DataTable from '../../components/DataTable/index.jsx';
 import StatusBadge from '../../components/StatusBadge/index.jsx';
+import GlobalLedgerTable from '../../components/GlobalLedgerTable/index.jsx';
 import LoadingState from '../../components/LoadingState/index.jsx';
 import ErrorState from '../../components/ErrorState/index.jsx';
 import './index.css';
@@ -56,69 +57,6 @@ const AuditorDashboard = () => {
   useEffect(() => {
     loadData();
   }, []);
-
-  const ledgerColumns = [
-    {
-      header: 'Tx Reference',
-      accessor: 'transactionReference',
-      render: (row) => (
-        <span style={{ fontWeight: 600, color: 'var(--text-color)' }}>
-          {row.transactionReference}
-        </span>
-      ),
-    },
-    {
-      header: 'Account',
-      accessor: 'accountNumber',
-      render: (row) => (
-        <span style={{ fontWeight: 600, color: 'var(--primary-color)' }}>
-          {row.accountNumber}
-        </span>
-      ),
-    },
-    {
-      header: 'Type',
-      accessor: 'entryType',
-      align: 'center',
-      render: (row) => <StatusBadge status={row.entryType} />,
-    },
-    {
-      header: 'Amount',
-      accessor: 'amount',
-      align: 'right',
-      render: (row) => {
-        const isCredit = row.entryType === 'CREDIT';
-        const color = isCredit ? 'var(--success-color)' : 'var(--danger-color)';
-        const prefix = isCredit ? '+' : '-';
-        return (
-          <span style={{ fontWeight: 700, color }}>
-            {prefix}
-            {formatCurrency(row.amount)}
-          </span>
-        );
-      },
-    },
-    {
-      header: 'Balance After',
-      accessor: 'balanceAfter',
-      align: 'right',
-      render: (row) => (
-        <span style={{ fontWeight: 700, color: 'var(--text-color)' }}>
-          {formatCurrency(row.balanceAfter)}
-        </span>
-      ),
-    },
-    {
-      header: 'Timestamp',
-      accessor: 'timestamp',
-      align: 'right',
-      render: (row) => (
-        <span style={{ color: 'var(--text-secondary)' }}>
-          {formatDate(row.timestamp)}
-        </span>
-      ),
-    },
-  ];
 
   return (
     <DashboardLayout
@@ -193,9 +131,8 @@ const AuditorDashboard = () => {
               </Link>
             </div>
 
-            <DataTable
-              columns={ledgerColumns}
-              data={ledgerEntries.slice(0, 6)}
+            <GlobalLedgerTable
+              entries={ledgerEntries.slice(0, 6)}
               searchPlaceholder="Filter journal entries..."
               searchField="transactionReference"
               emptyMessage="No ledger journal entries found."

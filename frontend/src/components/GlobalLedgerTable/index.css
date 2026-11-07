@@ -1,0 +1,47 @@
+.global-ledger-table-container {
+  width: 100%;
+}
+
+.ledger-cell-reference {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-color);
+  letter-spacing: 0.02em;
+  display: inline-block;
+  cursor: default;
+}
+
+.ledger-cell-account {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--primary-color);
+  display: inline-block;
+}
+
+.ledger-cell-amount {
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.ledger-cell-amount.credit {
+  color: var(--success-color);
+}
+
+.ledger-cell-amount.debit {
+  color: var(--danger-color);
+}
+
+@media (max-width: 640px) {
+  .ledger-cell-reference,
+  .ledger-cell-account {
+    font-size: 0.75rem;
+  }
+  .ledger-cell-amount {
+    font-size: 0.8125rem;
+  }
+}
+

@@ -190,3 +190,103 @@
     justify-content: center;
   }
 }
+
+/* Ledger Search Input Box */
+.ledger-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 240px;
+  flex: 1;
+}
+
+.ledger-search-box input {
+  height: 38px;
+  padding: 0 0.875rem 0 2.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  background-color: #FFFFFF;
+  color: var(--text-color);
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  width: 100%;
+  transition: all 0.15s ease;
+}
+
+.ledger-search-box input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px rgba(37, 99, 235, 0.2);
+}
+
+.ledger-search-icon {
+  position: absolute;
+  left: 0.75rem;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+/* Pagination Bar for Global Ledger */
+.ledger-pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.875rem 1.25rem;
+  background-color: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  box-shadow: var(--shadow-sm);
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.ledger-pagination-info {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.ledger-pagination-info strong {
+  color: var(--text-color);
+}
+
+.ledger-pagination-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.ledger-pagination-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 34px;
+  padding: 0 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-color);
+  background-color: #FFFFFF;
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ledger-pagination-btn:hover:not(:disabled) {
+  background-color: var(--surface-hover);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.ledger-pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ledger-page-indicator {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-color);
+  padding: 0 0.5rem;
+}
+
