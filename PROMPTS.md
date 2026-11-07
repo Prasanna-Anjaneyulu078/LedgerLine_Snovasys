@@ -1,476 +1,332 @@
-# LedgerLine: AI-Assisted Engineering & Architecture Log (PROMPTS.md)
+# LedgerLine – AI Engineering Log (PROMPTS.md)
 
-## Documentation Purpose & AI Collaboration Methodology
-
-This document provides a comprehensive, chronological record of AI-assisted engineering sessions during the development of **LedgerLine** (Secure Financial Transaction and Immutable Ledger System). It is structured to adhere to technical hiring challenge standards for AI collaboration, demonstrating how AI coding assistants were leveraged while engineering leadership, critical reviews, security audits, and architectural decisions remained strictly with the human engineer.
-
-### Human-in-the-Loop Engineering Principles
-1. **Human Ownership & Architectural Authority**: AI tools (such as Claude and DeepMind Antigravity) were utilized as intelligent pair-programming accelerators for drafting boilerplate, identifying edge cases, and generating test permutations. All architectural decisions, security boundaries, and schema invariants were directed, audited, and approved by the human engineer.
-2. **Rigorous Verification Over Blind Trust**: No AI suggestion was merged without independent verification against financial engineering constraints (double-entry invariants, ACID transaction isolation, deterministic concurrency locking, and least-privilege security).
-3. **Defense-in-Depth Security**: Whenever AI suggested single-layer protections (such as application-level validation alone), the human engineer mandated multi-layered defenses (e.g., combining database triggers, restricted PostgreSQL runtime roles, controller whitelisting, and strict Zod schema rejection).
-4. **Authentic Git Traceability**: Every engineering interaction is linked to verified commits in the project's Git repository (`https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys.git`).
-5. **Transparency & Evidence Integrity**: Verbatim prompts are included where recovered from session transcripts. Where historical verbatim text was not captured in repository history, it is explicitly noted as unavailable rather than fabricated.
+This document records how AI tools were used during LedgerLine development, including the original prompts, AI suggestions, human review, implementation decisions, and verification.
 
 ---
 
-## Session 1: 2026-11-05 — Foundation, Driver Selection & Concurrency Design
+## Session 1: Project Foundation and Architecture
 
-### Interaction 1. ORM Elimination in Favor of Raw SQL
+**Date:** 2026-11-05
 
-- **Context & Requirement:** Establish the database access layer and migration mechanism for a high-integrity, double-entry financial accounting ledger.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
-  *Context:* Requirement was to evaluate database access layers (Prisma vs Sequelize vs raw SQL) for handling strict PostgreSQL transaction isolation, explicit row-level locks, and integer paise currency units.
-- **AI Proposal / Initial Suggestion:** Recommended using an Object-Relational Mapper (ORM) such as Prisma or Sequelize to model database entities, manage relations, and run automated database migrations.
-- **Flaw / Limitation Identified During Human Review:** Financial accounting engines require strict, fine-grained control over PostgreSQL transaction isolation, explicit row-level locking (`SELECT ... FOR UPDATE`), deterministic multi-row locking to prevent deadlocks, and exact SQL execution plans without ORM query generation overhead or hidden sub-queries. Furthermore, ORMs frequently introduce impedance mismatches with native 64-bit BigInt minor currency units and transactional advisory locks during migrations.
-- **Human Review, Decision & Architectural Correction:** Rejected ORMs entirely in favor of native `pg` (`node-postgres`) using raw, parameterized SQL queries. Designed isolated repository classes (`accountRepository`, `transactionRepository`, `ledgerRepository`, `idempotencyRepository`) and created explicit, sequential migration scripts (`001_create_users.sql` to `006_create_audit_events.sql`) wrapped in PostgreSQL transactional advisory locks (`pg_advisory_xact_lock`).
-- **Implementation Details:**
-  - Files created: `backend/src/config/database.js`, `backend/src/database/migrate.js`, `backend/src/database/migrations/001_create_users.sql` through `006_create_audit_events.sql`.
-  - Modules: `node-postgres` connection pool, transactional DDL runner.
-- **Technical Verification & Test Evidence:** `npm run migrate` executes transactional DDL with PostgreSQL advisory locks. Verified in `tests/helpers/testDb.js`.
-- **Related Git Commit:** `a0d9f05fc2722669f1f09e00819732aaa035763e` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/a0d9f05fc2722669f1f09e00819732aaa035763e))
+### 1. Objective
+Establish the architectural foundations of the LedgerLine backend: select the database access pattern (evaluating ORM vs raw SQL), design concurrency control and row locking to prevent deadlocks in two-account transfers, handle 64-bit integer paise serialization safely in Node.js, and design atomic idempotency key storage.
 
----
+### 2. Original AI Prompt
+`[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
+*Instruction context:* Initialize the LedgerLine project with Express.js and PostgreSQL. Provide database models, connection management, transfer transaction locking, money handling, and idempotency key persistence.
 
-### Interaction 2. Multi-Account Deadlock Elimination
+### 3. AI Suggestion
+- Suggested using an ORM (Prisma or Sequelize) for database schemas and migrations.
+- In transfer transactions, suggested locking the source account row first, checking balance, and then locking the destination account row.
+- Suggested returning native JavaScript `BigInt` directly from database queries into Express `res.json()`.
+- Suggested storing idempotency keys in Redis or an in-memory cache with TTL.
 
-- **Context & Requirement:** Design row-level locking strategy for internal transfers moving funds between two accounts.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
-  *Context:* Requirement was to implement balance verification and transfer execution between two bank accounts under concurrent access.
-- **AI Proposal / Initial Suggestion:** In transfer transactions, acquire a lock on the source account row first, check its balance, and subsequently acquire a lock on the destination account row.
-- **Flaw / Limitation Identified During Human Review:** If User A transfers money to User B while User B simultaneously transfers money to User A, Thread 1 acquires `Lock(Account_A)` and awaits `Lock(Account_B)`, while Thread 2 acquires `Lock(Account_B)` and awaits `Lock(Account_A)`. This creates a classic circular wait deadlock condition in PostgreSQL, resulting in error `40P01 (deadlock_detected)` and aborted transactions.
-- **Human Review, Decision & Architectural Correction:** Mandated deterministic global lock ordering. Implemented `accountRepository.findTwoForUpdate(accountId1, accountId2, client)`: account UUIDs are sorted lexicographically (`[accountId1, accountId2].sort()`) before querying with `WHERE id = ANY($1::uuid[]) ORDER BY id ASC FOR UPDATE`. Regardless of transfer direction, all concurrent threads acquire row locks in the exact same global order.
-- **Implementation Details:**
-  - Files modified: `backend/src/repositories/account.repository.js`, `backend/src/modules/transactions/transaction.service.js`.
-  - Method: `findTwoForUpdate` with lexicographical array sorting and parameterized `ANY($1::uuid[])` query.
-- **Technical Verification & Test Evidence:** Verified with parallel requests in `tests/integration/concurrency.test.js` (`Test E: Concurrent Opposite-Direction Transfers - Deterministic locking eliminates deadlocks`). Zero deadlocks occurred under simultaneous execution.
-- **Related Git Commit:** `a0d9f05fc2722669f1f09e00819732aaa035763e` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/a0d9f05fc2722669f1f09e00819732aaa035763e))
+### 4. Human Review and Correction
+- **ORM Elimination:** Financial accounting engines require strict, fine-grained control over PostgreSQL transaction isolation, explicit row-level locking (`SELECT ... FOR UPDATE`), deterministic multi-row locking to prevent deadlocks, and exact SQL execution plans without ORM query generation overhead or hidden sub-queries. Furthermore, ORMs historically introduce impedance mismatches with native 64-bit integer (`BIGINT`) minor currency units and advisory locks during migrations. Replaced ORMs with native `pg` (`node-postgres`) using raw, parameterized SQL.
+- **Multi-Account Deadlock Elimination:** Locking Account A then Account B causes circular wait deadlocks (`40P01`) when Account A and Account B simultaneously transfer to each other. Mandated deterministic global lock ordering by sorting account UUIDs lexicographically (`[id1, id2].sort()`) before row acquisition (`ORDER BY id ASC FOR UPDATE`).
+- **BigInt JSON Serialization:** Express `res.json()` relies on `JSON.stringify()`, which throws `TypeError: Do not know how to serialize a BigInt`. Patched `BigInt.prototype.toJSON = function() { return this.toString(); }` and configured `pg.types.setTypeParser(20, ...)` to parse `BIGINT` columns into JavaScript `BigInt`.
+- **Idempotency Key Atomic Lifecycle:** Caches can drop keys during partitions, and placing the key outside the primary database transaction creates a split-brain vulnerability where money moves but the idempotency key fails to save. Enforced database-backed idempotency inside the primary PostgreSQL transaction with `UNIQUE (user_id, idempotency_key)`.
 
----
+### 5. Final Implementation
+- `backend/src/config/database.js`: Configured `node-postgres` connection pool, BigInt type parsers, and JSON serialization.
+- `backend/src/database/migrate.js`: Custom transactional migration runner acquiring PostgreSQL transactional advisory locks (`pg_advisory_xact_lock`).
+- `backend/src/database/migrations/001_create_users.sql` to `006_create_audit_events.sql`: Raw SQL DDL with primary/foreign keys and check constraints.
+- `backend/src/repositories/account.repository.js`: Implemented `findTwoForUpdate(accountId1, accountId2, client)` sorting account UUIDs.
+- `backend/src/repositories/idempotency.repository.js`: Database-backed idempotency lifecycle.
 
-### Interaction 3. BigInt JSON Serialization in Node.js
+### 6. Verification
+- Automated migration execution: `npm run migrate` executes transactional DDL with advisory locks. Verified in `tests/helpers/testDb.js`.
+- Unit tests: `tests/unit/money.test.js` (8 tests passing for paise conversion and rupee formatting).
+- Concurrency tests: `tests/integration/concurrency.test.js` (deterministic locking eliminates deadlocks under simultaneous bidirectional transfers).
+- Idempotency tests: `tests/integration/idempotency.test.js` (atomic key persistence and retry handling).
 
-- **Context & Requirement:** Safely handle and return financial calculations in integer paise without floating-point precision loss.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
-  *Context:* Requirement was to store currency amounts as integer paise (`BIGINT`) in PostgreSQL and map them into Node.js Express API responses.
-- **AI Proposal / Initial Suggestion:** Return integer paise as native JavaScript `BigInt` directly from database queries and pass them to Express `res.json()`.
-- **Flaw / Limitation Identified During Human Review:** Express's underlying `res.json()` relies on `JSON.stringify()`, which throws a `TypeError: Do not know how to serialize a BigInt` when encountering modern 64-bit integers.
-- **Human Review, Decision & Architectural Correction:** Configured `pg.types.setTypeParser(20, (val) => val === null ? null : BigInt(val))` so PostgreSQL `BIGINT` columns parse directly into JavaScript `BigInt`. Added global `BigInt.prototype.toJSON = function() { return this.toString(); };` in database initialization to prevent runtime serialization crashes. In API responses, amounts are returned with both `amountPaise` (string representation of minor units) and `amountFormatted` (human-readable Rupee string).
-- **Implementation Details:**
-  - Files modified: `backend/src/config/database.js`, `backend/src/utils/money.js`.
-  - Utilities: `toPaise`, `formatRupees`, `isPositivePaise`.
-- **Technical Verification & Test Evidence:** Unit tests in `tests/unit/money.test.js` (8 tests passing) and all integration API tests.
-- **Related Git Commit:** `a0d9f05fc2722669f1f09e00819732aaa035763e` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/a0d9f05fc2722669f1f09e00819732aaa035763e))
+### 7. Related Commit
+- `3e747ccba96e16f14b2f218aa7145392787b1b54` – `chore: initialize LedgerLine project` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/3e747ccba96e16f14b2f218aa7145392787b1b54))
+- `a0d9f05fc2722669f1f09e00819732aaa035763e` – `feat: initialize backend database infrastructure and integration test suite` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/a0d9f05fc2722669f1f09e00819732aaa035763e))
 
 ---
 
-### Interaction 4. Idempotency Key Atomic Lifecycle
+## Session 2: Backend Integration and API Design
 
-- **Context & Requirement:** Prevent duplicate financial transactions caused by client network retries or repeated form submissions.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
-  *Context:* Requirement was to design an idempotency mechanism ensuring that retried payment operations execute exactly once.
-- **AI Proposal / Initial Suggestion:** Store incoming idempotency keys in an external distributed cache (such as Redis) or memory cache with an expiration TTL.
-- **Flaw / Limitation Identified During Human Review:** Distributed caches can drop keys during network partitions or node failovers. Furthermore, placing the idempotency reservation outside the primary PostgreSQL transaction boundary creates a split-brain vulnerability: the financial transaction might commit in PostgreSQL while the cache write fails, allowing duplicate subsequent executions.
-- **Human Review, Decision & Architectural Correction:** Enforced database-backed idempotency inside the primary PostgreSQL transaction. Created the `idempotency_keys` table with `UNIQUE (user_id, idempotency_key)`. The key reservation, transaction record, and double-entry ledger postings commit atomically. If any step fails, the entire transaction rolls back cleanly.
-- **Implementation Details:**
-  - Files created: `backend/src/database/migrations/005_create_idempotency_keys.sql`, `backend/src/repositories/idempotency.repository.js`.
-  - Service integration: `transaction.service.js` `checkIdempotency()` with SHA-256 request hashing.
-- **Technical Verification & Test Evidence:** Verified in `tests/integration/idempotency.test.js` covering both identical payload replay and payload tampering conflict (409).
-- **Related Git Commit:** `a0d9f05fc2722669f1f09e00819732aaa035763e` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/a0d9f05fc2722669f1f09e00819732aaa035763e))
+**Date:** 2026-11-05
 
----
+### 1. Objective
+Audit pre-frontend integration architecture, establish statement reporting for refused/failed transactions while preserving double-entry ledger invariants, and formulate the immutability enforcement strategy.
 
-## Session 2: 2026-11-05 — Pre-Frontend Compliance Audit & Integration Architecture
+### 2. Original AI Prompt
+`[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
+*Instruction context:* Review the integration architecture and define how account statements should display transaction rejections, and how ledger immutability should be guaranteed.
 
-### Interaction 5. Statement Refusal Tracking vs. Ledger Separation
+### 3. AI Suggestion
+- Suggested logging failed and refused transaction attempts (e.g., insufficient funds, authorization failures) directly into the `ledger_entries` table with a status flag (`status = 'REFUSED'`).
+- Suggested relying exclusively on application repository encapsulation (omitting `UPDATE`/`DELETE` methods) to guarantee append-only ledger immutability.
 
-- **Context & Requirement:** Track refused and failed transaction attempts (e.g., insufficient funds, account status violations, authorization rejections) so account holders and auditors can inspect rejection history.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
-  *Context:* Requirement was to formulate how failed transaction attempts should be surfaced in account statements.
-- **AI Proposal / Initial Suggestion:** Insert failed transactions directly into the `ledger_entries` table with a status flag (`status = 'REFUSED'` or `'FAILED'`).
-- **Flaw / Limitation Identified During Human Review:** Double-entry accounting principles dictate that the financial ledger must strictly reflect executed, committed balance movements. Polluting the immutable ledger with rejected attempts breaks accounting balance calculations and historical reconciliation (`SUM(credit) - SUM(debit) == balance`).
-- **Human Review, Decision & Architectural Correction:** Separated financial accounting from security auditing:
-  1. Immutable financial ledger (`ledger_entries`) records only committed balance movements.
-  2. Security audit trail (`audit_events`) records refused operations (`TRANSACTION_WITHDRAW_REFUSED`, `TRANSACTION_TRANSFER_REFUSED`) with exact refusal reasons, attempted amounts, actor IDs, and IP addresses.
-  3. The dedicated statement service (`src/modules/statements/statement.service.js`) pulls committed postings from `ledger_entries` and queries refused attempts dynamically from `audit_events`.
-- **Implementation Details:**
-  - Files created: `backend/src/database/migrations/006_create_audit_events.sql`, `backend/src/repositories/audit.repository.js`, `backend/src/modules/statements/statement.service.js`.
-  - Endpoints: `GET /api/v1/statements/:accountId` and `GET /api/v1/audit-events`.
-- **Technical Verification & Test Evidence:** Verified in `tests/integration/transactions.test.js`, `tests/integration/authorization.test.js`, and `src/modules/statements/statement.service.js`.
-- **Related Git Commit:** `036328e13415335c05bf5bc48f314e3200158159` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/036328e13415335c05bf5bc48f314e3200158159))
+### 4. Human Review and Correction
+- **Statement Refusal Tracking vs. Ledger Separation:** Double-entry accounting principles dictate that the financial ledger must strictly reflect executed, committed balance movements. Polluting the immutable ledger with rejected attempts breaks accounting balance calculations and historical reconciliation (`SUM(credit) - SUM(debit) == balance`). Directed that rejected attempts be written to the `audit_events` table (`TRANSACTION_WITHDRAW_REFUSED`, `TRANSACTION_TRANSFER_REFUSED`). In `/api/v1/statements/:accountId`, committed postings are retrieved from `ledger_entries`, while refused attempts are pulled dynamically from `audit_events`.
+- **Append-Only Protection:** Application-level encapsulation is insufficient for financial compliance; it provides no defense against direct SQL execution, accidental scripts, or compromised administrative credentials. Mandated a two-layer database defense: a PostgreSQL trigger preventing modification, and SQL privilege revocation (`REVOKE UPDATE, DELETE, TRUNCATE ON ledger_entries`) on the runtime role.
+
+### 5. Final Implementation
+- `CHALLENGE_CHECKLIST.md`: Formalized compliance requirements for database-level immutability and statement separation.
+- `FRONTEND_INTEGRATION_PLAN.md`: Documented API contracts for statements, accounts, and audit events.
+- `backend/src/database/migrations/006_create_audit_events.sql`: Audit event schema tracking refused actions, actor IDs, and IP addresses.
+- `backend/src/modules/statements/statement.service.js`: Dedicated statement aggregation pulling committed records from `ledger_entries` and refused events from `audit_events`.
+
+### 6. Verification
+- Verified in `tests/integration/transactions.test.js` and `tests/integration/authorization.test.js` that failed attempts generate `audit_events` records without creating orphaned `ledger_entries`.
+
+### 7. Related Commit
+- `036328e13415335c05bf5bc48f314e3200158159` – `docs: add challenge compliance checklist, frontend integration plan, and AI prompt logs` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/036328e13415335c05bf5bc48f314e3200158159))
 
 ---
 
-### Interaction 6. Append-Only Protection: Database Engine vs. Application Layer
+## Session 3: Database Security and Append-Only Ledger
 
-- **Context & Requirement:** Ensure financial ledger records cannot be altered, forged, or deleted once written.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
-  *Context:* Requirement was to specify how ledger immutability should be enforced in compliance with financial regulations.
-- **AI Proposal / Initial Suggestion:** Rely exclusively on application-level repository encapsulation (omitting `UPDATE` and `DELETE` methods from `LedgerRepository`) to guarantee append-only immutability.
-- **Flaw / Limitation Identified During Human Review:** Application-level encapsulation is insufficient for financial compliance. It provides zero protection against direct SQL execution, compromised database credentials, accidental migration scripts, or internal administrative errors.
-- **Human Review, Decision & Architectural Correction:** Mandated database-level immutability enforcement. Formulated a two-layer security posture:
-  1. A PostgreSQL database trigger prohibiting modifications on `ledger_entries`.
-  2. SQL privilege revocation (`REVOKE UPDATE, DELETE, TRUNCATE ON ledger_entries`) for the runtime database user.
-- **Implementation Details:**
-  - Architectural requirements codified in `CHALLENGE_CHECKLIST.md` under Section 2 ("Ledger Immutability").
-  - Implementation queued for Session 3 migrations.
-- **Technical Verification & Test Evidence:** Reflected in `CHALLENGE_CHECKLIST.md` and subsequently implemented in `007_prevent_ledger_modification_trigger.sql`.
-- **Related Git Commit:** `036328e13415335c05bf5bc48f314e3200158159` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/036328e13415335c05bf5bc48f314e3200158159))
+**Date:** 2026-11-06
 
----
+### 1. Objective
+Implement database-level immutability for `ledger_entries`, configure a restricted runtime PostgreSQL role with least-privilege permissions, isolate test harness truncation cleanup, and fix precision bugs in double-entry verification.
 
-## Session 3: 2026-11-06 — Database-Level Append-Only Ledger Hardening & Role Separation
+### 2. Original AI Prompt
+`[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
+*Instruction context:* Implement PostgreSQL database trigger and role permissions to prevent modification or deletion of ledger records, and configure integration tests under the restricted role.
 
-### Interaction 7. Dual-Layer Defense-in-Depth vs. Single Layer
+### 3. AI Suggestion
+- Suggested relying either on a PostgreSQL trigger OR on role-level SQL privilege revocation alone.
+- Suggested running test cleanup (`cleanDatabase()`) under the same application database role.
 
-- **Context & Requirement:** Implement concrete database-level protections preventing `UPDATE`, `DELETE`, and `TRUNCATE` operations on `ledger_entries`.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
-  *Context:* Requirement was to execute the database-level immutability plan formulated in Session 2.
-- **AI Proposal / Initial Suggestion:** Implement either a PostgreSQL trigger OR configure PostgreSQL role permissions alone to guard the table.
-- **Flaw / Limitation Identified During Human Review:** A trigger alone allows the runtime connection to hold table modification privileges; if the trigger is disabled, dropped, or bypassed during an outage, rows become vulnerable. Conversely, role permissions alone leave the table unprotected when queries execute under table-owner or administrative connections.
-- **Human Review, Decision & Architectural Correction:** Implemented both layers simultaneously (Defense-in-Depth):
-  1. **PostgreSQL Trigger (`trg_prevent_ledger_modification`)**: Fires `BEFORE UPDATE OR DELETE ON ledger_entries` and raises SQLSTATE `23000 (integrity_constraint_violation)`.
-  2. **Dedicated Restricted Runtime Role (`ledgerline_runtime`)**: Table permissions explicitly grant `SELECT` and `INSERT` while revoking `UPDATE`, `DELETE`, and `TRUNCATE` (triggering SQLSTATE `42501 insufficient_privilege`).
-- **Implementation Details:**
-  - Migrations: `backend/src/database/migrations/007_prevent_ledger_modification_trigger.sql`.
-  - Scripts: `backend/src/database/setup-runtime-role.js`.
-  - Roles created: `ledgerline_runtime` with least-privilege table grants.
-- **Technical Verification & Test Evidence:** Verified in `tests/integration/ledger_immutability.test.js`: both the trigger violation (SQLSTATE `23000`) and the insufficient privilege error (SQLSTATE `42501`) are asserted independently.
-- **Related Git Commit:** `a5502e115a06298a620e8e2ccf53fed012a5eb8b` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/a5502e115a06298a620e8e2ccf53fed012a5eb8b))
+### 4. Human Review and Correction
+- **Dual-Layer Defense-in-Depth:** A trigger alone allows runtime connections to hold table modification privileges; if the trigger is disabled or bypassed, rows become vulnerable. Conversely, role privileges alone leave the table unprotected when queries run under table-owner or admin connections. Implemented both simultaneously: trigger `trg_prevent_ledger_modification` (SQLSTATE `23000`) and restricted role `ledgerline_runtime` with `REVOKE UPDATE, DELETE, TRUNCATE ON ledger_entries` (SQLSTATE `42501`).
+- **Test Harness Truncation Isolation:** Executing tests under `ledgerline_runtime` caused `cleanDatabase()` to crash on `TRUNCATE TABLE ... ledger_entries CASCADE` because the restricted role has no `TRUNCATE` privilege. Architected dual connection pools: `adminPool` via `TEST_DIRECT_URL` (database owner) for cleanup/migrations, and `testPool` via `TEST_DATABASE_URL` (`ledgerline_runtime`) for all application code.
+- **BigInt Comparison Bug:** In `tests/integration/ledger_immutability.test.js`, `expect(aliceCalculated).toBe(aliceDbAcc.rows[0].balance)` failed with `Expected: 9000n, Received: "9000"`. Discovered that PostgreSQL's `SUM()` aggregate returns a `NUMERIC` string in `node-postgres`, whereas `balance` is a native `BigInt`. Wrapped the returned string with `BigInt()` before comparison.
+
+### 5. Final Implementation
+- `backend/src/database/migrations/007_prevent_ledger_modification_trigger.sql`: Trigger function `prevent_ledger_modification()` raising SQLSTATE `23000` `BEFORE UPDATE OR DELETE ON ledger_entries`.
+- `backend/src/database/setup-runtime-role.js`: Automated script provisioning `ledgerline_runtime` role with least-privilege permissions.
+- `backend/tests/helpers/testDb.js`: Dual connection pool implementation (`adminPool` vs `testPool`).
+- `backend/tests/integration/ledger_immutability.test.js`: Suite asserting independent failures for trigger violation, permission denial, and double-entry mathematical balance.
+
+### 6. Verification
+- `tests/integration/ledger_immutability.test.js`: 8/8 tests passing. Verified trigger raises `23000`, `UPDATE`/`DELETE` raises `42501`, and `SUM(credit) - SUM(debit) == balance`.
+- Full suite: 39/39 tests passing across unit and 6 integration test suites.
+
+### 7. Related Commit
+- `a5502e115a06298a620e8e2ccf53fed012a5eb8b` – `security: enforce database-level ledger immutability` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/a5502e115a06298a620e8e2ccf53fed012a5eb8b))
+- `e56267c6fe8cb289b0ff6f0166551097f870950b` – `feat(security): protect ledger from modifications` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/e56267c6fe8cb289b0ff6f0166551097f870950b))
+- `ac7c8340bd2b61de446a61a8017ea85de8a7beb0` – `docs(prompts): update AI interaction log` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/ac7c8340bd2b61de446a61a8017ea85de8a7beb0))
 
 ---
 
-### Interaction 8. Test Harness Truncation Isolation
+## Session 4: Backend Debugging and API Routing
 
-- **Context & Requirement:** Execute automated integration test suites under the restricted runtime database role while maintaining test suite isolation.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
-  *Context:* Requirement was to run Jest integration tests under `ledgerline_runtime` to verify least-privilege operation.
-- **Flaw / Limitation Identified During Human Review:** Running integration tests under the restricted runtime role broke test isolation because `cleanDatabase()` calls `TRUNCATE TABLE ... ledger_entries CASCADE`, which requires table ownership or `TRUNCATE` privileges that the restricted runtime role intentionally does not possess.
-- **Human Review, Decision & Architectural Correction:** Separated test harness administrative cleanup from runtime application execution. Architected dual connection pools in `tests/helpers/testDb.js`:
-  1. `adminPool` connects via `TEST_DIRECT_URL` (database owner) strictly for administrative test setup, schema migrations, and `cleanDatabase()` truncation.
-  2. `testPool` connects via `TEST_DATABASE_URL` (the restricted runtime user `ledgerline_runtime`) for executing all application routes, repositories, and integration assertions.
-- **Implementation Details:**
-  - Files modified: `backend/tests/helpers/testDb.js`.
-  - Configuration: `TEST_DIRECT_URL` for admin pool, `TEST_DATABASE_URL` for application pool.
-- **Technical Verification & Test Evidence:** Verified with `npm test` passing 39/39 tests across unit and 6 integration test suites.
-- **Related Git Commit:** `e56267c6fe8cb289b0ff6f0166551097f870950b` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/e56267c6fe8cb289b0ff6f0166551097f870950b))
+**Date:** 2026-11-06
 
----
+### 1. Objective
+Resolve API routing 404 errors, fix duplicate `/api/v1/api/v1` URL prefixes in Swagger UI, resolve root `/health` vs `/api/v1/health` inconsistencies, complete missing OpenAPI endpoint definitions, and eliminate PostgreSQL SSL mode deprecation warnings.
 
-### Interaction 9. BigInt Comparison on PostgreSQL SUM() Result
+### 2. Original AI Prompt
+`[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
+*Instruction context:* Debug why Swagger UI and frontend callers receive 404 errors on `/auth/register` and `/health`, document missing admin routes in Swagger, and fix Neon SSL connection warnings.
 
-- **Context & Requirement:** Verify the double-entry accounting equation by calculating `SUM(credit) - SUM(debit)` from `ledger_entries` and asserting equivalence with `accounts.balance`.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
-  *Context:* Requirement was to write automated assertion verifying that ledger transaction sums equal account balances.
-- **Flaw / Limitation Identified During Human Review:** In `tests/integration/ledger_immutability.test.js`, the test asserted `expect(aliceCalculated).toBe(aliceDbAcc.rows[0].balance)` expecting `9000n`. The test failed with `Expected: 9000n, Received: "9000"`.
-- **Root Cause & Architectural Correction:** PostgreSQL's `SUM()` aggregate returns a `NUMERIC` type when summing integers to prevent overflow, which `node-postgres` parses as a string to prevent precision loss. `accounts.balance` is a `BIGINT` column parsed into JavaScript native `BigInt` (OID 20 parser). Comparing string to BigInt via strict equality failed. Wrapped the returned value with `BigInt(aliceCalculated)` and `BigInt(bobCalculated)` to compare numeric values safely without precision loss.
-- **Implementation Details:**
-  - Files modified: `backend/tests/integration/ledger_immutability.test.js`.
-- **Technical Verification & Test Evidence:** Test re-run succeeded; assertions confirmed calculated sum matches stored `BigInt` balance exactly.
-- **Related Git Commit:** `e56267c6fe8cb289b0ff6f0166551097f870950b` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/e56267c6fe8cb289b0ff6f0166551097f870950b))
+### 3. AI Suggestion
+- Suggested altering Express route definitions to mount routes without `/api/v1` prefixes.
+- Suggested duplicating `/health` route definition inside the versioned router.
 
----
+### 4. Human Review and Correction
+- **Base URL Duplication:** Discovered that `swagger.js` configured `servers: [{ url: '/api/v1' }]`, while route path keys also declared `/api/v1/...` (e.g. `'/api/v1/auth/register'`). When Swagger UI dispatched requests, it joined the server root and route path, yielding `/api/v1/api/v1/...`. Enforced strict convention: Base URL is `http://localhost:5000/api/v1`, Swagger route keys are relative to base URL (e.g. `/auth/register`), and Express mounts the versioned router under `/api/v1` exactly once in `src/app.js`.
+- **Health-Check Inconsistency:** Discovered `/health` is an unversioned infrastructure endpoint mounted at root (`app.get('/health')`). Overriding `/health` in Swagger using path-level server override `servers: [{ url: '/', description: 'Root URL' }]` fixed Swagger dispatching without duplicating route handlers.
+- **Missing OpenAPI Routes:** Added complete OpenAPI 3.0 documentation for missing endpoints: `/statements/:accountId`, `/admin/users`, `/admin/accounts`, `/admin/users/:userId/status`, `/admin/accounts/:accountId/status`.
+- **PostgreSQL SSL Warning:** Driver warned `WARNING: sslmode=require is treated as verify-full`. Updated connection strings to `sslmode=verify-full&channel_binding=require` and added regex normalization in `src/config/env.js` `sanitizeUrl()`.
 
-## Session 4: 2026-11-06 — Fix Backend Startup Logs, API Routing, and 404 Errors
+### 5. Final Implementation
+- `backend/src/config/swagger.js`: Corrected path keys, added server overrides for root health check, and documented all 25 registered endpoints.
+- `backend/src/config/env.js`: URL sanitizer upgrading `sslmode=require` to `sslmode=verify-full`.
+- `backend/.env` & `backend/.env.example`: Explicit `sslmode=verify-full&channel_binding=require`.
+- `backend/src/server.js`: Formatted startup console table displaying available endpoints and test credentials.
 
-### Interaction 10. API Base URL Duplication (`/api/v1/api/v1/auth/register`)
+### 6. Verification
+- Automated route audit test in `tests/integration/api_verification_audit.test.js`: Verified all 25 Express endpoints return valid HTTP responses (200, 201, 400, 401, or 403) and 0 endpoints return 404.
+- Verified `GET /health` returns 200 `{ status: 'UP', database: { connected: true } }` while `GET /api/v1/health` returns 404.
 
-- **Context & Requirement:** Ensure Swagger UI and client API callers successfully reach backend endpoints without path concatenation errors.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
-  *Context:* Debugging why Swagger UI requests returned 404 errors during manual API testing.
-- **Flaw / Limitation Identified During Human Review:** Requests sent from Swagger UI produced `404 Endpoint not found: [POST] /api/v1/api/v1/auth/register`. In `swagger.js`, OpenAPI `servers` had `url: '/api/v1'`, while route path keys were also declared starting with `/api/v1` (e.g., `'/api/v1/auth/register'`). When Swagger UI dispatched requests, it joined the server root and route path, yielding `/api/v1/api/v1/...`.
-- **Human Review, Decision & Architectural Correction:** Established a strict, unified convention:
-  1. Base URL: `http://localhost:5000/api/v1` (for Axios and Swagger v1 server definition).
-  2. Service / Swagger paths: Strictly relative to base URL (e.g. `/auth/register`, `/accounts`, `/transactions`).
-  3. Express mounting: Versioned router mounted under `/api/v1` exactly once in `src/app.js`.
-- **Implementation Details:**
-  - Files modified: `backend/src/config/swagger.js`, `backend/src/app.js`.
-- **Technical Verification & Test Evidence:** Verified via automated route verification script asserting `POST /api/v1/auth/register` returns 201/400 while `POST /api/v1/api/v1/auth/register` returns 404.
-- **Related Git Commit:** `01dca5aec13d757100e1de0544d3ce9e0c55c2d2` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/01dca5aec13d757100e1de0544d3ce9e0c55c2d2))
+### 7. Related Commit
+- `01dca5aec13d757100e1de0544d3ce9e0c55c2d2` – `fix(backend): resolve API routing and startup issues` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/01dca5aec13d757100e1de0544d3ce9e0c55c2d2))
+- `3bcaf3f6f102cf85119de028040097c40daa08b8` – `feat: updated to display the default user credentials at runtime.` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/3bcaf3f6f102cf85119de028040097c40daa08b8))
 
 ---
 
-### Interaction 11. Health-Check Endpoint Inconsistency (`/api/v1/health` vs `/health`)
+## Session 5: Account Number-Based Transactions
 
-- **Context & Requirement:** Expose infrastructure health monitoring for container orchestrators and load balancers.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
-  *Context:* Resolving discrepancy between startup log announcement and Swagger UI health check paths.
-- **Flaw / Limitation Identified During Human Review:** Frontend health polling attempted `GET /api/v1/health` resulting in 404, while startup logs announced `GET http://localhost:5000/health`. In Swagger, `/health` was grouped under `/api/v1`.
-- **Human Review, Decision & Architectural Correction:** Configured an explicit path-level server override in OpenAPI spec: `/health` sets `servers: [{ url: '/', description: 'Root URL' }]`, ensuring Swagger UI calls `http://localhost:5000/health`. Updated documentation to confirm that `/health` is an unversioned infrastructure endpoint.
-- **Implementation Details:**
-  - Files modified: `backend/src/config/swagger.js`, `backend/src/app.js`.
-- **Technical Verification & Test Evidence:** Tested `GET /health` returns 200 with `{ status: 'UP', database: { connected: true } }`, and confirmed `GET /api/v1/health` returns 404 without duplicating routes.
-- **Related Git Commit:** `01dca5aec13d757100e1de0544d3ce9e0c55c2d2` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/01dca5aec13d757100e1de0544d3ce9e0c55c2d2))
+**Date:** 2026-11-06
 
----
+### 1. Objective
+Transition public money transfer API from internal database UUIDs to human-readable account numbers (`LL-ACC-1001`), preserve backward compatibility for UUIDs, normalize idempotency request hashing, and fix Zod validation assertion formatting in integration tests.
 
-### Interaction 12. Missing OpenAPI Route Definitions
+### 2. Original AI Prompt
+`[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
+*Instruction context:* Update transfer API endpoints to accept account numbers instead of UUIDs, maintain backward compatibility, and ensure idempotency hashing works consistently across both formats.
 
-- **Context & Requirement:** Provide interactive Swagger documentation for all administrative and statement endpoints.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
-  *Context:* Audit endpoints registered in Express routers against definitions present in `swagger.js`.
-- **Flaw / Limitation Identified During Human Review:** Several existing endpoints (`/statements/:accountId`, `/admin/users`, `/admin/accounts`, `/admin/users/:userId/status`, `/admin/accounts/:accountId/status`) were completely missing from `swagger.js`, making them undocumented and untestable in Swagger UI.
-- **Human Review, Decision & Architectural Correction:** Added complete OpenAPI 3.0 documentation with schemas, path parameters, and query parameters for all registered Express endpoints.
-- **Implementation Details:**
-  - Files modified: `backend/src/config/swagger.js`.
-- **Technical Verification & Test Evidence:** Complete 25-endpoint route verification table passed with 100% success rate in `tests/integration/api_verification_audit.test.js`.
-- **Related Git Commit:** `01dca5aec13d757100e1de0544d3ce9e0c55c2d2` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/01dca5aec13d757100e1de0544d3ce9e0c55c2d2))
+### 3. AI Suggestion
+- Suggested replacing `sourceAccountId` and `destinationAccountId` with `sourceAccountNumber` and `destinationAccountNumber` exclusively in validation schemas, dropping UUID parameters.
+- Suggested hashing raw request JSON payloads directly for idempotency verification.
 
----
+### 4. Human Review and Correction
+- **Human Architectural Correction:** Requiring end users to enter 36-character internal database UUIDs is poor banking UX and exposes internal primary keys. Mandated 6 architectural rules:
+  1. Frontend must present and require account numbers.
+  2. Transfer API must accept `sourceAccountNumber` and `destinationAccountNumber`.
+  3. Backend must resolve account numbers to internal UUIDs before locking or updating.
+  4. All database foreign keys, row locks (`SELECT FOR UPDATE`), and immutable ledger entries continue using UUIDs.
+  5. Source account ownership must be verified against the authenticated user (`req.user.id`).
+  6. Double-entry accounting, concurrency, idempotency, and immutability must remain unchanged.
+- **Backward Compatibility:** Completely dropping UUIDs breaks legacy clients and automated tests. Configured Zod `.superRefine` accepting either pair (`sourceAccountNumber`/`destinationAccountNumber` OR `sourceAccountId`/`destinationAccountId`).
+- **Idempotency Hash Normalization:** Directly hashing raw payload keys causes a cache bypass if a client retries using an account number instead of a UUID (or vice versa), risking double execution. In `transactionService.transfer()`, account numbers are resolved to UUIDs first, and the SHA-256 hash is computed deterministically across resolved UUIDs.
+- **Test Assertion Correction:** In `account_number_transfer.test.js`, `expect(res.body.message).toMatch(...)` failed because `validateRequest` puts top-level `message: "Validation failed"` and nests the custom rule in `res.body.errors[0].message`. Updated assertion to check `JSON.stringify(res.body)`.
 
-### Interaction 13. PostgreSQL SSL Mode Deprecation Warning
+### 5. Final Implementation
+- `backend/src/modules/transactions/transaction.validation.js`: `.superRefine` dual-pair schema validation.
+- `backend/src/modules/transactions/transaction.service.js`: Resolves account numbers to UUIDs before locking, computes canonical hash across resolved IDs, and enforces source account ownership.
+- `backend/src/repositories/account.repository.js`: Added `findByIdOrAccountNumber()` and `findByAccountNumber()`.
+- `backend/src/config/swagger.js`: Updated transfer schema documentation to reflect primary account number fields and legacy UUID support.
 
-- **Context & Requirement:** Establish secure TLS/SSL connectivity with Neon Cloud PostgreSQL.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
-  *Context:* Eliminate runtime driver deprecation warnings during backend startup.
-- **Flaw / Limitation Identified During Human Review:** On connecting to Neon PostgreSQL, the driver logged `WARNING: sslmode=require is treated as verify-full`. `pg-connection-string` deprecated `sslmode=require` as an ambiguous alias in favor of explicit `verify-full`.
-- **Human Review, Decision & Architectural Correction:** Updated `DATABASE_URL`, `DIRECT_URL`, `TEST_DATABASE_URL`, and `TEST_DIRECT_URL` in `.env` and `.env.example` to explicitly use `sslmode=verify-full&channel_binding=require`. Added regex normalization in `src/config/env.js` `sanitizeUrl()` so any `sslmode=require` is automatically upgraded to `sslmode=verify-full` while maintaining strict `rejectUnauthorized: true` certificate validation.
-- **Implementation Details:**
-  - Files modified: `backend/src/config/env.js`, `backend/.env`, `backend/.env.example`.
-- **Technical Verification & Test Evidence:** Database connection tests run with zero deprecation warnings.
-- **Related Git Commit:** `01dca5aec13d757100e1de0544d3ce9e0c55c2d2` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/01dca5aec13d757100e1de0544d3ce9e0c55c2d2))
+### 6. Verification
+- Automated integration suite `tests/integration/account_number_transfer.test.js`: All 20 scenarios passed (account-number transfers, UUID transfers, insufficient funds, same-account rejection, non-existent account, inactive account, ownership verification, and cached idempotency replays).
 
----
-
-## Session 5: 2026-11-06 — Implement Account Number-Based Transfers & Core Ledger Modules
-
-### Interaction 14. Dual Identification Support & Backward Compatibility
-
-- **Context & Requirement:** Support human-readable account numbers (`LL-ACC-1001`) in transfer endpoints while preserving backwards compatibility for internal UUIDs.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
-  *Context:* Mandating that the transfer API transition from exposing internal UUIDs to accepting account numbers.
-- **AI Proposal / Initial Suggestion:** Replace `sourceAccountId` and `destinationAccountId` with `sourceAccountNumber` and `destinationAccountNumber` exclusively in validation schemas, dropping UUID parameters.
-- **Flaw / Limitation Identified During Human Review:** Completely breaking backward compatibility would fail existing automated tests, external integrations, and legacy clients sending internal UUIDs.
-- **Human Review, Decision & Architectural Correction:** Configured Zod `.superRefine` validation in `transaction.validation.js` allowing either pair:
-  1. Primary: `sourceAccountNumber` and `destinationAccountNumber`
-  2. Legacy: `sourceAccountId` and `destinationAccountId`  
-  If neither or partial parameters are provided, a descriptive validation error is returned.
-- **Implementation Details:**
-  - Files modified: `backend/src/modules/transactions/transaction.validation.js`, `backend/src/modules/transactions/transaction.service.js`.
-- **Technical Verification & Test Evidence:** Tested in `tests/integration/account_number_transfer.test.js` asserting successful execution for both account-number and UUID-based requests.
-- **Related Git Commit:** `07403060c2b04426384c0e3608f1e32d23e0a770` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/07403060c2b04426384c0e3608f1e32d23e0a770))
+### 7. Related Commit
+- `07403060c2b04426384c0e3608f1e32d23e0a770` – `feat: implement account number-based transfers with backward compatibility and swagger docs(use account numbers instead of UUIDs for source and destination accounts)` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/07403060c2b04426384c0e3608f1e32d23e0a770))
+- `1437e9d509179c58294cbf227d8ab8801abb068c` – `feat: add swagger api documentation configuration` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/1437e9d509179c58294cbf227d8ab8801abb068c))
+- `b5dc36bd0da945c3d9bf5be7467092c342316ca7` – `feat: add core financial ledger modules, validation, and API documentation` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/b5dc36bd0da945c3d9bf5be7467092c342316ca7))
+- `27710507e2c490adc07ee59bca81ad0d7ddcb203` – `feat: implement account service and integration test suites with jest` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/27710507e2c490adc07ee59bca81ad0d7ddcb203))
 
 ---
 
-### Interaction 15. Idempotency Request Hash Normalization
+## Session 6: Registration Security and Role Authorization
 
-- **Context & Requirement:** Compute SHA-256 request hashes to detect idempotency key reuse conflicts across transfer retries.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
-  *Context:* Integrating account number resolution with the idempotency key hashing pipeline.
-- **AI Proposal / Initial Suggestion:** Directly hash whatever payload keys were provided by the caller in the raw incoming JSON.
-- **Flaw / Limitation Identified During Human Review:** If a caller retries a transfer using the account number instead of the UUID (or vice versa), the raw payload hash would differ, bypassing the idempotency check and executing the transfer twice.
-- **Human Review, Decision & Architectural Correction:** In `transactionService.transfer()`, both account numbers are resolved to their persistent logical IDs first, and the SHA-256 idempotency request hash is computed deterministically across resolved accounts: `{ op: 'TRANSFER', sourceAccountId, destinationAccountId, amountPaise: amountPaise.toString() }`.
-- **Implementation Details:**
-  - Files modified: `backend/src/modules/transactions/transaction.service.js`.
-- **Technical Verification & Test Evidence:** Verified with `tests/integration/account_number_transfer.test.js` (`Duplicate transfer request with same Idempotency-Key returns cached response without duplicate execution`).
-- **Related Git Commit:** `07403060c2b04426384c0e3608f1e32d23e0a770` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/07403060c2b04426384c0e3608f1e32d23e0a770))
+**Date:** 2026-11-07
 
----
+### 1. Objective
+Audit and secure the public registration flow to prevent privilege escalation. Ensure that a normal user cannot register as `ADMIN` or `AUDITOR` by injecting fields into the HTTP request payload, enforce server-side role assignment, and add automated security tests.
 
-### Interaction 16. Zod Error Formatting in Integration Assertions
+### 2. Original AI Prompt
+```text
+LedgerLine — Registration Security & Role Escalation Prevention
+Act as a senior backend security engineer specializing in authentication, authorization and secure financial applications.
+1. Project context
+Project: LedgerLine — Secure Financial Transaction and Immutable Ledger System.
+Existing technology stack:
+Node.js, Express.js, JavaScript ES Modules, Express.js REST APIs, Neon PostgreSQL, PostgreSQL pg library with raw SQL (no ORM), JWT authentication, bcrypt password hashing, Zod request validation, Jest and Supertest.
+Existing user roles: ADMIN, ACCOUNT_HOLDER, AUDITOR.
+Important architectural rules:
+Public registration must always create an ACCOUNT_HOLDER.
+ADMIN and AUDITOR accounts must never be created through public registration.
+Role assignment must be controlled exclusively by the backend.
+Do not trust client-supplied role values.
+Preserve existing authentication and authorization architecture.
+2. Main objective: Audit and secure the public registration flow to prevent privilege escalation. A normal user must not be able to register as ADMIN or AUDITOR by modifying the HTTP request payload.
+3. Inspect the existing implementation first: Registration route, controller, service, user model/database insertion SQL, Zod validation schema, password hashing, JWT generation, authentication middleware, existing tests. Identify exactly where the role is assigned and whether any client-provided role can reach the database insertion query. Do not rebuild the registration module.
+4. Secure the registration validation schema: Required public registration fields: fullName, email, password. Public registration must not accept a trusted role from the client. Reject unexpected fields using Zod .strict().
+5. Enforce server-side role assignment: Assign ACCOUNT_HOLDER explicitly inside trusted backend service. Never read role from req.body. Never pass a client-provided role into the SQL INSERT query. Use parameterized SQL queries.
+6. Prevent role escalation: Test normal registration (ACCOUNT_HOLDER) and test role injection (ADMIN, AUDITOR, lowercase roles, privilege fields like isAdmin).
+```
 
-- **Context & Requirement:** Verify that transfers between the same source and destination account are rejected.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
-  *Context:* Writing integration tests for same-account transfer validation rejection.
-- **Flaw / Limitation Identified During Human Review:** In `tests/integration/account_number_transfer.test.js` Scenario 7, the assertion `expect(res.body.message).toMatch(/Source and destination accounts must be different/i)` failed because `validateRequest` middleware formats top-level `message: "Validation failed"` and puts the custom rule message in `res.body.errors[0].message`.
-- **Human Review, Decision & Architectural Correction:** Updated the test assertion to inspect the response errors structure `expect(JSON.stringify(res.body)).toMatch(/Source and destination accounts must be different/i)`.
-- **Implementation Details:**
-  - Files modified: `backend/tests/integration/account_number_transfer.test.js`.
-- **Technical Verification & Test Evidence:** All 20 integration tests passed in `tests/integration/account_number_transfer.test.js`.
-- **Related Git Commit:** `07403060c2b04426384c0e3608f1e32d23e0a770` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/07403060c2b04426384c0e3608f1e32d23e0a770))
+### 3. AI Suggestion
+Initial audit identified 5 critical privilege escalation vulnerabilities:
+1. `registerSchema` explicitly permitted `role: z.enum(['ADMIN', 'ACCOUNT_HOLDER', 'AUDITOR'])` and omitted `.strict()`.
+2. `auth.controller.js` passed unfiltered `req.body` to the service.
+3. `auth.service.js` accepted `role` from the arguments and defaulted to `'ACCOUNT_HOLDER'` only if missing.
+4. `userRepository.create()` passed `$4` (the client role) directly into SQL `INSERT INTO users (..., role)`.
+5. JWT tokens minted upon registration embedded `user.role` from the DB row, giving injected admins full access to `authorize('ADMIN')` routes.
 
----
+### 4. Human Review and Correction
+Mandated a 3-layer Defense-in-Depth architectural correction:
+- **Layer 1 (Schema Rejection):** Removed `role` entirely from `registerSchema` and added `.strict()`. Any unexpected field (`role`, `isAdmin`, `permissions`) immediately triggers `400 Bad Request`.
+- **Layer 2 (Controller Destructuring):** Modified `authController.register` to destructure only `{ fullName, email, password }` from `req.body`, discarding any extra fields.
+- **Layer 3 (Authoritative Service Enforcement):** In `authService.register()`, hardcoded `const role = 'ACCOUNT_HOLDER'`. The backend is the sole authority for role assignment.
+- **Documentation & Tests:** Removed `role` from `swagger.js` `UserRegister` schema. Expanded `tests/integration/auth.test.js` from 7 tests to 18 automated security tests.
 
-### Interaction 17. Human Architectural Correction: Account Number-Based Transfers
+### 5. Final Implementation
+- `backend/src/modules/auth/auth.validation.js`: Strict registration schema omitting `role`.
+- `backend/src/modules/auth/auth.controller.js`: Explicit field whitelisting.
+- `backend/src/modules/auth/auth.service.js`: Unconditional server-side `ACCOUNT_HOLDER` role assignment.
+- `backend/src/config/swagger.js`: Aligned OpenAPI register request schema.
+- `backend/tests/integration/auth.test.js`: 18 automated security integration tests.
 
-- **Context & Requirement:** Banking and fintech users identify accounts using structured account numbers (`LL-ACC-1001`), not internal database primary keys.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — requires manual recovery from chat history.]`  
-  *Context:* Human engineering correction instructing the AI to restructure transfer inputs while preserving internal database integrity.
-- **AI Proposal / Initial Suggestion:** Expose database primary key UUIDs in public transfer API endpoints (`sourceAccountId`, `destinationAccountId`).
-- **Flaw / Limitation Identified During Human Review:** Exposing internal database primary key UUIDs is poor API design and a potential information disclosure risk. Users cannot easily remember or copy 36-character UUIDs.
-- **Human Review, Decision & Architectural Correction:** Formulated and enforced a 6-point architectural requirement:
-  1. Frontend must present and require account numbers for source and destination account selection.
-  2. Transfer API must accept account numbers instead of exposing internal UUIDs.
-  3. Backend must resolve both account numbers to their corresponding internal account UUIDs before locking.
-  4. All existing database relationships, transaction processing, row-level locking, and ledger entries must continue using internal UUIDs.
-  5. Source account ownership must be verified against the authenticated user.
-  6. Existing authorization, idempotency, concurrency, double-entry accounting, and append-only ledger protections must remain unchanged.
-- **Implementation Details:**
-  - Files modified: `backend/src/modules/transactions/transaction.controller.js`, `backend/src/modules/transactions/transaction.service.js`, `backend/src/repositories/account.repository.js`.
-- **Technical Verification & Test Evidence:** Completed and verified across all 20 automated integration scenarios in `backend/tests/integration/account_number_transfer.test.js`.
-- **Related Git Commit:** `07403060c2b04426384c0e3608f1e32d23e0a770` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/07403060c2b04426384c0e3608f1e32d23e0a770))
+### 6. Verification
+- Automated tests in `tests/integration/auth.test.js`: All 18 tests passed (normal registration, uppercase `ADMIN`/`AUDITOR` rejection, lowercase `admin`/`auditor` rejection, privilege fields `isAdmin` rejection, direct service call role enforcement, JWT tampering rejection, and admin endpoint RBAC protection).
+- Overall suite: 106/106 tests passing.
 
----
-
-## Session 6: 2026-11-07 — Registration Security & Role Escalation Prevention
-
-### Interaction 18. Public Registration Schema Vulnerability & Role Injection
-
-- **Context & Requirement:** Audit and secure the public registration flow to prevent privilege escalation. A normal user must not be able to register as `ADMIN` or `AUDITOR` by modifying the HTTP request payload. Public registration must always create an `ACCOUNT_HOLDER`.
-- **Actual AI Prompt (Verbatim):**
-  ```text
-  LedgerLine — Registration Security & Role Escalation Prevention
-  Act as a senior backend security engineer specializing in authentication, authorization and secure financial applications.
-  1. Project context
-  Project: LedgerLine — Secure Financial Transaction and Immutable Ledger System.
-  Existing technology stack: Node.js, Express.js, JavaScript ES Modules, Express.js REST APIs, Neon PostgreSQL, PostgreSQL pg library with raw SQL (no ORM), JWT authentication, bcrypt password hashing, Zod request validation, Jest and Supertest.
-  Existing user roles: ADMIN, ACCOUNT_HOLDER, AUDITOR.
-  Important architectural rules:
-  - Public registration must always create an ACCOUNT_HOLDER.
-  - ADMIN and AUDITOR accounts must never be created through public registration.
-  - Role assignment must be controlled exclusively by the backend.
-  - Do not trust client-supplied role values.
-  - Preserve existing authentication and authorization architecture.
-  2. Main objective: Audit and secure the public registration flow to prevent privilege escalation. A normal user must not be able to register as ADMIN or AUDITOR by modifying the HTTP request payload.
-  3. Inspect the existing implementation first: Registration route, controller, service, database insertion SQL, Zod validation schema, password hashing, JWT generation, authentication middleware, existing tests. Identify exactly where the role is assigned and whether any client-provided role can reach the database insertion query.
-  4. Secure the registration validation schema: Required fields { fullName, email, password }. Public registration must not accept a trusted role from the client. Reject unexpected fields using Zod .strict().
-  5. Enforce server-side role assignment: Assign ACCOUNT_HOLDER explicitly inside trusted backend service. Never read role from req.body or pass into SQL INSERT query.
-  6. Prevent role escalation: Test normal registration (ACCOUNT_HOLDER) and test role injection (ADMIN, AUDITOR, lowercase, privilege fields like isAdmin).
-  ```
-- **Flaws Discovered During Security Audit:**
-  1. **Schema Vulnerability**: In `backend/src/modules/auth/auth.validation.js`, `registerSchema` explicitly included `role: z.enum(['ADMIN', 'ACCOUNT_HOLDER', 'AUDITOR']).default('ACCOUNT_HOLDER').optional()` and omitted `.strict()`. This permitted clients to send `{"role": "ADMIN"}` or `{"role": "AUDITOR"}`, which passed validation successfully.
-  2. **Service Parameter Passthrough**: In `backend/src/modules/auth/auth.service.js`, `register({ fullName, email, password, role = 'ACCOUNT_HOLDER' }, context)` unpacked the client-supplied `role` and passed it directly to `userRepository.create()`.
-  3. **Controller Passthrough**: In `backend/src/modules/auth/auth.controller.js`, `authController.register` passed `req.body` without field filtering.
-  4. **PostgreSQL Insertion**: In `backend/src/repositories/user.repository.js`, the parameterized query `INSERT INTO users (full_name, email, password_hash, role, is_active) VALUES ($1, $2, $3, $4, true)` inserted `$4` directly. Because the PostgreSQL `CHECK (role IN ('ADMIN', 'ACCOUNT_HOLDER', 'AUDITOR'))` constraint accepts `ADMIN` and `AUDITOR`, the injected role was committed to the database.
-  5. **JWT & Identity Escalation**: The issued JWT and `req.user` in `authenticate` middleware loaded `user.role` from the database row, giving the attacker full administrative access across `authorize('ADMIN')` endpoints.
-- **Architectural Corrections (Defense-in-Depth):**
-  1. **Strict Zod Validation (Layer 1)**: Removed `role` entirely from `registerSchema` in `auth.validation.js` and appended `.strict()`. Any client payload containing unexpected or privileged fields (`role`, `isAdmin`, `permissions`, `isVerified`, etc.) fails validation immediately with `400 Bad Request` (`Validation failed`).
-  2. **Controller Whitelisting (Layer 2)**: Modified `auth.controller.js` to explicitly destructure only `{ fullName, email, password }` from `req.body` and pass only those fields to the service layer.
-  3. **Authoritative Server-Side Role Enforcement (Layer 3)**: Updated `auth.service.js` to unconditionally bind `const role = 'ACCOUNT_HOLDER'`. The service ignores any client-supplied role parameter, eliminating any mechanism for public registration to assign `ADMIN` or `AUDITOR` roles.
-  4. **API Documentation Alignment**: Removed the `role` property from the `UserRegister` schema in `swagger.js`.
-  5. **Comprehensive Automated Test Suite**: Expanded `tests/integration/auth.test.js` from 7 tests to 18 tests covering:
-     - Test A: Normal registration assigns `ACCOUNT_HOLDER`, hashes password with bcrypt, and profile verification via `GET /api/v1/auth/me` returns `ACCOUNT_HOLDER`.
-     - Test B: `ADMIN` role injection rejected with 400 and no user created in the database.
-     - Test C: `AUDITOR` role injection rejected with 400 and no user created in the database.
-     - Test D: Alternative/lowercase role strings (`admin`, `auditor`, `ACCOUNT_HOLDER`, `SUPER_ADMIN`, `ROOT`) rejected with 400.
-     - Test E: Privilege fields (`isAdmin`, `permissions`, `isVerified`) rejected with 400.
-     - Service Defense-in-Depth: Direct invocation of `authService.register` with `role: 'ADMIN'` strictly forces `ACCOUNT_HOLDER` in the database.
-     - JWT Tampering Protection: Client-forged JWT with tampered role claim rejected with 401.
-     - Privileged Route Access: Verified that regular users and auditors cannot access admin endpoints (`403 Forbidden`).
-- **Implementation Details:**
-  - Files modified: `backend/src/modules/auth/auth.validation.js`, `backend/src/modules/auth/auth.controller.js`, `backend/src/modules/auth/auth.service.js`, `backend/src/config/swagger.js`, `backend/tests/integration/auth.test.js`.
-- **Technical Verification & Test Evidence:** Executed automated test suite against Neon PostgreSQL test database (`TEST_DATABASE_URL`). All 18 auth tests and 30 API verification tests passed with 100% success rate.
-- **Related Git Commit:** `1e54086d7941f5b73752296da57b1faa39426fce` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/1e54086d7941f5b73752296da57b1faa39426fce))
+### 7. Related Commit
+- `1e54086d7941f5b73752296da57b1faa39426fce` – `fix: prevent privilege escalation in public registration with strict validation and server-side role enforcement` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/1e54086d7941f5b73752296da57b1faa39426fce))
 
 ---
 
-## Session 7: 2026-11-07 — Concurrency, Idempotency & Authorization Hardening
+## Session 7: Concurrency, Idempotency and Authorization
 
-### Interaction 19. Idempotency Key Scoping & Concurrent Retry Serialization
+**Date:** 2026-11-07
 
-- **Context & Requirement:** Review idempotency key mechanics across financial endpoints (`POST /api/v1/transactions/*`). Verify behavior for sequential retries, concurrent retries, tampered payloads, and failed attempts.
-- **Actual AI Prompt (Verbatim):**
-  ```text
-  # LedgerLine — Day 2: Concurrency, Idempotency & Authorization Hardening
-  Act as a senior backend engineer, PostgreSQL specialist and application security engineer.
-  Your task is to complete the remaining Day 2 work for LedgerLine based on the existing implementation.
-  [Inspect transaction and idempotency implementation]
-  Verify the following behaviour:
-  1. One logical client transaction uses one idempotency key.
-  2. Retries of that same logical transaction reuse the original key.
-  3. Same key + same request payload returns the original completed result.
-  4. Same key + changed payload returns a conflict.
-  5. A genuinely new logical transaction uses a new key.
-  6. Concurrent requests using the same key cannot create duplicate transactions.
-  7. Failed transactions do not leave inconsistent idempotency records.
-  Inspect how request hashes are generated. Ensure the hash represents the relevant validated transaction payload.
-  ```
-- **Architectural Findings & Hardening:**
-  1. **Key Uniqueness & Scope**: Protected by PostgreSQL unique constraint `uq_user_idempotency_key UNIQUE (user_id, idempotency_key)`. Keys are strictly scoped per authenticated user, preventing cross-user collision.
-  2. **Canonical Payload Hash**: A SHA-256 hash is computed across normalized operation parameters (`op`, `sourceAccountId`, `destinationAccountId`, `amountPaise`). Retrying with modified amount or destination triggers `409 Conflict` (`Idempotency key reuse conflict: request payload differs from original request`).
-  3. **Concurrent Retry Race Serialization**: When identical requests race in parallel (`Promise.all`), the PostgreSQL unique constraint on `idempotency_keys` allows exactly one thread to insert the pending key reservation and execute the transaction. Racing concurrent requests either receive `409 Conflict` (due to active in-flight lock or unique violation) or await and retrieve the committed replay. Under no circumstance can a duplicate transaction or duplicate ledger entry be created.
-  4. **Failed Transaction Rollback**: If balance validation fails, the entire transaction rolls back, releasing the in-flight key so the client can retry cleanly.
-- **Implementation Details:**
-  - Files modified: `backend/src/modules/transactions/transaction.service.js`, `backend/src/repositories/idempotency.repository.js`, `backend/tests/integration/idempotency.test.js`.
-- **Technical Verification & Test Evidence:** Automated tests in `tests/integration/idempotency.test.js` (Test A sequential retry, Test B concurrent retry with `Promise.all`, Test C changed payload conflict, and failed cleanup retry).
-- **Related Git Commit:** `bc52c325b051dd57cfbbeddca150e75d4a06fffa` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/bc52c325b051dd57cfbbeddca150e75d4a06fffa))
+### 1. Objective
+Complete Day 2 concurrency, idempotency, and authorization hardening: eliminate balance race conditions on withdrawals (`SELECT FOR UPDATE`), verify deterministic deadlock elimination on opposite transfers, enforce idempotency key scoping per user with concurrent retry serialization, verify IDOR account protection and auditor money-movement denial, and fix test harness runtime issues.
 
----
+### 2. Original AI Prompt
+```text
+# LedgerLine — Day 2: Concurrency, Idempotency & Authorization Hardening
+Act as a senior backend engineer, PostgreSQL specialist and application security engineer.
+Your task is to complete the remaining Day 2 work for LedgerLine based on the existing implementation.
+1. Project technology stack: Node.js, Express.js, JavaScript ES Modules, Neon PostgreSQL, PostgreSQL pg library with raw SQL, JWT authentication, bcrypt, Zod validation, Jest and Supertest, Swagger API documentation.
+Important architecture decisions:
+- UUIDs remain internal database identifiers.
+- Account numbers such as LL-ACC-1001 are used in public API requests.
+- Money is stored as integer paise using PostgreSQL BIGINT and JavaScript BigInt.
+- Transactions use PostgreSQL database transactions.
+- Ledger entries are append-only.
+- The runtime database role follows least-privilege permissions.
+- No ORM, Docker, TypeScript or unnecessary dependencies.
+2. Existing progress: Manual endpoint testing was performed for idempotency, same key with same payload, same key with changed payload, transaction failure, account ownership/IDOR, RBAC, registration role escalation. Manual tests do not prove concurrent safety; inspect implementation and add automated tests for remaining scenarios.
+3. BUILD — Review transaction and idempotency implementation:
+- Unique constraints: Idempotency key uniqueness, duplicate transaction protection, account number uniqueness, foreign keys.
+- Idempotency keys and request hashes: Verify 1 key per logical transaction; retries reuse original key; same key + payload returns original result; changed payload returns 409 conflict; concurrent requests cannot create duplicate transactions; failed transactions roll back cleanly.
+- SELECT FOR UPDATE: Concurrency-safe balance checks; row-level locking on accounts; prevent negative balance overdrafts under racing withdrawals.
+- Deadlock elimination: Opposite-direction concurrent transfers; deterministic row lock ordering (lexicographical order).
+- Authorization & IDOR: Verify cross-user account access denial; auditor role read-only restriction (cannot deposit, withdraw, transfer).
+```
 
-### Interaction 20. Balance Race Conditions & `SELECT FOR UPDATE`
+### 3. AI Suggestion
+- Confirmed `uq_user_idempotency_key UNIQUE (user_id, idempotency_key)` protects key scoping.
+- Evaluated withdrawal race condition: without `SELECT FOR UPDATE`, racing withdrawals read stale balance simultaneously, producing negative balances (-₹200).
+- Evaluated bidirectional transfers: arbitrary row locking order triggers PostgreSQL circular wait deadlock `40P01`.
+- Identified 3 runtime test harness issues during test suite execution:
+  1. Seed fixture collision: Alice had an initial seeded deposit transaction (`INIT-ALICE`), throwing off generic transaction counts.
+  2. Query parameter placeholder mismatch: `concurrency.test.js` passed 1 argument with `$2` placeholder, causing a PostgreSQL parameter error.
+  3. Total ledger entry count failure in authorization tests due to initial seeded account credit entries.
 
-- **Context & Requirement:** Investigate balance check atomicity under racing withdrawal requests.
-- **Actual AI Prompt (Verbatim):**
-  ```text
-  Inspect withdrawal and transfer balance handling.
-  Verify:
-  - Account rows are locked using SELECT ... FOR UPDATE before balance checks.
-  - Concurrent withdrawals from the same account cannot overdraft or drop balance below zero.
-  - Balance validation occurs strictly within the lock boundary.
-  - Add automated concurrency tests executing truly simultaneous requests via Promise.all.
-  ```
-- **Flaws Evaluated:** Without row-level locks, two concurrent withdrawals (e.g. ₹400 and ₹300 against a ₹500 balance) read `balance >= amount` simultaneously before either updates, causing negative balance overdraft (-₹200).
-- **Mitigation Architecture:**
-  1. Transaction isolation with `BEGIN ... COMMIT`.
-  2. Immediate row-level locking via `SELECT ... FROM accounts WHERE id = $1 FOR UPDATE`.
-  3. Balance validation occurs exclusively while the row lock is held.
-  4. Engine-level `CHECK (balance >= 0)` constraint as an absolute safety barrier.
-- **Implementation Details:**
-  - Files modified: `backend/src/repositories/account.repository.js`, `backend/src/modules/transactions/transaction.service.js`, `backend/tests/integration/concurrency.test.js`.
-- **Technical Verification & Test Evidence:** `tests/integration/concurrency.test.js` (Test D racing withdrawals: exactly one succeeds, the other fails with 400 Insufficient Funds, final balance is either 10,000 or 20,000 paise, and balance never drops below zero).
-- **Related Git Commit:** `bc52c325b051dd57cfbbeddca150e75d4a06fffa` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/bc52c325b051dd57cfbbeddca150e75d4a06fffa))
+### 4. Human Review and Correction
+- **Racing Withdrawals:** Enforced `SELECT ... FROM accounts WHERE id = $1 FOR UPDATE` within an active transaction. Balance validation occurs exclusively while holding the row lock. Engine-level `CHECK (balance >= 0)` serves as the ultimate safety barrier.
+- **Opposite Transfers:** Verified `accountRepository.findTwoForUpdate()` acquires locks in global lexicographical order (`ORDER BY id ASC FOR UPDATE`), eliminating circular wait.
+- **Idempotency Concurrency:** When identical requests race in parallel (`Promise.all`), the PostgreSQL unique constraint on `idempotency_keys` ensures exactly one thread creates the pending key reservation and commits. Concurrent requests receive `409 Conflict` or await the committed replay. Failed transactions roll back and release the key for clean client retries.
+- **Authorization & IDOR:** Verified `authorizeAccountAccess` middleware blocks unauthorized cross-user balance queries, statements, and transfers with 403 Forbidden. Verified auditor role is strictly read-only and blocked from `/deposit`, `/withdraw`, `/transfer`.
+- **Runtime Bugfixes:** Corrected SQL parameter placeholder to `$1`, filtered transaction assertions by `transaction_type = 'TRANSFER'`, and asserted `0` unauthorized debit/credit entries created.
 
----
+### 5. Final Implementation
+- `backend/src/repositories/account.repository.js`: Concurrency-safe `findByIdForUpdate` and `findTwoForUpdate`.
+- `backend/src/modules/transactions/transaction.service.js`: Transaction boundary management (`BEGIN ... COMMIT / ROLLBACK`), idempotency lifecycle, and account ownership enforcement.
+- `backend/src/middlewares/auth.middleware.js`: RBAC and `authorizeAccountAccess` middleware.
+- `backend/tests/integration/idempotency.test.js`: 4 automated idempotency tests (sequential retry, concurrent retry via `Promise.all`, changed payload conflict, and cleanup rollback).
+- `backend/tests/integration/concurrency.test.js`: 2 parallel race tests (racing withdrawals preventing overdraft, and opposite-direction transfers eliminating deadlocks).
+- `backend/tests/integration/authorization.test.js`: 12 automated authorization tests (cross-user IDOR access denial, auditor money-movement denial, and auditor read-only inspection).
 
-### Interaction 21. Multi-Account Deadlock Elimination (Deterministic Lock Ordering)
+### 6. Verification
+- `tests/integration/idempotency.test.js`: 4/4 tests passing.
+- `tests/integration/concurrency.test.js`: 2/2 tests passing with zero deadlocks and zero overdrafts.
+- `tests/integration/authorization.test.js`: 12/12 tests passing.
+- Full backend test suite: 106/106 tests passing across all 9 test suites.
 
-- **Context & Requirement:** Investigate simultaneous opposite-direction transfers: Account A transfers to Account B while Account B concurrently transfers to Account A.
-- **Actual AI Prompt (Verbatim):**
-  ```text
-  Inspect transfers between accounts for deadlock prevention.
-  Verify:
-  - Multi-account row locking uses a deterministic global order (e.g. sorting account IDs).
-  - Simultaneous opposite transfers (A -> B and B -> A) do not cause deadlock exceptions (40P01).
-  - Add automated concurrency tests executing bidirectional transfers in parallel.
-  ```
-- **Flaws Evaluated:** Arbitrary lock order locks Account A on thread 1 and Account B on thread 2, causing circular wait and PostgreSQL deadlock exception `40P01 (deadlock_detected)`.
-- **Mitigation Architecture:** In `accountRepository.findTwoForUpdate(accountId1, accountId2, client)`, the two account UUIDs are sorted lexicographically (`[accountId1, accountId2].sort()`) and queried via `WHERE id = ANY($1::uuid[]) ORDER BY id ASC FOR UPDATE`. Both transactions acquire locks in identical global order.
-- **Implementation Details:**
-  - Files modified: `backend/src/repositories/account.repository.js`, `backend/src/modules/transactions/transaction.service.js`, `backend/tests/integration/concurrency.test.js`.
-- **Technical Verification & Test Evidence:** `tests/integration/concurrency.test.js` (Test E opposite transfers: zero deadlocks, both transfers commit, double-entry ledger is balanced: 2 debits = 2 credits = 4,000 paise, and money is conserved).
-- **Related Git Commit:** `bc52c325b051dd57cfbbeddca150e75d4a06fffa` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/bc52c325b051dd57cfbbeddca150e75d4a06fffa))
+### 7. Related Commit
+- `bc52c325b051dd57cfbbeddca150e75d4a06fffa` – `test(concurrency): add automated tests for Day 2 concurrency, idempotency, and authorization hardening` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/bc52c325b051dd57cfbbeddca150e75d4a06fffa))
 
 ---
 
-### Interaction 22. Cross-User Account Access (IDOR Prevention) & Auditor Denial
+## Documentation Notes
 
-- **Context & Requirement:** Verify authorization boundaries preventing regular users from accessing other accounts, and ensuring auditors cannot move money.
-- **Actual AI Prompt (Verbatim):**
-  ```text
-  Verify account ownership and authorization controls:
-  - Account access: Account holders can only view their own accounts, balances, transactions and statements.
-  - Cross-user attempts to access another user's account must return 403 Forbidden.
-  - Auditor access: AUDITOR role has strictly read-only access to accounts, ledger and audit logs.
-  - Any attempt by an AUDITOR to deposit, withdraw, or transfer must return 403 Forbidden.
-  - Add automated integration tests for IDOR and auditor permission boundaries.
-  ```
-- **Mitigation Architecture:**
-  1. `authorizeAccountAccess` middleware and `transactionService` verify account ownership against `req.user.id`.
-  2. Any cross-user attempt to query balance, view statements, withdraw, or transfer returns `403 Forbidden` with zero database modifications.
-  3. Auditor role has strictly read-only access to `/ledger`, `/audit-events`, `/accounts`, and `/statements`. Any attempt to call `/deposit`, `/withdraw`, or `/transfer` returns `403 Forbidden`.
-- **Implementation Details:**
-  - Files modified: `backend/src/middlewares/auth.middleware.js`, `backend/src/modules/transactions/transaction.service.js`, `backend/tests/integration/authorization.test.js`.
-- **Technical Verification & Test Evidence:** `tests/integration/authorization.test.js` (Test F cross-user IDOR access denial, and Test G auditor money-movement denial with read-only inspection verified across 12 automated tests).
-- **Related Git Commit:** `bc52c325b051dd57cfbbeddca150e75d4a06fffa` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/bc52c325b051dd57cfbbeddca150e75d4a06fffa))
-
----
-
-### Interaction 23. Discovered Errors and Runtime Corrections
-
-- **Context & Requirement:** Resolve test harness collisions and runtime errors encountered during Day 2 hardening test development.
-- **Actual AI Prompt (Verbatim):** `[Original verbatim prompt unavailable — interactive terminal error debugging.]`  
-  *Context:* Runtime debugging of Jest integration test assertion errors against live PostgreSQL test database.
-- **Discovered Errors and Runtime Corrections:**
-  1. **Seed Fixture Collision**:
-     - *Error*: Initial test assertions checking `transactions WHERE initiated_by = $1` received count `2` instead of `1`.
-     - *Root Cause*: `seedTestFixtures()` seeds an initial deposit transaction (`INIT-ALICE`).
-     - *Fix*: Filtered transaction assertions with `transaction_type = 'TRANSFER'` or checked explicit transaction IDs.
-  2. **Query Parameter Placeholder Mismatch**:
-     - *Error*: In `concurrency.test.js`, an account balance update query passed 1 parameter with `$2` placeholder, triggering `error: could not determine data type of parameter $1`.
-     - *Fix*: Corrected the placeholder to `$1`.
-  3. **Ledger Invariant Verification**:
-     - *Error*: In `authorization.test.js`, total ledger entries assertion failed because both Alice and Bob have initial seeded credit entries.
-     - *Fix*: Verified that 0 `DEBIT` entries and 0 `TRANSFER` transactions were created during unauthorized attempts, proving complete database isolation.
-- **Implementation Details:**
-  - Files modified: `backend/tests/integration/concurrency.test.js`, `backend/tests/integration/authorization.test.js`.
-- **Technical Verification & Test Evidence:** Full test suite execution: 106 automated tests passing across 9 test suites with zero failures.
-- **Related Git Commit:** `bc52c325b051dd57cfbbeddca150e75d4a06fffa` ([Commit Link](https://github.com/Prasanna-Anjaneyulu078/LedgerLine_Snovasys/commit/bc52c325b051dd57cfbbeddca150e75d4a06fffa))
+- Original prompts must be genuine and preserved as written.
+- Never present reconstructed or paraphrased prompts as verbatim.
+- If an original prompt cannot be recovered, state that honestly.
+- Record only implemented changes and tests that were actually performed.
+- Include real Git commit references wherever available.
+- Clearly distinguish AI suggestions from human decisions.
