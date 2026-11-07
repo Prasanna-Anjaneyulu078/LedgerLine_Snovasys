@@ -6,22 +6,22 @@ This document provides a systematic threat model, vulnerability analysis, and se
 
 ## Security Verification Matrix
 
-| Threat ID | Threat Name | Severity | Primary Mitigation Control | Verification Evidence | Status |
+| Threat ID | Threat Name | Severity | Primary Mitigation Control | Verification Method & Evidence | Status |
 | :--- | :--- | :---: | :--- | :--- | :---: |
-| **THREAT-001** | Race Condition Overdraft via Racing Withdrawals | **CRITICAL** | `SELECT ... FOR UPDATE` row locks + `CHECK (balance >= 0)` | `tests/integration/concurrency.test.js` (Test D) | **VERIFIED** |
-| **THREAT-002** | Deadlock on Concurrent Opposite-Direction Transfers | **MEDIUM** | Deterministic UUID lock ordering (`ORDER BY id ASC FOR UPDATE`) | `tests/integration/concurrency.test.js` (Test E) | **VERIFIED** |
-| **THREAT-003** | Duplicate Financial Execution via Network Retries | **CRITICAL** | PostgreSQL `uq_user_idempotency_key` + SHA-256 canonical hashing | `tests/integration/idempotency.test.js` (Tests A, B, C) | **VERIFIED** |
-| **THREAT-004** | Inconsistent Ledger State & Atomicity Failure | **CRITICAL** | Atomic `BEGIN...COMMIT` + dual-entry debit/credit ledger creation | `tests/integration/transactions.test.js` | **VERIFIED** |
-| **THREAT-005** | Broken Account-Level Access Control (IDOR) | **HIGH** | `authorizeAccountAccess` middleware + source account owner checks | `tests/integration/authorization.test.js` (Test F) | **VERIFIED** |
-| **THREAT-006** | Auditor Privilege Abuse (Unauthorized Money Movement) | **HIGH** | Strict RBAC (`authorize('ACCOUNT_HOLDER', 'ADMIN')`) | `tests/integration/authorization.test.js` (Test G) | **VERIFIED** |
-| **THREAT-007** | Floating-Point Math Rounding Drift | **HIGH** | Minor units (integer paise) with PostgreSQL `BIGINT` & JS `BigInt` | `tests/unit/money.test.js` | **VERIFIED** |
-| **THREAT-008** | Unauthorized Modification of Ledger Records | **CRITICAL** | Dual-layer: `trg_prevent_ledger_modification` + `ledgerline_runtime` role | `tests/integration/ledger_immutability.test.js` | **VERIFIED** |
-| **THREAT-009** | Privilege Escalation via Registration Role Injection | **CRITICAL** | Strict Zod schema (`.strict()`) + controller filter + hardcoded role | `tests/integration/auth.test.js` (18 tests) | **VERIFIED** |
-| **THREAT-010** | SQL Injection via Raw SQL Parameter Interpolation | **CRITICAL** | 100% Parameterized queries (`$1, $2`) across all repositories | `tests/integration/account_number_transfer.test.js` | **VERIFIED** |
-| **THREAT-011** | Negative or Zero Transaction Amount Tampering | **HIGH** | Zod positive decimal regex + `CHECK (amount > 0)` DB constraint | `tests/integration/transactions.test.js` | **VERIFIED** |
-| **THREAT-012** | Token Tampering & Deactivated User Access | **HIGH** | Server-side JWT signature verification + active user DB check | `tests/integration/auth.test.js` | **VERIFIED** |
-| **THREAT-013** | Denial of Service via Request Flooding | **MEDIUM** | Multi-tier `express-rate-limit` + 1MB JSON body payload limit | `tests/integration/api_verification_audit.test.js` | **VERIFIED** |
-| **THREAT-014** | Sensitive Credential Exposure via Logs or Errors | **MEDIUM** | Centralized error masking + `sanitizeUrl` + bcrypt hashing (12 rounds) | `tests/integration/api_verification_audit.test.js` | **VERIFIED** |
+| **THREAT-001** | Race Condition Overdraft via Racing Withdrawals | **CRITICAL** | `SELECT ... FOR UPDATE` row locks + `CHECK (balance >= 0)` | Automated Test (`concurrency.test.js` Test D) | **VERIFIED (TEST)** |
+| **THREAT-002** | Deadlock on Concurrent Opposite-Direction Transfers | **MEDIUM** | Deterministic UUID lock ordering (`ORDER BY id ASC FOR UPDATE`) | Automated Test (`concurrency.test.js` Test E) | **VERIFIED (TEST)** |
+| **THREAT-003** | Duplicate Financial Execution via Network Retries | **CRITICAL** | PostgreSQL `uq_user_idempotency_key` + SHA-256 canonical hashing | Automated Test (`idempotency.test.js` Tests A, B, C) | **VERIFIED (TEST)** |
+| **THREAT-004** | Inconsistent Ledger State & Atomicity Failure | **CRITICAL** | Atomic `BEGIN...COMMIT` + dual-entry debit/credit ledger creation | Automated Test (`transactions.test.js`, `ledger_immutability.test.js`) | **VERIFIED (TEST)** |
+| **THREAT-005** | Broken Account-Level Access Control (IDOR) | **HIGH** | `authorizeAccountAccess` middleware + source account owner checks | Automated Test (`authorization.test.js` Test F) | **VERIFIED (TEST)** |
+| **THREAT-006** | Auditor Privilege Abuse (Unauthorized Money Movement) | **HIGH** | Strict RBAC (`authorize('ACCOUNT_HOLDER', 'ADMIN')`) | Automated Test (`authorization.test.js` Test G) | **VERIFIED (TEST)** |
+| **THREAT-007** | Floating-Point Math Rounding Drift | **HIGH** | Minor units (integer paise) with PostgreSQL `BIGINT` & JS `BigInt` | Automated Test (`money.test.js` 8 tests) | **VERIFIED (TEST)** |
+| **THREAT-008** | Unauthorized Modification of Ledger Records | **CRITICAL** | Dual-layer: `trg_prevent_ledger_modification` + `ledgerline_runtime` role | Automated Test (`ledger_immutability.test.js` 8 tests) | **VERIFIED (TEST)** |
+| **THREAT-009** | Privilege Escalation via Registration Role Injection | **CRITICAL** | Strict Zod schema (`.strict()`) + controller filter + hardcoded role | Automated Test (`auth.test.js` 18 tests) | **VERIFIED (TEST)** |
+| **THREAT-010** | SQL Injection via Raw SQL Parameter Interpolation | **CRITICAL** | 100% Parameterized queries (`$1, $2`) across all repositories | Code Inspection & Integration Test Suite | **VERIFIED (INSPECTION)** |
+| **THREAT-011** | Negative or Zero Transaction Amount Tampering | **HIGH** | Zod positive decimal regex + `CHECK (amount > 0)` DB constraint | Automated Test (`transactions.test.js`, `money.test.js`) | **VERIFIED (TEST)** |
+| **THREAT-012** | Token Tampering & Deactivated User Access | **HIGH** | Server-side JWT signature verification + active user DB check | Automated Test (`auth.test.js`) | **VERIFIED (TEST)** |
+| **THREAT-013** | Denial of Service via Request Flooding | **MEDIUM** | Multi-tier `express-rate-limit` + 1MB JSON body payload limit | Code Inspection & Manual Verification | **VERIFIED (INSPECTION)** |
+| **THREAT-014** | Sensitive Credential Exposure via Logs or Errors | **MEDIUM** | Production error masking + `sanitizeUrl` + bcrypt (12 rounds) | Code Inspection & Automated Test (`auth.test.js`) | **VERIFIED (HYBRID)** |
 
 ---
 
@@ -36,8 +36,8 @@ This document provides a systematic threat model, vulnerability analysis, and se
 - **2. Attack Scenario:**
   - Attacker Alice possesses an account with an available balance of ₹500.00 (50,000 paise).
   - Alice dispatches two simultaneous HTTP requests to `POST /api/v1/transactions/withdraw`:
-    - Request A: Withdraw ₹400.00 (40,000 paise).
-    - Request B: Withdraw ₹300.00 (30,000 paise).
+    - Request A: Withdraw ₹400.00 (40,000 paise) via `{"accountNumber": "LL-ACC-1001", "amount": "400.00"}`.
+    - Request B: Withdraw ₹300.00 (30,000 paise) via `{"accountNumber": "LL-ACC-1001", "amount": "300.00"}`.
   - Total requested: ₹700.00 > ₹500.00 available balance.
   - If the backend executes simple `SELECT balance ...` followed by application validation, both threads read 50,000 paise, both determine `50000 >= amount`, and both execute `UPDATE accounts SET balance = balance - amount`. Alice successfully extracts ₹700.00, leaving the account at -₹200.00 (-20,000 paise).
 - **3. Potential Impact:**
@@ -66,15 +66,15 @@ This document provides a systematic threat model, vulnerability analysis, and se
 
 ---
 
-### Threat ID: THREAT-002 – Deadlock on Concurrent Opposite-Direction Transfers
+### Threat ID: THREAT-002 – Deadlock Abort on Concurrent Opposite-Direction Transfers
 
 - **Severity:** **MEDIUM** – Risk of transaction aborts (`40P01`) and service disruption under high concurrency.
 - **1. Threat Description:**
   - When funds are transferred between two accounts (Account A and Account B), both account rows must be locked to update balances and maintain isolation.
   - If two concurrent threads acquire locks in opposing order, PostgreSQL encounters a circular wait deadlock and forcibly aborts one of the transactions with error code `40P01 (deadlock_detected)`.
 - **2. Attack Scenario:**
-  - User Alice initiates a transfer of ₹10.00 from Account A to Account B via `POST /api/v1/transactions/transfer`.
-  - Simultaneously, User Bob initiates a transfer of ₹10.00 from Account B to Account A.
+  - User Alice initiates a transfer of ₹10.00 from Account A (`LL-ACC-1001`) to Account B (`LL-ACC-2001`) via `POST /api/v1/transactions/transfer`.
+  - Simultaneously, User Bob initiates a transfer of ₹10.00 from Account B (`LL-ACC-2001`) to Account A (`LL-ACC-1001`).
   - Thread 1 locks Account A and attempts to lock Account B. Thread 2 locks Account B and attempts to lock Account A.
   - Neither thread can proceed, resulting in an unhandled deadlock exception, transaction rollback, and failure response to legitimate customers.
 - **3. Potential Impact:**
@@ -94,7 +94,7 @@ This document provides a systematic threat model, vulnerability analysis, and se
 - **8. Related Git Commit:**
   - `bc52c325b051dd57cfbbeddca150e75d4a06fffa` – `test(concurrency): add automated tests for Day 2 concurrency, idempotency, and authorization hardening`
 - **9. Residual Risk:**
-  - In cross-database or distributed microservices architectures, deterministic lock ordering must be coordinated via distributed locking or two-phase commits. (Not applicable to LedgerLine's monolithic PostgreSQL architecture).
+  - In cross-database or distributed microservices architectures, deterministic lock ordering must be coordinated via distributed locking or two-phase commits. (Not applicable to LedgerLine's single-database PostgreSQL architecture).
 
 ---
 
@@ -105,8 +105,8 @@ This document provides a systematic threat model, vulnerability analysis, and se
   - Clients interacting with financial APIs frequently experience network drops, client timeouts, or application reloads after the server has processed and committed a transaction but before the HTTP response is received.
   - If the client retries the request, a non-idempotent backend processes the transaction again, causing duplicate withdrawals or transfers.
 - **2. Attack Scenario:**
-  - A mobile banking application submits a ₹1,000.00 transfer request. The server commits the transfer, debits the user's balance, and records ledger entries.
-  - The client's cellular connection drops before receiving the HTTP 200 response. The mobile application's automated retry logic submits the exact same transfer request again.
+  - A mobile banking application submits a ₹1,000.00 transfer request via `POST /api/v1/transactions/transfer`. The server commits the transfer, debits the user's balance, and records ledger entries.
+  - The client's cellular connection drops before receiving the HTTP 200 response. The mobile application's automated retry logic submits the exact same transfer request again with the same `Idempotency-Key`.
   - Without idempotency controls, the user is debited another ₹1,000.00.
 - **3. Potential Impact:**
   - Unauthorized duplicate financial transactions.
@@ -149,7 +149,7 @@ This document provides a systematic threat model, vulnerability analysis, and se
   - Double-entry accounting requires that every transfer produce balanced credit and debit entries for the exact same amount (`SUM(credit) = SUM(debit)`).
   - If a server error, crash, or constraint violation occurs halfway through a transfer (e.g. sender is debited, but receiver is not credited), the system's books become permanently corrupted.
 - **2. Attack Scenario:**
-  - A transfer of ₹5,000.00 is initiated. The application executes `UPDATE accounts SET balance = balance - 5000` on the sender, but an unhandled exception or database connection drop occurs before the receiver's balance is updated and before ledger entries are recorded.
+  - A transfer of ₹5,000.00 is initiated via `POST /api/v1/transactions/transfer`. The application executes `UPDATE accounts SET balance = balance - 5000` on the sender, but an unhandled exception or database connection drop occurs before the receiver's balance is updated and before ledger entries are recorded.
   - The sender's money has vanished without reaching the recipient.
 - **3. Potential Impact:**
   - Violation of fundamental double-entry accounting invariants.
@@ -172,7 +172,7 @@ This document provides a systematic threat model, vulnerability analysis, and se
 - **8. Related Git Commit:**
   - `a0d9f05fc2722669f1f09e00819732aaa035763e` – `feat: initialize backend database infrastructure and integration test suite`
 - **9. Residual Risk:**
-  - Direct database administrative intervention (DBA executing manual SQL). Mitigated by least-privilege runtime roles and immutable audit logging.
+  - Direct database administrative intervention (DBA executing manual SQL). Mitigated by least-privilege database user credentials and audit logs.
 
 ---
 
@@ -185,8 +185,10 @@ This document provides a systematic threat model, vulnerability analysis, and se
 - **2. Attack Scenario:**
   - Attacker Alice registers as an `ACCOUNT_HOLDER` and receives account `LL-ACC-1001`.
   - Alice modifies HTTP request parameters to target Bob's account `LL-ACC-2001`:
-    - `GET /api/v1/accounts/LL-ACC-2001` (balance inspection)
-    - `GET /api/v1/statements/LL-ACC-2001` (statement inspection)
+    - `GET /api/v1/accounts/LL-ACC-2001` (balance & account details)
+    - `GET /api/v1/accounts/LL-ACC-2001/balance` (balance inspection)
+    - `GET /api/v1/accounts/LL-ACC-2001/statement` (account statement query)
+    - `GET /api/v1/statements/LL-ACC-2001` (statement endpoint)
     - `POST /api/v1/transactions/withdraw` with `{"accountNumber": "LL-ACC-2001"}`
     - `POST /api/v1/transactions/transfer` with `{"sourceAccountNumber": "LL-ACC-2001"}`
   - If authorization checks only verify that Alice is logged in (role check alone), Alice successfully inspects or steals Bob's money.
@@ -195,21 +197,22 @@ This document provides a systematic threat model, vulnerability analysis, and se
   - Unauthorized debiting of victim accounts (theft).
   - Regulatory and compliance violations (GDPR, banking confidentiality).
 - **4. Existing Security Controls:**
-  - `authorizeAccountAccess` middleware resolving identifiers and validating ownership against `req.user.id`.
+  - `authorizeAccountAccess('accountNumber')` middleware resolving account numbers or UUIDs and validating ownership against `req.user.id`.
   - Service-level fast-path and locked-transaction ownership verification (`account.owner_id !== user.id`).
   - Security audit logging of unauthorized attempts (`TRANSACTION_TRANSFER_REFUSED`, `TRANSACTION_WITHDRAW_REFUSED`).
 - **5. Mitigation Strategy:**
   - *Implemented:*
-    1. Middleware layer: `authorizeAccountAccess` intercepts account endpoints, resolves the account via `findByIdOrAccountNumber`, and immediately throws `403 Forbidden` if `req.user.role === 'ACCOUNT_HOLDER'` and `account.owner_id !== req.user.id`.
+    1. Middleware layer: `authorizeAccountAccess` intercepts account and statement endpoints, resolves the account via `findByIdOrAccountNumber`, and immediately throws `403 Forbidden` if `req.user.role === 'ACCOUNT_HOLDER'` and `account.owner_id !== req.user.id`.
     2. Service layer defense-in-depth: In `transactionService.transfer()` and `withdraw()`, ownership is verified before and after acquiring row locks. Even if middleware were bypassed, the service rejects the call with `403 Forbidden`.
-    3. Audit recording: All refused access attempts are logged permanently to `audit_events` with the attacker's IP and actor ID.
+    3. Audit recording: All refused access attempts are logged permanently to `audit_events` with the caller's IP and actor ID.
 - **6. Verification and Test Evidence:**
-  - *Automated Tests:* `tests/integration/authorization.test.js` – Test F (`User cannot view balance of another user account`, `User cannot withdraw from another user account`, `User cannot transfer from another user account`).
+  - *Automated Tests:* `tests/integration/authorization.test.js` – Test F (`User cannot view balance of another user account`, `User cannot withdraw from another user account`, `User cannot transfer from another user account`) and `tests/integration/account_number_transfer.test.js`.
   - *Observed Result:* All cross-user attempts returned HTTP 403 Forbidden with zero database modifications.
 - **7. Related Implementation Files:**
   - `backend/src/middleware/authorize.js`
   - `backend/src/modules/transactions/transaction.service.js`
   - `backend/src/modules/accounts/account.service.js`
+  - `backend/src/modules/statements/statement.service.js`
   - `backend/tests/integration/authorization.test.js`
 - **8. Related Git Commit:**
   - `bc52c325b051dd57cfbbeddca150e75d4a06fffa` – `test(concurrency): add automated tests for Day 2 concurrency, idempotency, and authorization hardening`
@@ -284,26 +287,28 @@ This document provides a systematic threat model, vulnerability analysis, and se
 
 ### Threat ID: THREAT-008 – Unauthorized Modification or Deletion of Ledger Records (Immutability Breach)
 
-- **Severity:** **CRITICAL** – Altering historical ledger records destroys accounting integrity, facilitates embezzlement, and invalidates the entire audit trail.
+- **Severity:** **CRITICAL** – Altering historical financial ledger records invalidates accounting veracity and facilitates undetected fraud.
 - **1. Threat Description:**
-  - A core requirement of double-entry bookkeeping and financial compliance is that the ledger must be strictly append-only.
+  - A core requirement of double-entry bookkeeping and financial compliance is that the financial ledger must be strictly append-only.
   - If a malicious actor, compromised service account, or rogue SQL query modifies (`UPDATE`) or deletes (`DELETE`, `TRUNCATE`) records in `ledger_entries`, historical auditability is lost and balances can be fraudulently forged.
 - **2. Attack Scenario:**
   - An attacker exploits a vulnerability in the application to execute direct SQL, or an employee with access to the runtime database connection issues:
-    `UPDATE ledger_entries SET amount = 1000 WHERE id = '...'` or `DELETE FROM ledger_entries WHERE entry_type = 'DEBIT'`
+    `UPDATE ledger_entries SET amount = 1000 WHERE id = '...'` or `DELETE FROM ledger_entries WHERE entry_type = 'DEBIT'` or `TRUNCATE TABLE ledger_entries`
   - The attacker alters past transactions to conceal theft or falsify financial history.
 - **3. Potential Impact:**
   - Irreversible corruption of financial history.
   - Fraud, embezzlement, and audit falsification.
   - Complete failure of financial compliance standards.
 - **4. Existing Security Controls:**
-  - PostgreSQL trigger: `trg_prevent_ledger_modification` firing `BEFORE UPDATE OR DELETE ON ledger_entries`.
-  - Database role privileges: Restricted application runtime role `ledgerline_runtime` with revoked `UPDATE`, `DELETE`, and `TRUNCATE` permissions.
-  - Application encapsulation: `LedgerRepository` implements only `create` (append-only); no update or delete methods exist.
+  - PostgreSQL trigger: `trg_prevent_ledger_modification` firing `BEFORE UPDATE OR DELETE ON ledger_entries FOR EACH ROW`.
+  - Database role privileges: Dedicated application runtime role `ledgerline_runtime` with revoked `UPDATE`, `DELETE`, and `TRUNCATE` permissions.
+  - Application encapsulation: `LedgerRepository` implements only `create()` (append-only); no update or delete methods exist.
 - **5. Mitigation Strategy:**
   - *Implemented (Dual-Layer Defense-in-Depth):*
-    1. *Layer 1 (Database Role Least Privilege):* The application connects via dedicated role `ledgerline_runtime`, which has permissions strictly limited to `SELECT` and `INSERT`. `UPDATE`, `DELETE`, and `TRUNCATE` are explicitly revoked (PostgreSQL error `42501 insufficient_privilege`).
-    2. *Layer 2 (PostgreSQL Trigger Invariant):* The trigger function `prevent_ledger_modification()` intercepts any attempt to execute `UPDATE` or `DELETE` on `ledger_entries` (even from superusers or table owners) and raises an exception with SQLSTATE `23000 (integrity_constraint_violation)`.
+    1. *Layer 1 (Database Role Least Privilege):* The application connects via dedicated role `ledgerline_runtime`, which has permissions strictly limited to `SELECT` and `INSERT`. Privileges for `UPDATE`, `DELETE`, and `TRUNCATE` are explicitly revoked (`REVOKE UPDATE, DELETE, TRUNCATE ON ledger_entries FROM ledgerline_runtime`). PostgreSQL rejects attempts with error `42501 (insufficient_privilege)`.
+    2. *Layer 2 (PostgreSQL Trigger Invariant):* The trigger function `prevent_ledger_modification()` intercepts any attempt to execute row-level `UPDATE` or `DELETE` on `ledger_entries` and raises an exception with SQLSTATE `23000 (integrity_constraint_violation)`.
+  - *Distinction Between Trigger and Privilege Protection:*
+    - The row-level trigger protects against `UPDATE` and `DELETE` on individual rows. However, in PostgreSQL, a row-level `FOR EACH ROW` trigger does **not** intercept table-level `TRUNCATE` statements. Protection against `TRUNCATE` is enforced separately by table-level privilege revocation (`REVOKE TRUNCATE`).
 - **6. Verification and Test Evidence:**
   - *Automated Tests:* `tests/integration/ledger_immutability.test.js`:
     - Verified `has_table_privilege('ledgerline_runtime', 'ledger_entries', ...)` confirms SELECT=true, INSERT=true, UPDATE=false, DELETE=false, TRUNCATE=false.
@@ -311,7 +316,7 @@ This document provides a systematic threat model, vulnerability analysis, and se
     - Verified direct SQL `DELETE` fails with SQLSTATE `23000` / `42501`.
     - Verified direct SQL `TRUNCATE` fails with SQLSTATE `42501`.
 - **7. Related Implementation Files:**
-  - `backend/src/database/migrations/007_prevent_ledger_modification_trigger.sql`
+  - `backend/src/database/migrations/007_prevent_ledger_modification.sql`
   - `backend/src/database/setup-runtime-role.js`
   - `backend/src/repositories/ledger.repository.js`
   - `backend/tests/integration/ledger_immutability.test.js`
@@ -319,7 +324,7 @@ This document provides a systematic threat model, vulnerability analysis, and se
   - `a5502e115a06298a620e8e2ccf53fed012a5eb8b` – `security: enforce database-level ledger immutability`
   - `e56267c6fe8cb289b0ff6f0166551097f870950b` – `feat(security): protect ledger from modifications`
 - **9. Residual Risk:**
-  - A cloud database administrator with Neon superuser credentials could drop the trigger or alter table grants. Mitigated by restricting direct owner connection credentials (`DIRECT_URL`) to automated migrations and auditing cloud database logs.
+  - *Database Administrator / Cloud Owner Limitations:* In PostgreSQL, triggers and table privileges can be altered or dropped by users holding superuser or table-owner privileges (`neondb_owner`). A compromised migration credential (`DIRECT_URL`) or cloud database administrator can issue `ALTER TABLE ... DISABLE TRIGGER` or drop the table. Database-level immutability strictly protects against the application runtime role and regular SQL execution, but cannot defend against a compromised cloud database owner without write-once external hardware (WORM storage) or cryptographic ledger hashing.
 
 ---
 
@@ -378,11 +383,11 @@ This document provides a systematic threat model, vulnerability analysis, and se
 
 ### Threat ID: THREAT-010 – SQL Injection via Raw SQL Parameter Interpolation
 
-- **Severity:** **CRITICAL** – Direct compromise of database confidentiality, data integrity, and potential data destruction.
+- **Severity:** **CRITICAL** – Potential database compromise, arbitrary data leakage, or data destruction if raw SQL is improperly interpolated.
 - **1. Threat Description:**
-  - Because LedgerLine does not use an ORM (using native `pg` with raw SQL for transaction control), insecure string concatenation or template literals in SQL queries would allow attackers to inject arbitrary SQL statements.
+  - Because LedgerLine does not use an ORM (using native `pg` with raw SQL for fine-grained transaction control), any dynamic string concatenation or template literal interpolation in SQL queries would allow attackers to inject arbitrary SQL statements.
 - **2. Attack Scenario:**
-  - An attacker submits a malicious string in an account number lookup or description field:
+  - An attacker submits a malicious string in an account lookup or description field:
     `LL-ACC-1001' OR '1'='1` or `'; DROP TABLE ledger_entries; --`
   - If interpolated directly into a query string (`SELECT ... WHERE account_number = '${accNum}'`), the injected SQL executes in PostgreSQL, leaking all accounts or executing destructive DDL.
 - **3. Potential Impact:**
@@ -395,15 +400,21 @@ This document provides a systematic threat model, vulnerability analysis, and se
 - **5. Mitigation Strategy:**
   - *Implemented:* All SQL queries in `account.repository.js`, `transaction.repository.js`, `ledger.repository.js`, `user.repository.js`, `idempotency.repository.js`, and `audit.repository.js` exclusively use parameterized queries with placeholder values (`$1, $2, ...`). The PostgreSQL driver sends parameters separately from the query text, guaranteeing that user input is treated strictly as literal data.
 - **6. Verification and Test Evidence:**
-  - *Automated Tests:* Verified across all 9 test suites (106 tests) where special characters, punctuation, and injection strings pass through validation and repositories without altering SQL syntax.
-  - *Codebase Audit:* Comprehensive inspection confirmed zero occurrences of template literal string interpolation in SQL queries.
+  - *Verification Method: Code Inspection & Integration Test Suite.*
+  - *Code Inspection:* Full audit of all 6 repository files confirmed 100% parameterized query usage (`$1, $2, ...`) with zero occurrences of template literal or string concatenation in SQL queries.
+  - *Automated Tests:* Integration test suites pass user-supplied strings, special characters, and UUIDs through the repository layer without SQL syntax distortion.
+  - *Verification Note:* While parameterized queries prevent SQL injection architecturally, dedicated automated SQL fuzzing/penetration testing (e.g. SQLmap or automated injection payloads against all endpoints) was not part of the challenge test suite.
 - **7. Related Implementation Files:**
-  - `backend/src/repositories/*.repository.js`
-  - `backend/src/database/migrate.js`
+  - `backend/src/repositories/user.repository.js`
+  - `backend/src/repositories/account.repository.js`
+  - `backend/src/repositories/transaction.repository.js`
+  - `backend/src/repositories/ledger.repository.js`
+  - `backend/src/repositories/idempotency.repository.js`
+  - `backend/src/repositories/audit.repository.js`
 - **8. Related Git Commit:**
   - `a0d9f05fc2722669f1f09e00819732aaa035763e` – `feat: initialize backend database infrastructure and integration test suite`
 - **9. Residual Risk:**
-  - Developer error introducing string interpolation in future custom queries. Mitigated by code review standards and static analysis.
+  - Developer error introducing string interpolation in future custom queries. Mitigated by strict code review standards and static code analysis (e.g. ESLint security plugins).
 
 ---
 
@@ -487,11 +498,11 @@ This document provides a systematic threat model, vulnerability analysis, and se
 
 - **Severity:** **MEDIUM** – Temporary API degradation, server unresponsive states, and database connection pool starvation.
 - **1. Threat Description:**
-  - Malicious actors or aggressive scrapers can flood the API with thousands of rapid requests, exhausting server memory, CPU, or Neon PostgreSQL connection pool limits, denying service to legitimate customers.
+  - Malicious actors or aggressive automated scripts can flood the API with thousands of rapid requests, exhausting server memory, CPU, or Neon PostgreSQL connection pool limits, denying service to legitimate customers.
 - **2. Attack Scenario:**
-  - An attacker runs an automated script dispatching 10,000 requests per minute to `/api/v1/auth/login` (brute-forcing passwords) or `POST /api/v1/transactions/transfer`, saturating the 10-connection PostgreSQL pool and crashing the Node.js event loop.
+  - An attacker runs a multi-threaded script dispatching thousands of requests per second to `/api/v1/auth/login` (brute-forcing passwords) or `POST /api/v1/transactions/transfer`, saturating the 10-connection PostgreSQL pool and crashing the Node.js event loop.
 - **3. Potential Impact:**
-  - Application slowdown or total service unavailability.
+  - Application slowdown or temporary service unavailability.
   - Inability for legitimate customers to execute transfers.
   - Database connection timeout errors.
 - **4. Existing Security Controls:**
@@ -503,12 +514,16 @@ This document provides a systematic threat model, vulnerability analysis, and se
   - Database pool configuration: `max: 10`, `idleTimeoutMillis: 30000`, `connectionTimeoutMillis: 5000`.
 - **5. Mitigation Strategy:**
   - *Implemented:*
-    1. Express rate-limiting middleware throttles excessive IP traffic and returns `429 Too Many Requests`.
-    2. Payload body limits prevent memory exhaustion via giant JSON payloads.
+    1. Express rate-limiting middleware throttles excessive single-IP traffic and returns `429 Too Many Requests`.
+    2. Payload body limits (1MB) prevent memory exhaustion via large JSON payloads.
     3. Connection pool timeouts ensure leaked or slow connections are closed before exhausting the pool.
 - **6. Verification and Test Evidence:**
-  - *Automated Tests:* `tests/integration/api_verification_audit.test.js` verified rate-limiter headers (`RateLimit-Limit`, `RateLimit-Remaining`) are attached to API responses.
-  - *Manual Verification:* Verified that requests exceeding limits receive HTTP 429 (`Too many requests`).
+  - *Verification Method: Code Inspection & Manual Sanity Testing.*
+  - *Code Inspection:* Verified configuration in `backend/src/middleware/rateLimiter.js` and registration in `backend/src/app.js`.
+  - *Important Verification Distinctions:*
+    - Basic rate-limiting middleware is implemented in code, but automated 429 assertion suites were deliberately excluded from the standard Jest test run to avoid throttling subsequent integration tests.
+    - Heavy volumetric load testing and PostgreSQL connection pool starvation under extreme traffic (e.g. 10,000+ simultaneous requests via k6 or Autocannon) have **not been tested** in the current challenge environment.
+    - Application-level IP rate limiting does **not** protect against distributed denial-of-service (DDoS) across rotating IP addresses.
 - **7. Related Implementation Files:**
   - `backend/src/middleware/rateLimiter.js`
   - `backend/src/app.js`
@@ -516,7 +531,7 @@ This document provides a systematic threat model, vulnerability analysis, and se
 - **8. Related Git Commit:**
   - `a0d9f05fc2722669f1f09e00819732aaa035763e` – `feat: initialize backend database infrastructure and integration test suite`
 - **9. Residual Risk:**
-  - Distributed Denial of Service (DDoS) across thousands of rotating IPs cannot be stopped by application-level IP rate limiters alone. Requires edge protection (e.g. Cloudflare, AWS Shield) in production.
+  - True distributed denial of service (DDoS) across botnets cannot be prevented by application-level IP limiters alone. Requires edge WAF / CDN protection (e.g. Cloudflare, AWS Shield) in production.
 
 ---
 
@@ -536,17 +551,20 @@ This document provides a systematic threat model, vulnerability analysis, and se
   - URL sanitizer `sanitizeUrl()` in `src/config/env.js`.
   - Bcrypt password hashing (12 salt rounds); raw passwords never persisted or returned.
   - `.gitignore` preventing `.env` commits.
+  - TLS/SSL database connection with certificate validation.
 - **5. Mitigation Strategy:**
-  - *Implemented:*
-    1. Error handling: In production (`NODE_ENV === 'production'`), `errorHandler` suppresses internal error details, returning generic messages and status codes to clients.
-    2. Credential protection: Passwords are encrypted with bcrypt (12 rounds) before storage. `toJSON` implementations on user repositories omit password hashes from API responses.
-    3. Driver URL sanitization: Driver configuration sanitizes database connection strings to ensure secure SSL flags (`sslmode=verify-full`).
+  - *Component Breakdown:*
+    1. *Error Masking (`errorHandler.js`):* In production (`NODE_ENV === 'production'`), `errorHandler` suppresses internal error details, returning generic messages (`Database error occurred`) and omits `stack` traces from JSON responses. In development, stack traces are exposed strictly for debugging.
+    2. *URL Sanitization (`env.js`):* `sanitizeUrl()` normalizes database connection strings, trims surrounding quotes, and automatically upgrades legacy `sslmode=require` flags to `sslmode=verify-full`. It does **not** redact passwords in log strings (which must be handled by avoiding raw URL printing).
+    3. *Password Hashing (`auth.service.js`):* Passwords are encrypted with bcrypt (12 rounds) before storage. `formatUserResponse` explicitly omits `password_hash` from all user API responses.
+    4. *TLS/SSL Configuration (`database.js`):* Database connection uses Neon PostgreSQL with TLS/SSL. In `database.js`, SSL settings enforce certificate validation (`rejectUnauthorized: true`).
 - **6. Verification and Test Evidence:**
-  - *Automated Tests:* `tests/integration/auth.test.js` verified that `GET /api/v1/auth/me` and login responses omit `password_hash`.
-  - *Error Verification:* Verified that 400, 401, 403, 404, and 500 error responses follow standard structured JSON without leaking stack traces.
+  - *Automated Tests:* `tests/integration/auth.test.js` verified that `GET /api/v1/auth/me` and registration responses omit `password_hash`.
+  - *Code Inspection:* Verified error masking logic in `errorHandler.js` and SSL configuration in `database.js` and `env.js`.
 - **7. Related Implementation Files:**
   - `backend/src/middleware/errorHandler.js`
   - `backend/src/config/env.js`
+  - `backend/src/config/database.js`
   - `backend/src/modules/auth/auth.service.js`
   - `backend/.gitignore`
 - **8. Related Git Commit:**
@@ -562,16 +580,30 @@ This document provides a systematic threat model, vulnerability analysis, and se
 
 | Severity Level | Threat Count | Threat IDs | Implemented & Verified |
 | :--- | :---: | :--- | :---: |
-| **CRITICAL** | **5** | THREAT-001, THREAT-003, THREAT-004, THREAT-008, THREAT-009, THREAT-010 | **6 / 6 (100%)** |
-| **HIGH** | **5** | THREAT-005, THREAT-006, THREAT-007, THREAT-011, THREAT-012 | **5 / 5 (100%)** |
-| **MEDIUM** | **3** | THREAT-002, THREAT-013, THREAT-014 | **3 / 3 (100%)** |
+| **CRITICAL** | **6** | THREAT-001, THREAT-003, THREAT-004, THREAT-008, THREAT-009, THREAT-010 | **6 / 6** |
+| **HIGH** | **5** | THREAT-005, THREAT-006, THREAT-007, THREAT-011, THREAT-012 | **5 / 5** |
+| **MEDIUM** | **3** | THREAT-002, THREAT-013, THREAT-014 | **3 / 3** |
 | **LOW** | **0** | — | — |
-| **TOTAL** | **14** | **All threats evaluated** | **14 / 14 (100%)** |
+| **TOTAL** | **14** | **All 14 threats evaluated** | **14 / 14** |
 
-- **Threats Identified:** 14 distinct threats across 7 categories.
-- **Threats with Verified Existing Mitigations:** 14 threats (100% verified against automated tests and repository source code).
-- **Threats Requiring Immediate Remediation:** 0 unmitigated critical or high vulnerabilities in existing code.
-- **Test Evidence Coverage:** All 14 threats are backed by automated tests across Jest unit and integration suites (106 tests total).
+### Implementation and Verification Breakdown
+
+- **Threats Verified by Automated Tests (11 threats):**
+  - THREAT-001 (Concurrency Overdraft): `concurrency.test.js` (Test D)
+  - THREAT-002 (Deadlock Ordering): `concurrency.test.js` (Test E)
+  - THREAT-003 (Idempotency Retries): `idempotency.test.js` (Tests A, B, C)
+  - THREAT-004 (Double-Entry Atomicity): `transactions.test.js`, `ledger_immutability.test.js`
+  - THREAT-005 (Account-Level IDOR): `authorization.test.js` (Test F), `account_number_transfer.test.js`
+  - THREAT-006 (Auditor Privilege Denial): `authorization.test.js` (Test G)
+  - THREAT-007 (Floating-Point Precision): `money.test.js` (8 tests)
+  - THREAT-008 (Ledger Immutability Trigger & Role): `ledger_immutability.test.js` (8 tests)
+  - THREAT-009 (Registration Privilege Escalation): `auth.test.js` (18 tests)
+  - THREAT-011 (Negative/Zero Amounts): `transactions.test.js`, `money.test.js`
+  - THREAT-012 (Token Tampering & Deactivation): `auth.test.js`
+- **Threats Verified by Code Inspection & Hybrid Validation (3 threats):**
+  - THREAT-010 (SQL Injection): Verified 100% parameterized queries across all repositories; automated fuzzing test suite was not implemented.
+  - THREAT-013 (DoS & Rate Limiting): Verified middleware registration and configuration; volumetric connection pool exhaustion was not tested under automated load.
+  - THREAT-014 (Sensitive Credential & Error Exposure): Password hash exclusion verified by automated tests; production error stack suppression and SSL configuration verified by code inspection.
 
 ---
 
@@ -580,9 +612,10 @@ This document provides a systematic threat model, vulnerability analysis, and se
 While the core financial engine, concurrency safeguards, and authorization boundaries are verified, the following architectural limitations should be recognized:
 
 1. **In-Memory Rate Limiting:** The `express-rate-limit` middleware stores request counts in Node.js process memory. In a multi-instance, load-balanced production environment, rate limits are not shared across server nodes without a distributed store (e.g. Redis).
-2. **Stateless JWT Invalidation:** JWT tokens cannot be revoked individually before their 1-hour expiration timestamp unless the user account itself is deactivated (`is_active = false`). There is currently no distributed token blocklist for immediate single-session logout.
+2. **Stateless JWT Invalidation:** JWT tokens cannot be revoked individually before their expiration timestamp unless the user account itself is deactivated (`is_active = false`). There is currently no distributed token blocklist for immediate single-session logout.
 3. **Single-Currency Engine:** All money calculations assume Indian Rupees (INR) represented in integer paise. The system does not currently support multi-currency accounts or real-time foreign exchange conversions.
-4. **Local Contention Latency:** High-frequency simultaneous transactions targeting the same account row are serialized via PostgreSQL row locks (`SELECT FOR UPDATE`), which can introduce queue wait times under extreme load on individual accounts.
+4. **Database-Level Immutability Limitations:** PostgreSQL row-level triggers do not intercept `TRUNCATE` (which is guarded by role permissions), and neither triggers nor role privileges can prevent a superuser or database owner (`neondb_owner`) from disabling triggers or modifying tables directly.
+5. **Absence of Dedicated Load / Penetration Testing:** The current test harness verifies functional correctness, race condition safety, and authorization boundaries, but does not include automated volumetric DDoS or automated SQL injection fuzzing tools.
 
 ---
 
@@ -594,4 +627,5 @@ The following improvements are recommended for future enterprise production mile
 2. **JWT Revocation Blocklist / Refresh Tokens:** Implement short-lived access tokens (15 minutes) paired with rotating refresh tokens stored in PostgreSQL or Redis to enable immediate session termination.
 3. **Automated Idempotency Key Pruning:** Add a scheduled background cron job to archive and purge `idempotency_keys` older than 48 hours to prevent unbounded table growth.
 4. **Multi-Factor Authentication (MFA/2FA):** Implement TOTP-based two-factor authentication (e.g. authenticator apps) for administrative accounts (`ADMIN`, `AUDITOR`) and high-value transfers.
-5. **Web Application Firewall (WAF):** Place an edge WAF (e.g. Cloudflare or AWS WAF) in front of the application to filter volumetric DDoS attacks and automated credential-stuffing botnets.
+5. **Edge Web Application Firewall (WAF):** Place an edge WAF (e.g. Cloudflare or AWS WAF) in front of the application to filter volumetric DDoS attacks and automated credential-stuffing botnets.
+6. **Automated Security Scanning:** Integrate automated DAST/SAST security scanning (e.g. OWASP ZAP, Snyk, SonarQube) into the CI/CD pipeline.
