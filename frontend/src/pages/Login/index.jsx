@@ -86,7 +86,7 @@ const Login = () => {
 
         <form onSubmit={handleSubmit}>
           <FormInput
-            label="Corporate Email Address"
+            label="Email Address"
             id="login-email"
             type="email"
             value={email}
