@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import './index.css';
 
 const FormInput = ({
@@ -14,12 +15,20 @@ const FormInput = ({
   error,
   helperText,
   prefix,
+  showPasswordToggle = false,
   options, // for select
   rows = 3,
   className = '',
   ...props
 }) => {
   const inputId = id || name;
+  const isPassword = type === 'password';
+  const shouldEnableToggle = isPassword || showPasswordToggle;
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+
+  const effectiveType = shouldEnableToggle && isPassword
+    ? (isPasswordVisible ? 'text' : 'password')
+    : type;
 
   return (
     <div className={`form-group ${className}`}>
@@ -70,20 +79,38 @@ const FormInput = ({
             {...props}
           />
         ) : (
-          <input
-            id={inputId}
-            name={name}
-            type={type}
-            value={value}
-            onChange={onChange}
-            placeholder={placeholder}
-            disabled={disabled}
-            className={`form-input ${prefix ? 'form-input-with-prefix' : ''} ${
-              error ? 'form-input-error' : ''
-            } ${disabled ? 'form-input-disabled' : ''}`}
-            required={required}
-            {...props}
-          />
+          <>
+            <input
+              id={inputId}
+              name={name}
+              type={effectiveType}
+              value={value}
+              onChange={onChange}
+              placeholder={placeholder}
+              disabled={disabled}
+              className={`form-input ${prefix ? 'form-input-with-prefix' : ''} ${
+                shouldEnableToggle && isPassword ? 'form-input-with-toggle' : ''
+              } ${error ? 'form-input-error' : ''} ${disabled ? 'form-input-disabled' : ''}`}
+              required={required}
+              {...props}
+            />
+            {shouldEnableToggle && isPassword && (
+              <button
+                type="button"
+                className="form-password-toggle"
+                onClick={() => setIsPasswordVisible((prev) => !prev)}
+                aria-label={isPasswordVisible ? 'Hide password' : 'Show password'}
+                aria-pressed={isPasswordVisible}
+                tabIndex={0}
+              >
+                {isPasswordVisible ? (
+                  <EyeOff size={18} aria-hidden="true" />
+                ) : (
+                  <Eye size={18} aria-hidden="true" />
+                )}
+              </button>
+            )}
+          </>
         )}
       </div>
 

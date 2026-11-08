@@ -143,6 +143,7 @@ const Register = () => {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Min. 8 characters (upper, lower, digit, symbol)"
             required
+            showPasswordToggle
           />
 
           <FormInput
@@ -154,6 +155,7 @@ const Register = () => {
             onChange={(e) => setConfirmPassword(e.target.value)}
             placeholder="Re-enter password"
             required
+            showPasswordToggle
           />
 
           <button

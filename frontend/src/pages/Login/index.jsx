@@ -115,6 +115,7 @@ const Login = () => {
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Enter secure password"
             required
+            showPasswordToggle
           />
 
           <button
