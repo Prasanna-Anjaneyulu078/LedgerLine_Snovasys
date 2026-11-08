@@ -63,8 +63,10 @@ export function errorHandler(err, req, res, next) {
     ...(env.NODE_ENV === 'development' ? { stack: err.stack } : {}),
   };
 
+  res.locals.errorMessage = error.message;
+
   if (error.statusCode >= 500) {
-    logger.error(
+    logger.debug(
       {
         err: {
           message: err.message,

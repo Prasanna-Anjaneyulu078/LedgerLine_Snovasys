@@ -18,24 +18,15 @@ async function startServer() {
 
   server = app.listen(env.PORT, () => {
     const banner = [
-      '==================================================',
-      '                 LEDGERLINE API',
-      '==================================================',
-      `Environment       : ${env.NODE_ENV}`,
-      'Server Status     : RUNNING',
-      `Server URL        : http://localhost:${env.PORT}`,
-      `Health Check      : http://localhost:${env.PORT}/health`,
-      `API Base URL      : http://localhost:${env.PORT}/api/v1`,
-      `API Documentation : http://localhost:${env.PORT}/api-docs`,
-      `Database          : ${dbStatus}`,
-      '--------------------------------------------------',
-      'Demonstration Credentials (Local Development Only):',
-      '1. Admin          : prasanna.admin@example.com / Prasanna@LL26#Admin',
-      '2. Auditor        : sasank.auditor@example.com / Sasank@LL26#Audit',
-      '3. Account Holder : kavi@example.com / Kavi@LL26#User01',
-      '   (User 2 - Ravi): ravi@example.com / Ravi@LL26#User02',
-      'WARNING: Demonstration credentials only. Never use in production.',
-      '==================================================',
+      '========================================',
+      '           LEDGERLINE API',
+      '========================================',
+      `Environment : ${env.NODE_ENV}`,
+      'Status      : RUNNING',
+      `Server      : http://localhost:${env.PORT}`,
+      `API         : http://localhost:${env.PORT}/api/v1`,
+      `Database    : ${dbStatus}`,
+      '========================================',
     ].join('\n');
 
     console.log(`\n${banner}\n`);
