@@ -192,8 +192,8 @@ const Users = () => {
     },
   ];
 
-  const totalUsers = pagination.totalUsers;
-  const totalPages = pagination.totalPages;
+  const totalUsers = Number(pagination?.totalUsers ?? 0);
+  const totalPages = Number(pagination?.totalPages ?? 0);
   const startItem = totalUsers === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
   const endItem = Math.min(currentPage * PAGE_SIZE, totalUsers);
 

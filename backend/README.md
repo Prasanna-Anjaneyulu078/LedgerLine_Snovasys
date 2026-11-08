@@ -162,14 +162,27 @@ Money-moving requests (`/deposit`, `/withdraw`, `/transfer`) support an `Idempot
 
 ## 7. Demo Accounts & Development Credentials
 
-The seed script creates demo accounts with known credentials for local development:
+The seed script creates four demonstration accounts with known credentials for local development:
 
-| Role | Email | Password | Initial Accounts & Balances |
-| :--- | :--- | :--- | :--- |
-| **ADMIN** | `admin@ledgerline.internal` | `Admin@123456` | System-wide administrative access |
-| **ACCOUNT_HOLDER** | `alice@example.com` | `Alice@123456` | `LL-ACC-1001` (Savings: ₹5,000.00)<br/>`LL-ACC-1002` (Checking: ₹2,500.00) |
-| **ACCOUNT_HOLDER** | `bob@example.com` | `Bob@123456` | `LL-ACC-2001` (Savings: ₹10,000.00) |
-| **AUDITOR** | `auditor@ledgerline.internal` | `Auditor@123456` | Read-only access to ledger, statements, and audit |
+| Role | Display Name | Email | Password | Initial Accounts & Balances |
+| :--- | :--- | :--- | :--- | :--- |
+| **ADMIN** | Prasanna Anjaneyulu | `prasanna.admin@example.com` | `Prasanna@LL26#Admin` | System-wide administrative access |
+| **AUDITOR** | Sasank | `sasank.auditor@example.com` | `Sasank@LL26#Audit` | Read-only access to ledger, statements, and audit |
+| **ACCOUNT_HOLDER** | Kavi | `kavi@example.com` | `Kavi@LL26#User01` | `LL-ACC-1001` (Savings: ₹5,000.00)<br/>`LL-ACC-1002` (Checking: ₹2,500.00) |
+| **ACCOUNT_HOLDER** | Ravi | `ravi@example.com` | `Ravi@LL26#User02` | `LL-ACC-2001` (Savings: ₹10,000.00) |
+
+> [!WARNING]
+> **Local Demonstration Only:** These credentials are for local development and demonstration testing only. Do not use them for production accounts. Production environments must enforce strict password generation, environment-variable-backed secrets, and administrative access controls. Never store plaintext credentials in production repositories.
+
+### Initializing the Demonstration Database
+To apply all schema migrations and seed the four demonstration accounts:
+```bash
+# Run schema migrations
+npm run migrate
+
+# Seed demonstration accounts and initial ledger balances
+npm run seed
+```
 
 ---
 

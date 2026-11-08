@@ -239,14 +239,28 @@ npm run dev
 
 ## 7. Default Seed Accounts & Demo Credentials
 
-The database seeder pre-populates the following verified institutional users:
+The database seeder pre-populates the following four verified demonstration identities:
 
-| Role | Name | Email Address | Password | Associated Accounts |
+| Role | Display Name | Email Address | Password | Associated Accounts |
 | :--- | :--- | :--- | :--- | :--- |
-| **System Admin** | System Administrator | `admin@ledgerline.internal` | `Admin@123456` | Full administrative oversight |
-| **Account Holder** | Alice Sharma | `alice@example.com` | `Alice@123456` | `LL-ACC-1001`, `LL-ACC-1002`, `LL-ACC-1003` |
-| **Account Holder** | Bob Sharma | `bob@example.com` | `Bob@123456` | `LL-ACC-2001`, `LL-ACC-2002` |
-| **Compliance Auditor** | Compliance Auditor | `auditor@ledgerline.internal` | `Auditor@123456` | System-wide read-only inspection |
+| **ADMIN** | Prasanna Anjaneyulu | `prasanna.admin@example.com` | `Prasanna@LL26#Admin` | Full administrative oversight |
+| **AUDITOR** | Sasank | `sasank.auditor@example.com` | `Sasank@LL26#Audit` | System-wide read-only inspection |
+| **ACCOUNT_HOLDER** | Kavi | `kavi@example.com` | `Kavi@LL26#User01` | `LL-ACC-1001` (Savings: ₹5,000.00)<br/>`LL-ACC-1002` (Checking: ₹2,500.00) |
+| **ACCOUNT_HOLDER** | Ravi | `ravi@example.com` | `Ravi@LL26#User02` | `LL-ACC-2001` (Savings: ₹10,000.00) |
+
+> [!WARNING]
+> **Local Demonstration Only:** These credentials are for local demonstration and evaluation only. Do not use them for production accounts. Production deployments must enforce robust identity management, secure credential rotations, and strict environment isolation.
+
+### Demonstration Database Initialization
+To initialize the demonstration database with the required schema and seed accounts:
+```bash
+# 1. Run database migrations
+cd backend
+npm run migrate
+
+# 2. Seed the 4 demonstration accounts and opening ledger entries
+npm run seed
+```
 
 > [!NOTE]
 > **Evaluation Credentials:** For testing and evaluation, enter any of the pre-seeded credentials above into the `/login` portal to inspect role-specific capabilities and permission boundaries. Demo credentials are deliberately omitted from the public UI for a clean, secure authentication experience.

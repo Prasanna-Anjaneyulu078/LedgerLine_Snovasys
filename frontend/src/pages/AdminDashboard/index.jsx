@@ -225,6 +225,7 @@ const AdminDashboard = () => {
 
   const trends = dashboardData?.transactionTrends || [];
   const recentTransactions = dashboardData?.recentTransactions || [];
+  const recentUsers = dashboardData?.recentUsers || [];
 
   // Compute maximum volume across trends for proportional SVG/CSS bar heights
   const maxTrendVolume = Math.max(
@@ -339,6 +340,48 @@ const AdminDashboard = () => {
       render: (row) => (
         <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
           {formatDate(row.timestamp || row.createdAt)}
+        </span>
+      ),
+    },
+  ];
+
+  const recentUserColumns = [
+    {
+      header: 'User Identity',
+      accessor: 'name',
+      render: (row) => (
+        <span style={{ fontWeight: 600, color: 'var(--text-color)' }}>
+          {row.name || row.fullName || '—'}
+        </span>
+      ),
+    },
+    {
+      header: 'Email Address',
+      accessor: 'email',
+      render: (row) => (
+        <span style={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>
+          {row.email}
+        </span>
+      ),
+    },
+    {
+      header: 'Role',
+      accessor: 'role',
+      render: (row) => <StatusBadge status={row.role} />,
+    },
+    {
+      header: 'Status',
+      accessor: 'status',
+      align: 'center',
+      render: (row) => <StatusBadge status={row.status} />,
+    },
+    {
+      header: 'Registration Date',
+      accessor: 'createdAt',
+      align: 'right',
+      render: (row) => (
+        <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+          {formatDate(row.createdAt, false)}
         </span>
       ),
     },
@@ -619,6 +662,29 @@ const AdminDashboard = () => {
               columns={recentTransactionColumns}
               data={recentTransactions}
               emptyMessage="No financial transactions recorded in the database yet."
+            />
+          </div>
+
+          {/* Recent Registered Users Section */}
+          <div className="admin-data-section">
+            <div className="admin-data-section-header">
+              <div>
+                <h3 className="admin-data-section-title">
+                  Recent Registered Identities
+                </h3>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', margin: '2px 0 0 0' }}>
+                  Database-backed user identities ({overview.totalUsers} registered in PostgreSQL)
+                </p>
+              </div>
+              <Link to="/admin/users" className="admin-data-section-link">
+                Manage All Users &rarr;
+              </Link>
+            </div>
+
+            <DataTable
+              columns={recentUserColumns}
+              data={recentUsers}
+              emptyMessage="No registered user records found in the database."
             />
           </div>
 

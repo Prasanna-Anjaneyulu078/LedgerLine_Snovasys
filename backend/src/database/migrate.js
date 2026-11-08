@@ -20,6 +20,7 @@ const MIGRATION_TABLE_MAP = {
   '006_create_audit_events.sql': 'audit_events',
   '007_prevent_ledger_modification.sql': 'ledger_entries',
   '008_create_refresh_tokens.sql': 'refresh_tokens',
+  '009_update_demo_users.sql': 'users',
 };
 
 /**

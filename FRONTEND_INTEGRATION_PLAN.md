@@ -614,14 +614,17 @@ App
 
 ---
 
-## 7. Frontend Mock Credentials (from Backend Seed Script)
+## 7. Demonstration Credentials (from Backend Seed Script)
 
-For development and evaluation, the backend seed script (`npm run seed`) provisions:
+For local development and evaluation, the backend seed script (`npm run seed`) provisions four authorized demonstration accounts:
 
-| Role | Email | Password | Pre-loaded Accounts |
-| :--- | :--- | :--- | :--- |
-| **Admin** | `admin@ledgerline.internal` | `Admin@123456` | System Administration |
-| **Account Holder (Alice)** | `alice@example.com` | `Alice@123456` | `LL-ACC-1001` (₹5,000.00)<br/>`LL-ACC-1002` (₹2,500.00) |
-| **Account Holder (Bob)** | `bob@example.com` | `Bob@123456` | `LL-ACC-2001` (₹10,000.00) |
-| **Auditor** | `auditor@ledgerline.internal` | `Auditor@123456` | Read-only Audit & Ledger View |
+| Role | Display Name | Email | Password | Pre-loaded Accounts |
+| :--- | :--- | :--- | :--- | :--- |
+| **ADMIN** | Prasanna Anjaneyulu | `prasanna.admin@example.com` | `Prasanna@LL26#Admin` | System Administration |
+| **AUDITOR** | Sasank | `sasank.auditor@example.com` | `Sasank@LL26#Audit` | Read-only Audit & Ledger View |
+| **ACCOUNT_HOLDER** | Kavi | `kavi@example.com` | `Kavi@LL26#User01` | `LL-ACC-1001` (₹5,000.00)<br/>`LL-ACC-1002` (₹2,500.00) |
+| **ACCOUNT_HOLDER** | Ravi | `ravi@example.com` | `Ravi@LL26#User02` | `LL-ACC-2001` (₹10,000.00) |
+
+> [!WARNING]
+> **Demonstration Credentials Notice:** These are local demonstration credentials only. Do not use them for production accounts. Production environments must never store default passwords or commit demo secrets.
 

@@ -111,6 +111,17 @@ export function normalizeDashboardOverview(data) {
       initiatorEmail: tx.initiatorEmail || tx.initiator_email,
       createdAt: tx.createdAt || tx.created_at,
     })),
+    recentUsers: (data.recentUsers || []).map((u) => ({
+      ...u,
+      id: u.id,
+      name: u.fullName || u.full_name || u.name,
+      fullName: u.fullName || u.full_name || u.name,
+      email: u.email,
+      role: u.role,
+      isActive: u.isActive ?? u.is_active ?? true,
+      status: (u.isActive ?? u.is_active ?? true) ? 'ACTIVE' : 'SUSPENDED',
+      createdAt: u.createdAt || u.created_at,
+    })),
   };
 }
 

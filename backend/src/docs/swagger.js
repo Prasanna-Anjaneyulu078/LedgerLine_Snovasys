@@ -48,17 +48,17 @@ export const swaggerDocument = {
         type: 'object',
         required: ['fullName', 'email', 'password'],
         properties: {
-          fullName: { type: 'string', example: 'Alice Sharma' },
-          email: { type: 'string', format: 'email', example: 'alice@example.com' },
-          password: { type: 'string', format: 'password', example: 'Alice@123456' },
+          fullName: { type: 'string', example: 'Kavi' },
+          email: { type: 'string', format: 'email', example: 'kavi@example.com' },
+          password: { type: 'string', format: 'password', example: 'Kavi@LL26#User01' },
         },
       },
       UserLogin: {
         type: 'object',
         required: ['email', 'password'],
         properties: {
-          email: { type: 'string', format: 'email', example: 'alice@example.com' },
-          password: { type: 'string', format: 'password', example: 'Alice@123456' },
+          email: { type: 'string', format: 'email', example: 'kavi@example.com' },
+          password: { type: 'string', format: 'password', example: 'Kavi@LL26#User01' },
         },
       },
       CreateAccountRequest: {

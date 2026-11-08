@@ -17,9 +17,9 @@
 - **Request Body**:
   ```json
   {
-    "fullName": "Alice Sharma",
-    "email": "alice@example.com",
-    "password": "Alice@123456",
+    "fullName": "Kavi",
+    "email": "kavi@example.com",
+    "password": "Kavi@LL26#User01",
     "role": "ACCOUNT_HOLDER"
   }
   ```
@@ -32,8 +32,8 @@
     "data": {
       "user": {
         "id": "5bd2ab30-5a86-4298-924a-558b88838a10",
-        "fullName": "Alice Sharma",
-        "email": "alice@example.com",
+        "fullName": "Kavi",
+        "email": "kavi@example.com",
         "role": "ACCOUNT_HOLDER",
         "isActive": true
       },
@@ -50,8 +50,8 @@
 - **Request Body**:
   ```json
   {
-    "email": "alice@example.com",
-    "password": "Alice@123456"
+    "email": "kavi@example.com",
+    "password": "Kavi@LL26#User01"
   }
   ```
 - **Response** (`200 OK`): Returns sanitized user and signed JWT bearer token.

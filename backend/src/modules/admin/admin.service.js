@@ -84,7 +84,14 @@ export class AdminService {
       LIMIT 8;
     `;
 
-    const [usersRes, accountsRes, txnsRes, auditRes, trendsRes, recentTxnsRes, typeDistRes] = await Promise.all([
+    const recentUsersQuery = `
+      SELECT id, full_name, email, role, is_active, created_at
+      FROM users
+      ORDER BY created_at DESC
+      LIMIT 6;
+    `;
+
+    const [usersRes, accountsRes, txnsRes, auditRes, trendsRes, recentTxnsRes, typeDistRes, recentUsersRes] = await Promise.all([
       pool.query(usersQuery),
       pool.query(accountsQuery),
       pool.query(txnsQuery),
@@ -92,6 +99,7 @@ export class AdminService {
       pool.query(trendsQuery),
       pool.query(recentTxnsQuery),
       pool.query(typeDistQuery),
+      pool.query(recentUsersQuery),
     ]);
 
     const usersData = usersRes.rows[0];
@@ -192,11 +200,21 @@ export class AdminService {
       createdAt: tx.created_at,
     }));
 
+    const recentUsers = recentUsersRes.rows.map((u) => ({
+      id: u.id,
+      fullName: u.full_name,
+      email: u.email,
+      role: u.role,
+      isActive: u.is_active,
+      createdAt: u.created_at,
+    }));
+
     return {
       overview,
       transactionTrends,
       transactionTypeDistribution,
       recentTransactions,
+      recentUsers,
     };
   }
 

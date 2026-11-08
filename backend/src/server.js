@@ -29,11 +29,12 @@ async function startServer() {
       `API Documentation : http://localhost:${env.PORT}/api-docs`,
       `Database          : ${dbStatus}`,
       '--------------------------------------------------',
-      'Default User Credentials:',
-      '1. Admin          : admin@ledgerline.internal / Admin@123456',
-      '2. Account Holder : alice@example.com / Alice@123456',
-      '3. Auditor        : auditor@ledgerline.internal / Auditor@123456',
-      '   (User 2 - Bob) : bob@example.com / Bob@123456',
+      'Demonstration Credentials (Local Development Only):',
+      '1. Admin          : prasanna.admin@example.com / Prasanna@LL26#Admin',
+      '2. Auditor        : sasank.auditor@example.com / Sasank@LL26#Audit',
+      '3. Account Holder : kavi@example.com / Kavi@LL26#User01',
+      '   (User 2 - Ravi): ravi@example.com / Ravi@LL26#User02',
+      'WARNING: Demonstration credentials only. Never use in production.',
       '==================================================',
     ].join('\n');
 
