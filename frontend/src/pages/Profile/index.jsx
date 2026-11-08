@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShieldCheck, Calendar, User, Mail, Shield, Wallet } from 'lucide-react';
+import { Wallet } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import authService from '../../services/authService.js';
 import DashboardLayout from '../../layouts/DashboardLayout/index.jsx';
@@ -112,18 +112,6 @@ const Profile = () => {
                 </div>
               </div>
             )}
-
-            <div className="profile-security-box">
-              <ShieldCheck size={20} style={{ color: 'var(--success-color)', flexShrink: 0, marginTop: '2px' }} />
-              <div>
-                <strong style={{ color: 'var(--text-color)', display: 'block', marginBottom: '2px' }}>
-                  Strict RBAC & Audit Enforcement Active
-                </strong>
-                Your current session is anchored to institutional identity verification via PostgreSQL.
-                All transactional events, status modifications, and ledger inquiries are
-                cryptographically attributed to this user ID.
-              </div>
-            </div>
           </div>
         )}
       </div>
