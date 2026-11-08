@@ -61,8 +61,8 @@ export class TransactionService {
    * Process external funds deposit into an account
    */
   async deposit({ accountNumber, accountId, amount, description = 'Account deposit' }, user, idempotencyKey = null, context = {}) {
-    if (user.role === 'AUDITOR') {
-      throw AppError.forbidden('Auditors are restricted from initiating financial transactions');
+    if (user.role !== 'ACCOUNT_HOLDER') {
+      throw AppError.forbidden('Only Account Holders are authorized to deposit funds into accounts');
     }
 
     const amountPaise = toPaise(amount);
@@ -79,6 +79,11 @@ export class TransactionService {
     const targetAccount = await accountRepository.findByIdOrAccountNumber(targetIdentifier);
     if (!targetAccount) {
       throw AppError.notFound('Destination account not found');
+    }
+
+    // Account ownership authorization check: Account Holders can only deposit into accounts they own
+    if (targetAccount.owner_id !== user.id) {
+      throw AppError.forbidden('You do not have permission to deposit to this account');
     }
 
     if (targetAccount.status !== 'ACTIVE') {
@@ -126,6 +131,10 @@ export class TransactionService {
       const account = await accountRepository.findByIdForUpdate(resolvedAccountId, client);
       if (!account) {
         throw AppError.notFound('Destination account not found');
+      }
+
+      if (account.owner_id !== user.id) {
+        throw AppError.forbidden('You do not have permission to deposit to this account');
       }
 
       if (account.status !== 'ACTIVE') {
@@ -240,8 +249,8 @@ export class TransactionService {
    * Process withdrawal from an account
    */
   async withdraw({ accountNumber, accountId, amount, description = 'Account withdrawal' }, user, idempotencyKey = null, context = {}) {
-    if (user.role === 'AUDITOR') {
-      throw AppError.forbidden('Auditors are restricted from initiating financial transactions');
+    if (user.role !== 'ACCOUNT_HOLDER') {
+      throw AppError.forbidden('Only Account Holders are authorized to withdraw funds from accounts');
     }
 
     const amountPaise = toPaise(amount);
@@ -260,8 +269,8 @@ export class TransactionService {
       throw AppError.notFound('Source account not found');
     }
 
-    // Ownership authorization check (fast-path pre-check)
-    if (user.role !== 'ADMIN' && targetAccount.owner_id !== user.id) {
+    // Ownership authorization check: Account Holders can only withdraw from accounts they own
+    if (targetAccount.owner_id !== user.id) {
       throw AppError.forbidden('You do not have permission to withdraw from this account');
     }
 
@@ -312,7 +321,7 @@ export class TransactionService {
       }
 
       // Ownership authorization check inside lock
-      if (user.role !== 'ADMIN' && account.owner_id !== user.id) {
+      if (account.owner_id !== user.id) {
         throw AppError.forbidden('You do not have permission to withdraw from this account');
       }
 
@@ -446,8 +455,8 @@ export class TransactionService {
     idempotencyKey = null,
     context = {}
   ) {
-    if (user.role === 'AUDITOR') {
-      throw AppError.forbidden('Auditors are restricted from initiating financial transactions');
+    if (user.role !== 'ACCOUNT_HOLDER') {
+      throw AppError.forbidden('Only Account Holders are authorized to transfer funds');
     }
 
     const rawSourceAccNum = typeof sourceAccountNumber === 'string' ? sourceAccountNumber.trim() : null;
@@ -504,7 +513,7 @@ export class TransactionService {
     const resolvedDestAccNum = resolvedDestAccount.account_number;
 
     // Fast-path security check: Source account ownership
-    if (user.role !== 'ADMIN' && resolvedSourceAccount.owner_id !== user.id) {
+    if (resolvedSourceAccount.owner_id !== user.id) {
       await auditRepository
         .create({
           actorId: user.id,
@@ -622,7 +631,7 @@ export class TransactionService {
       }
 
       // Re-verify ownership inside transaction lock boundary
-      if (user.role !== 'ADMIN' && sourceAccount.owner_id !== user.id) {
+      if (sourceAccount.owner_id !== user.id) {
         throw AppError.forbidden('You do not have permission to transfer funds from this source account');
       }
 

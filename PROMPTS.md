@@ -1312,6 +1312,98 @@ The goal is to make the Admin Panel fully functional and database-driven, not ju
 
 ---
 
+### Phase 9: Role-Based Financial Operations Enforcement — Admin, Account Holder, and Auditor Separation of Duties
+
+**Date:** 2026-11-08
+
+#### 1. Objective
+Update LedgerLine role permissions so that financial money-movement operations (deposits, withdrawals, transfers) belong exclusively to verified `ACCOUNT_HOLDER` users, while `ADMIN` handles system administration (user management, account freeze/suspend, audit inspection) and `AUDITOR` handles independent read-only compliance inspection. Align the implementation with the Snovasys Fresher Hiring Challenge 2026 problem statement and its seven-day development plan.
+
+#### 2. Original AI Prompt
+*Verbatim prompt from conversation history:*
+```text
+# Task: Enforce Role-Based Financial Operations — Admin, Account Holder and Auditor
+
+Update LedgerLine's role permissions so that financial money-movement operations belong exclusively to Account Holders, while Admin handles system administration and Auditor has read-only access.
+
+This decision is based on the Snovasys Fresher Hiring Challenge 2026 problem statement and its seven-day development plan.
+
+## 1. Final Role Responsibilities
+
+### ADMIN — System Administration
+Admin should be responsible for:
+- View the system-wide dashboard and analytics.
+- Manage users.
+- View and manage account statuses.
+- View system-wide accounts.
+- View all permitted transaction records.
+- View the global ledger.
+- Review audit events and security activity.
+- Investigate refused transactions.
+
+Admin must NOT be able to:
+- Initiate deposits.
+- Initiate withdrawals.
+- Initiate transfers.
+- Directly modify account balances.
+- Create arbitrary ledger entries.
+- Edit or delete posted ledger entries.
+
+### ACCOUNT_HOLDER — Financial Operations
+Account Holders should be able to:
+- View their own accounts and balances.
+- Deposit money into their own accounts.
+- Withdraw money from their own accounts.
+- Transfer money between their own accounts or to active destination accounts.
+- View their own transaction history.
+- View account statements.
+- View refused transaction attempts.
+
+### AUDITOR — Read-Only Oversight
+Auditors should be responsible for:
+- View the global ledger.
+- Review all permitted transaction records.
+- Review audit events.
+- View statements within permitted scope.
+```
+
+#### 3. AI Suggestion
+- Suggested updating frontend visibility checks in `Transactions/index.jsx` using `role !== 'AUDITOR' && role !== 'ADMIN'`.
+- Suggested relying primarily on service-level ownership checks without route-level role authorization middleware.
+
+#### 4. Human Review and Correction
+- Mandated **defense-in-depth authorization**:
+  1. **Route Middleware Layer:** Added explicit `authorize('ACCOUNT_HOLDER')` middleware to `/deposit`, `/withdraw`, and `/transfer` in `transaction.routes.js` to reject non-account-holders at the HTTP gateway.
+  2. **Service Layer Defense:** Added explicit `user.role !== 'ACCOUNT_HOLDER'` guards in `deposit()`, `withdraw()`, and `transfer()` in `transaction.service.js` returning HTTP 403 Forbidden, and removed legacy `user.role !== 'ADMIN'` bypasses so that even if route middleware is bypassed, no administrative user can ever initiate money movements.
+  3. **Row-Level Lock Boundary:** Maintained strict account ownership verification (`owner_id === user.id`) before locking and inside row-level `SELECT ... FOR UPDATE` transaction blocks.
+  4. **Frontend UI Enforcement:** Restricted action buttons, query parameter auto-open handlers, and modal rendering in `Transactions/index.jsx` strictly to `role === 'ACCOUNT_HOLDER'`.
+  5. **Documentation Alignment:** Updated `backend/docs/API_DOCUMENTATION.md`, `backend/README.md`, and `backend/src/docs/swagger.js` with an authoritative Role Permissions Matrix.
+
+#### 5. Final Implementation
+- `backend/src/modules/transactions/transaction.routes.js`: Added `authorize('ACCOUNT_HOLDER')` middleware to `/deposit`, `/withdraw`, and `/transfer`.
+- `backend/src/modules/transactions/transaction.service.js`:
+  - `deposit`: Added role check (`user.role !== 'ACCOUNT_HOLDER'`) and account ownership check (`targetAccount.owner_id !== user.id`).
+  - `withdraw`: Added role check (`user.role !== 'ACCOUNT_HOLDER'`) and removed `user.role !== 'ADMIN'` ownership bypass.
+  - `transfer`: Added role check (`user.role !== 'ACCOUNT_HOLDER'`) and removed `user.role !== 'ADMIN'` ownership bypass in fast-path and locked transfer execution.
+- `frontend/src/pages/Transactions/index.jsx`:
+  - Action buttons (Deposit, Withdraw, Transfer) restricted to `{role === 'ACCOUNT_HOLDER' && ...}`.
+  - Query parameter handler (`?action=deposit|withdraw|transfer`) restricted to `role === 'ACCOUNT_HOLDER'`.
+  - Deposit, Withdraw, and Transfer `ConfirmModal` components wrapped in `{role === 'ACCOUNT_HOLDER' && ...}` so they are not rendered in the DOM for Admin or Auditor.
+  - Added role check guards to `handleDepositSubmit`, `handleWithdrawSubmit`, and `handleTransferSubmit`.
+- `backend/docs/API_DOCUMENTATION.md`: Added comprehensive Role Permissions Matrix and updated endpoint authorization details for Deposit, Withdraw, and Transfer.
+- `backend/README.md`: Updated Section 7.3 transaction endpoints table authorization column to `Account Holder (Owner Only)`.
+- `backend/src/docs/swagger.js`: Updated OpenAPI endpoint summaries, descriptions, and 403 Forbidden response schemas for `/transactions/deposit`, `/transactions/withdraw`, and `/transactions/transfer`.
+
+#### 6. Verification
+- Backend syntax verification: `node --check` executed cleanly on all modified backend files with zero errors.
+- Frontend build verification: `npm --prefix frontend run build` completed cleanly in 228ms with zero errors.
+- Adhered strictly to execution constraints: No test suites run, no database mutations performed, and no Git commits staged.
+
+#### 7. Related Commit
+- Pending user approval.
+
+---
+
 ## Documentation Notes
 
 - All original prompts are genuine, verbatim records extracted from active conversation history.

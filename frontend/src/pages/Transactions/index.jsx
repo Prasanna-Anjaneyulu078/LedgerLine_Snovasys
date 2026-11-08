@@ -138,12 +138,12 @@ const Transactions = () => {
     fetchTransactions();
   }, [fetchTransactions]);
 
-  // Check URL query parameters for action
+  // Check URL query parameters for action (strictly restricted to ACCOUNT_HOLDER)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const action = params.get('action');
     const acc = params.get('account');
-    if (action && ['deposit', 'withdraw', 'transfer'].includes(action) && role !== 'AUDITOR') {
+    if (action && ['deposit', 'withdraw', 'transfer'].includes(action) && role === 'ACCOUNT_HOLDER') {
       setActiveModal(action);
       if (acc) {
         setFormAccountId(acc);
@@ -212,6 +212,11 @@ const Transactions = () => {
   const handleDepositSubmit = async () => {
     if (isSubmitting) return;
 
+    if (role !== 'ACCOUNT_HOLDER') {
+      setFormError('Financial operations are restricted to Account Holders only.');
+      return;
+    }
+
     if (!formAccountId || !formAmount || parseFloat(formAmount) <= 0) {
       setFormError('Please enter a valid target account and positive amount.');
       return;
@@ -275,6 +280,11 @@ const Transactions = () => {
   const handleWithdrawSubmit = async () => {
     if (isSubmitting) return;
 
+    if (role !== 'ACCOUNT_HOLDER') {
+      setFormError('Financial operations are restricted to Account Holders only.');
+      return;
+    }
+
     if (!formAccountId || !formAmount || parseFloat(formAmount) <= 0) {
       setFormError('Please enter a valid source account and positive amount.');
       return;
@@ -337,6 +347,11 @@ const Transactions = () => {
 
   const handleTransferSubmit = async () => {
     if (isSubmitting) return;
+
+    if (role !== 'ACCOUNT_HOLDER') {
+      setFormError('Financial operations are restricted to Account Holders only.');
+      return;
+    }
 
     if (!formAccountId || !formDestAccountId || !formAmount || parseFloat(formAmount) <= 0) {
       setFormError('Please specify source, destination, and a valid positive amount.');
@@ -510,8 +525,8 @@ const Transactions = () => {
             </p>
           </div>
 
-          {/* Action Buttons: strictly hidden for AUDITOR */}
-          {role !== 'AUDITOR' && (
+          {/* Action Buttons: exclusively for ACCOUNT_HOLDER */}
+          {role === 'ACCOUNT_HOLDER' && (
             <div className="transactions-action-buttons">
               <button
                 type="button"
@@ -656,266 +671,271 @@ const Transactions = () => {
           />
         )}
 
-        {/* DEPOSIT MODAL */}
-        <ConfirmModal
-          isOpen={activeModal === 'deposit'}
-          title="Deposit Funds"
-          confirmText={isRetryAttempt ? 'Retry Deposit' : 'Execute Deposit'}
-          onConfirm={handleDepositSubmit}
-          onClose={closeModal}
-          isLoading={isSubmitting}
-        >
-          {formSuccess ? (
-            <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--success-color)' }}>
-              <CheckCircle2 size={36} style={{ margin: '0 auto 8px' }} />
-              <p style={{ fontWeight: 600 }}>{formSuccess}</p>
-            </div>
-          ) : (
-            <div>
-              {/* Idempotency Protection Indicator Badge */}
-              <div className="idempotency-badge">
-                <ShieldCheck size={16} className="idempotency-icon" />
-                <span>Duplicate transaction protection is enabled.</span>
-              </div>
-
-              {/* Uncertain Outcome Alert */}
-              {uncertainOutcome && (
-                <div className="tx-uncertain-alert">
-                  <div className="tx-uncertain-alert-header">
-                    <AlertTriangle size={16} />
-                    <span>Uncertain Transaction Outcome</span>
+        {/* FINANCIAL TRANSACTION MODALS: ACCOUNT_HOLDER ONLY */}
+        {role === 'ACCOUNT_HOLDER' && (
+          <>
+            {/* DEPOSIT MODAL */}
+            <ConfirmModal
+              isOpen={activeModal === 'deposit'}
+              title="Deposit Funds"
+              confirmText={isRetryAttempt ? 'Retry Deposit' : 'Execute Deposit'}
+              onConfirm={handleDepositSubmit}
+              onClose={closeModal}
+              isLoading={isSubmitting}
+            >
+              {formSuccess ? (
+                <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--success-color)' }}>
+                  <CheckCircle2 size={36} style={{ margin: '0 auto 8px' }} />
+                  <p style={{ fontWeight: 600 }}>{formSuccess}</p>
+                </div>
+              ) : (
+                <div>
+                  {/* Idempotency Protection Indicator Badge */}
+                  <div className="idempotency-badge">
+                    <ShieldCheck size={16} className="idempotency-icon" />
+                    <span>Duplicate transaction protection is enabled.</span>
                   </div>
-                  <p>
-                    A network timeout or connection interruption occurred before the server response was received.
-                    The ledger may have completed this operation. Please verify your <strong>Transaction Journal</strong>.
-                    If you choose to retry, duplicate protection guarantees no double-charging.
-                  </p>
+
+                  {/* Uncertain Outcome Alert */}
+                  {uncertainOutcome && (
+                    <div className="tx-uncertain-alert">
+                      <div className="tx-uncertain-alert-header">
+                        <AlertTriangle size={16} />
+                        <span>Uncertain Transaction Outcome</span>
+                      </div>
+                      <p>
+                        A network timeout or connection interruption occurred before the server response was received.
+                        The ledger may have completed this operation. Please verify your <strong>Transaction Journal</strong>.
+                        If you choose to retry, duplicate protection guarantees no double-charging.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Retry with Same Key Notice */}
+                  {isRetryAttempt && !uncertainOutcome && (
+                    <div className="idempotency-retry-notice">
+                      <RefreshCw size={14} className="retry-icon" />
+                      <span>Safe Retry Active: Resubmitting with original transaction key to prevent duplicate ledger postings.</span>
+                    </div>
+                  )}
+
+                  {formError && !uncertainOutcome && (
+                    <div style={{ padding: '8px 12px', backgroundColor: 'var(--danger-bg)', color: 'var(--danger-text)', borderRadius: '4px', marginBottom: '12px', fontSize: '0.8125rem' }}>
+                      {formError}
+                    </div>
+                  )}
+
+                  <FormInput
+                    label="Target Credit Account"
+                    type="select"
+                    value={formAccountId}
+                    onChange={handleAccountIdChange}
+                    options={accountOptions}
+                    required
+                    disabled={isSubmitting}
+                  />
+                  <FormInput
+                    label="Deposit Amount"
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    value={formAmount}
+                    onChange={handleAmountChange}
+                    placeholder="0.00"
+                    prefix="₹"
+                    required
+                    disabled={isSubmitting}
+                  />
+                  <FormInput
+                    label="Transaction Description / Reference Note"
+                    type="text"
+                    value={formDescription}
+                    onChange={handleDescriptionChange}
+                    placeholder="e.g. Inward institutional deposit"
+                    disabled={isSubmitting}
+                  />
                 </div>
               )}
+            </ConfirmModal>
 
-              {/* Retry with Same Key Notice */}
-              {isRetryAttempt && !uncertainOutcome && (
-                <div className="idempotency-retry-notice">
-                  <RefreshCw size={14} className="retry-icon" />
-                  <span>Safe Retry Active: Resubmitting with original transaction key to prevent duplicate ledger postings.</span>
+            {/* WITHDRAW MODAL */}
+            <ConfirmModal
+              isOpen={activeModal === 'withdraw'}
+              title="Withdraw Funds"
+              confirmText={isRetryAttempt ? 'Retry Withdrawal' : 'Confirm Withdrawal'}
+              onConfirm={handleWithdrawSubmit}
+              onClose={closeModal}
+              isLoading={isSubmitting}
+            >
+              {formSuccess ? (
+                <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--success-color)' }}>
+                  <CheckCircle2 size={36} style={{ margin: '0 auto 8px' }} />
+                  <p style={{ fontWeight: 600 }}>{formSuccess}</p>
                 </div>
-              )}
-
-              {formError && !uncertainOutcome && (
-                <div style={{ padding: '8px 12px', backgroundColor: 'var(--danger-bg)', color: 'var(--danger-text)', borderRadius: '4px', marginBottom: '12px', fontSize: '0.8125rem' }}>
-                  {formError}
-                </div>
-              )}
-
-              <FormInput
-                label="Target Credit Account"
-                type="select"
-                value={formAccountId}
-                onChange={handleAccountIdChange}
-                options={accountOptions}
-                required
-                disabled={isSubmitting}
-              />
-              <FormInput
-                label="Deposit Amount"
-                type="number"
-                step="0.01"
-                min="1"
-                value={formAmount}
-                onChange={handleAmountChange}
-                placeholder="0.00"
-                prefix="₹"
-                required
-                disabled={isSubmitting}
-              />
-              <FormInput
-                label="Transaction Description / Reference Note"
-                type="text"
-                value={formDescription}
-                onChange={handleDescriptionChange}
-                placeholder="e.g. Inward institutional deposit"
-                disabled={isSubmitting}
-              />
-            </div>
-          )}
-        </ConfirmModal>
-
-        {/* WITHDRAW MODAL */}
-        <ConfirmModal
-          isOpen={activeModal === 'withdraw'}
-          title="Withdraw Funds"
-          confirmText={isRetryAttempt ? 'Retry Withdrawal' : 'Confirm Withdrawal'}
-          onConfirm={handleWithdrawSubmit}
-          onClose={closeModal}
-          isLoading={isSubmitting}
-        >
-          {formSuccess ? (
-            <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--success-color)' }}>
-              <CheckCircle2 size={36} style={{ margin: '0 auto 8px' }} />
-              <p style={{ fontWeight: 600 }}>{formSuccess}</p>
-            </div>
-          ) : (
-            <div>
-              {/* Idempotency Protection Indicator Badge */}
-              <div className="idempotency-badge">
-                <ShieldCheck size={16} className="idempotency-icon" />
-                <span>Duplicate transaction protection is enabled.</span>
-              </div>
-
-              {/* Uncertain Outcome Alert */}
-              {uncertainOutcome && (
-                <div className="tx-uncertain-alert">
-                  <div className="tx-uncertain-alert-header">
-                    <AlertTriangle size={16} />
-                    <span>Uncertain Transaction Outcome</span>
+              ) : (
+                <div>
+                  {/* Idempotency Protection Indicator Badge */}
+                  <div className="idempotency-badge">
+                    <ShieldCheck size={16} className="idempotency-icon" />
+                    <span>Duplicate transaction protection is enabled.</span>
                   </div>
-                  <p>
-                    A network timeout or connection interruption occurred before the server response was received.
-                    The ledger may have completed this operation. Please verify your <strong>Transaction Journal</strong>.
-                    If you choose to retry, duplicate protection guarantees no double-charging.
-                  </p>
+
+                  {/* Uncertain Outcome Alert */}
+                  {uncertainOutcome && (
+                    <div className="tx-uncertain-alert">
+                      <div className="tx-uncertain-alert-header">
+                        <AlertTriangle size={16} />
+                        <span>Uncertain Transaction Outcome</span>
+                      </div>
+                      <p>
+                        A network timeout or connection interruption occurred before the server response was received.
+                        The ledger may have completed this operation. Please verify your <strong>Transaction Journal</strong>.
+                        If you choose to retry, duplicate protection guarantees no double-charging.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Retry with Same Key Notice */}
+                  {isRetryAttempt && !uncertainOutcome && (
+                    <div className="idempotency-retry-notice">
+                      <RefreshCw size={14} className="retry-icon" />
+                      <span>Safe Retry Active: Resubmitting with original transaction key to prevent duplicate ledger postings.</span>
+                    </div>
+                  )}
+
+                  {formError && !uncertainOutcome && (
+                    <div style={{ padding: '8px 12px', backgroundColor: 'var(--danger-bg)', color: 'var(--danger-text)', borderRadius: '4px', marginBottom: '12px', fontSize: '0.8125rem' }}>
+                      {formError}
+                    </div>
+                  )}
+
+                  <FormInput
+                    label="Source Debit Account"
+                    type="select"
+                    value={formAccountId}
+                    onChange={handleAccountIdChange}
+                    options={accountOptions}
+                    required
+                    disabled={isSubmitting}
+                  />
+                  <FormInput
+                    label="Withdrawal Amount"
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    value={formAmount}
+                    onChange={handleAmountChange}
+                    placeholder="0.00"
+                    prefix="₹"
+                    required
+                    disabled={isSubmitting}
+                  />
+                  <FormInput
+                    label="Disbursement Description"
+                    type="text"
+                    value={formDescription}
+                    onChange={handleDescriptionChange}
+                    placeholder="e.g. Vendor operational payout"
+                    disabled={isSubmitting}
+                  />
                 </div>
               )}
+            </ConfirmModal>
 
-              {/* Retry with Same Key Notice */}
-              {isRetryAttempt && !uncertainOutcome && (
-                <div className="idempotency-retry-notice">
-                  <RefreshCw size={14} className="retry-icon" />
-                  <span>Safe Retry Active: Resubmitting with original transaction key to prevent duplicate ledger postings.</span>
+            {/* TRANSFER MODAL */}
+            <ConfirmModal
+              isOpen={activeModal === 'transfer'}
+              title="Inter-Account Transfer"
+              confirmText={isRetryAttempt ? 'Retry Transfer' : 'Execute Transfer'}
+              onConfirm={handleTransferSubmit}
+              onClose={closeModal}
+              isLoading={isSubmitting}
+            >
+              {formSuccess ? (
+                <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--success-color)' }}>
+                  <CheckCircle2 size={36} style={{ margin: '0 auto 8px' }} />
+                  <p style={{ fontWeight: 600 }}>{formSuccess}</p>
                 </div>
-              )}
-
-              {formError && !uncertainOutcome && (
-                <div style={{ padding: '8px 12px', backgroundColor: 'var(--danger-bg)', color: 'var(--danger-text)', borderRadius: '4px', marginBottom: '12px', fontSize: '0.8125rem' }}>
-                  {formError}
-                </div>
-              )}
-
-              <FormInput
-                label="Source Debit Account"
-                type="select"
-                value={formAccountId}
-                onChange={handleAccountIdChange}
-                options={accountOptions}
-                required
-                disabled={isSubmitting}
-              />
-              <FormInput
-                label="Withdrawal Amount"
-                type="number"
-                step="0.01"
-                min="1"
-                value={formAmount}
-                onChange={handleAmountChange}
-                placeholder="0.00"
-                prefix="₹"
-                required
-                disabled={isSubmitting}
-              />
-              <FormInput
-                label="Disbursement Description"
-                type="text"
-                value={formDescription}
-                onChange={handleDescriptionChange}
-                placeholder="e.g. Vendor operational payout"
-                disabled={isSubmitting}
-              />
-            </div>
-          )}
-        </ConfirmModal>
-
-        {/* TRANSFER MODAL */}
-        <ConfirmModal
-          isOpen={activeModal === 'transfer'}
-          title="Inter-Account Transfer"
-          confirmText={isRetryAttempt ? 'Retry Transfer' : 'Execute Transfer'}
-          onConfirm={handleTransferSubmit}
-          onClose={closeModal}
-          isLoading={isSubmitting}
-        >
-          {formSuccess ? (
-            <div style={{ textAlign: 'center', padding: '1rem', color: 'var(--success-color)' }}>
-              <CheckCircle2 size={36} style={{ margin: '0 auto 8px' }} />
-              <p style={{ fontWeight: 600 }}>{formSuccess}</p>
-            </div>
-          ) : (
-            <div>
-              {/* Idempotency Protection Indicator Badge */}
-              <div className="idempotency-badge">
-                <ShieldCheck size={16} className="idempotency-icon" />
-                <span>Duplicate transaction protection is enabled.</span>
-              </div>
-
-              {/* Uncertain Outcome Alert */}
-              {uncertainOutcome && (
-                <div className="tx-uncertain-alert">
-                  <div className="tx-uncertain-alert-header">
-                    <AlertTriangle size={16} />
-                    <span>Uncertain Transaction Outcome</span>
+              ) : (
+                <div>
+                  {/* Idempotency Protection Indicator Badge */}
+                  <div className="idempotency-badge">
+                    <ShieldCheck size={16} className="idempotency-icon" />
+                    <span>Duplicate transaction protection is enabled.</span>
                   </div>
-                  <p>
-                    A network timeout or connection interruption occurred before the server response was received.
-                    The ledger may have completed this operation. Please verify your <strong>Transaction Journal</strong>.
-                    If you choose to retry, duplicate protection guarantees no double-charging.
-                  </p>
+
+                  {/* Uncertain Outcome Alert */}
+                  {uncertainOutcome && (
+                    <div className="tx-uncertain-alert">
+                      <div className="tx-uncertain-alert-header">
+                        <AlertTriangle size={16} />
+                        <span>Uncertain Transaction Outcome</span>
+                      </div>
+                      <p>
+                        A network timeout or connection interruption occurred before the server response was received.
+                        The ledger may have completed this operation. Please verify your <strong>Transaction Journal</strong>.
+                        If you choose to retry, duplicate protection guarantees no double-charging.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Retry with Same Key Notice */}
+                  {isRetryAttempt && !uncertainOutcome && (
+                    <div className="idempotency-retry-notice">
+                      <RefreshCw size={14} className="retry-icon" />
+                      <span>Safe Retry Active: Resubmitting with original transaction key to prevent duplicate ledger postings.</span>
+                    </div>
+                  )}
+
+                  {formError && !uncertainOutcome && (
+                    <div style={{ padding: '8px 12px', backgroundColor: 'var(--danger-bg)', color: 'var(--danger-text)', borderRadius: '4px', marginBottom: '12px', fontSize: '0.8125rem' }}>
+                      {formError}
+                    </div>
+                  )}
+
+                  <FormInput
+                    label="Source (Debit) Account"
+                    type="select"
+                    value={formAccountId}
+                    onChange={handleAccountIdChange}
+                    options={accountOptions}
+                    required
+                    disabled={isSubmitting}
+                  />
+                  <FormInput
+                    label="Destination (Credit) Account"
+                    type="select"
+                    value={formDestAccountId}
+                    onChange={handleDestAccountIdChange}
+                    options={allDestOptions}
+                    required
+                    disabled={isSubmitting}
+                  />
+                  <FormInput
+                    label="Transfer Amount"
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    value={formAmount}
+                    onChange={handleAmountChange}
+                    placeholder="0.00"
+                    prefix="₹"
+                    required
+                    disabled={isSubmitting}
+                  />
+                  <FormInput
+                    label="Transfer Purpose / Ledger Note"
+                    type="text"
+                    value={formDescription}
+                    onChange={handleDescriptionChange}
+                    placeholder="e.g. Liquidity balancing"
+                    disabled={isSubmitting}
+                  />
                 </div>
               )}
-
-              {/* Retry with Same Key Notice */}
-              {isRetryAttempt && !uncertainOutcome && (
-                <div className="idempotency-retry-notice">
-                  <RefreshCw size={14} className="retry-icon" />
-                  <span>Safe Retry Active: Resubmitting with original transaction key to prevent duplicate ledger postings.</span>
-                </div>
-              )}
-
-              {formError && !uncertainOutcome && (
-                <div style={{ padding: '8px 12px', backgroundColor: 'var(--danger-bg)', color: 'var(--danger-text)', borderRadius: '4px', marginBottom: '12px', fontSize: '0.8125rem' }}>
-                  {formError}
-                </div>
-              )}
-
-              <FormInput
-                label="Source (Debit) Account"
-                type="select"
-                value={formAccountId}
-                onChange={handleAccountIdChange}
-                options={accountOptions}
-                required
-                disabled={isSubmitting}
-              />
-              <FormInput
-                label="Destination (Credit) Account"
-                type="select"
-                value={formDestAccountId}
-                onChange={handleDestAccountIdChange}
-                options={allDestOptions}
-                required
-                disabled={isSubmitting}
-              />
-              <FormInput
-                label="Transfer Amount"
-                type="number"
-                step="0.01"
-                min="1"
-                value={formAmount}
-                onChange={handleAmountChange}
-                placeholder="0.00"
-                prefix="₹"
-                required
-                disabled={isSubmitting}
-              />
-              <FormInput
-                label="Transfer Purpose / Ledger Note"
-                type="text"
-                value={formDescription}
-                onChange={handleDescriptionChange}
-                placeholder="e.g. Liquidity balancing"
-                disabled={isSubmitting}
-              />
-            </div>
-          )}
-        </ConfirmModal>
+            </ConfirmModal>
+          </>
+        )}
 
         {/* TRANSACTION DETAILS MODAL */}
         {selectedTxForDetails && (

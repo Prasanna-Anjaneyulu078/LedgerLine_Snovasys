@@ -268,33 +268,49 @@ export const swaggerDocument = {
     },
     '/transactions/deposit': {
       post: {
-        summary: 'Deposit funds into an account',
+        summary: 'Deposit funds into an account (Account Holder only)',
+        description:
+          'Executes an atomic deposit into an owned account. Restricted to ACCOUNT_HOLDER role only (ADMIN and AUDITOR receive 403 Forbidden). Enforces account ownership, row-level locking, and creates balanced debit/credit ledger postings.',
         security: [{ BearerAuth: [] }],
         parameters: [{ name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }],
         requestBody: {
           required: true,
           content: { 'application/json': { schema: { $ref: '#/components/schemas/DepositRequest' } } },
         },
-        responses: { 200: { description: 'Deposit successful' } },
+        responses: {
+          200: { description: 'Deposit successful' },
+          400: { description: 'Validation failed, negative amount, or inactive account' },
+          401: { description: 'Missing or invalid authentication token' },
+          403: { description: 'Forbidden: caller is not an ACCOUNT_HOLDER or does not own the account' },
+          404: { description: 'Account not found' },
+        },
       },
     },
     '/transactions/withdraw': {
       post: {
-        summary: 'Withdraw funds from an account',
+        summary: 'Withdraw funds from an account (Account Holder only)',
+        description:
+          'Executes an atomic withdrawal from an owned account. Restricted to ACCOUNT_HOLDER role only (ADMIN and AUDITOR receive 403 Forbidden). Enforces account ownership, row-level locking, positive balance invariants, and creates balanced debit/credit ledger postings.',
         security: [{ BearerAuth: [] }],
         parameters: [{ name: 'Idempotency-Key', in: 'header', required: false, schema: { type: 'string' } }],
         requestBody: {
           required: true,
           content: { 'application/json': { schema: { $ref: '#/components/schemas/WithdrawalRequest' } } },
         },
-        responses: { 200: { description: 'Withdrawal successful' } },
+        responses: {
+          200: { description: 'Withdrawal successful' },
+          400: { description: 'Validation failed, insufficient funds, or inactive account' },
+          401: { description: 'Missing or invalid authentication token' },
+          403: { description: 'Forbidden: caller is not an ACCOUNT_HOLDER or does not own the account' },
+          404: { description: 'Account not found' },
+        },
       },
     },
     '/transactions/transfer': {
       post: {
-        summary: 'Transfer funds between accounts with double-entry ledger postings',
+        summary: 'Transfer funds between accounts with double-entry ledger postings (Account Holder only)',
         description:
-          'Executes an atomic double-entry transfer between accounts identified by source and destination account numbers (or legacy UUIDs). Enforces source account ownership, row-level locking, deadlock prevention, positive balance invariants, and creates balanced debit/credit ledger postings.',
+          'Executes an atomic double-entry transfer between accounts identified by source and destination account numbers (or legacy UUIDs). Restricted exclusively to ACCOUNT_HOLDER role (ADMIN and AUDITOR receive 403 Forbidden). Enforces source account ownership, row-level locking, deadlock prevention, positive balance invariants, and creates balanced debit/credit ledger postings.',
         security: [{ BearerAuth: [] }],
         parameters: [
           {
@@ -348,7 +364,7 @@ export const swaggerDocument = {
           },
           400: { description: 'Validation failed, insufficient funds, or inactive account' },
           401: { description: 'Missing or invalid authentication token' },
-          403: { description: 'Forbidden: caller is an Auditor or does not own the source account' },
+          403: { description: 'Forbidden: caller is not an ACCOUNT_HOLDER or does not own the source account' },
           404: { description: 'Source or destination account not found' },
           409: { description: 'Idempotency key conflict or in-flight transaction collision' },
         },

@@ -7,6 +7,28 @@
 
 ---
 
+## Role Permissions Matrix & Separation of Duties
+
+LedgerLine strictly enforces separation of concerns across three core system roles in compliance with financial integrity standards:
+
+| Capability / Endpoint | `ACCOUNT_HOLDER` | `ADMIN` | `AUDITOR` | Notes |
+| :--- | :---: | :---: | :---: | :--- |
+| **Deposit Funds** (`POST /transactions/deposit`) | **Allowed** (Own account) | **Forbidden (403)** | **Forbidden (403)** | Financial money-movement restricted to account owners |
+| **Withdraw Funds** (`POST /transactions/withdraw`) | **Allowed** (Own account) | **Forbidden (403)** | **Forbidden (403)** | Financial money-movement restricted to account owners |
+| **Transfer Funds** (`POST /transactions/transfer`) | **Allowed** (Source owner) | **Forbidden (403)** | **Forbidden (403)** | Balanced double-entry transfer between accounts |
+| **List Accounts** (`GET /accounts`) | **Own Accounts** | **All Accounts** | **All Accounts** | Scoped by ownership for Account Holders; system-wide for Admin/Auditor |
+| **Get Account Balance** (`GET /accounts/:id/balance`) | **Own Account** | **All Accounts** | **All Accounts** | Real-time balance computed with audit verification |
+| **Account Statements** (`GET /accounts/:id/statement`) | **Own Account** | **All Accounts** | **All Accounts** | Complete running balance with posted and refused records |
+| **List Transactions** (`GET /transactions`) | **Own Transactions** | **All Transactions** | **All Transactions** | Scoped by participant accounts for Account Holders |
+| **Transaction Details** (`GET /transactions/:id`) | **Participant Only** | **All Transactions** | **All Transactions** | Includes associated double-entry ledger entries |
+| **Global Ledger Journal** (`GET /ledger`) | **Forbidden (403)** | **Allowed** | **Allowed** | Immutable double-entry journal inspection |
+| **System Audit Trail** (`GET /audit-events`) | **Forbidden (403)** | **Allowed** | **Allowed** | Complete security and operational event trail |
+| **Admin Analytics** (`GET /admin/dashboard`) | **Forbidden (403)** | **Allowed** | **Forbidden (403)** | Institutional system telemetry and volume metrics |
+| **Manage Users** (`GET/PATCH /admin/users`) | **Forbidden (403)** | **Allowed** | **Forbidden (403)** | User lifecycle and activation management |
+| **Manage Account Status** (`PATCH /admin/accounts/:id/status`) | **Forbidden (403)** | **Allowed** | **Forbidden (403)** | Administrative holds, freezes, and suspensions |
+
+---
+
 ## 1. Authentication Endpoints
 
 ### Register User
@@ -114,6 +136,7 @@
 - **Method**: `POST`
 - **Path**: `/api/v1/transactions/deposit`
 - **Headers**: `Authorization: Bearer <TOKEN>`, `Idempotency-Key: <UUID>`
+- **Authorization**: `ACCOUNT_HOLDER` role exclusively. Caller must own the target account. `ADMIN` and `AUDITOR` receive `403 Forbidden`.
 - **Request Body**:
   ```json
   {
@@ -127,7 +150,7 @@
 - **Method**: `POST`
 - **Path**: `/api/v1/transactions/withdraw`
 - **Headers**: `Authorization: Bearer <TOKEN>`, `Idempotency-Key: <UUID>`
-- **Authorization**: Must be Account Owner or Admin. Auditor forbidden.
+- **Authorization**: `ACCOUNT_HOLDER` role exclusively. Caller must own the target account. `ADMIN` and `AUDITOR` receive `403 Forbidden`.
 - **Request Body**:
   ```json
   {
@@ -141,7 +164,7 @@
 - **Method**: `POST`
 - **Path**: `/api/v1/transactions/transfer`
 - **Headers**: `Authorization: Bearer <TOKEN>`, `Idempotency-Key: <UUID>`
-- **Authorization**: Must own source account or be Admin. Auditor forbidden.
+- **Authorization**: `ACCOUNT_HOLDER` role exclusively. Caller must own the source account; destination account must be active. `ADMIN` and `AUDITOR` receive `403 Forbidden`.
 - **Request Body (Account Number-Based - Preferred)**:
   ```json
   {

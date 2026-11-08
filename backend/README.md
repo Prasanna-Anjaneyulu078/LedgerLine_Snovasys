@@ -251,9 +251,9 @@ All API routes are prefixed with `/api/v1`.
 ### 7.3 Transaction Endpoints
 | Method | Endpoint | Authorization | Description |
 | :--- | :--- | :--- | :--- |
-| `POST` | `/transactions/deposit` | Owner / Admin | Deposit funds into account |
-| `POST` | `/transactions/withdraw` | Owner / Admin | Withdraw funds with balance check |
-| `POST` | `/transactions/transfer` | Owner / Admin | Balanced double-entry transfer |
+| `POST` | `/transactions/deposit` | Account Holder (Owner Only) | Deposit funds into owned account (Admin/Auditor forbidden: 403) |
+| `POST` | `/transactions/withdraw` | Account Holder (Owner Only) | Withdraw funds with balance check (Admin/Auditor forbidden: 403) |
+| `POST` | `/transactions/transfer` | Account Holder (Owner Only) | Balanced double-entry transfer (Admin/Auditor forbidden: 403) |
 | `GET` | `/transactions` | Authenticated | List transactions with filters |
 | `GET` | `/transactions/:id` | Participant / Admin / Auditor | Get transaction & ledger postings |
 
