@@ -84,6 +84,7 @@ const GlobalLedgerTable = ({
   actions,
   searchPlaceholder,
   searchField,
+  pagination,
   emptyMessage = 'No ledger journal entries found.',
 }) => {
   const columns = React.useMemo(() => getGlobalLedgerColumns(), []);
@@ -98,6 +99,7 @@ const GlobalLedgerTable = ({
         actions={actions}
         searchPlaceholder={searchPlaceholder}
         searchField={searchField}
+        pagination={pagination}
         emptyMessage={emptyMessage}
       />
     </div>

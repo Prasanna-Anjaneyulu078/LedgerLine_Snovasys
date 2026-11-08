@@ -10,6 +10,7 @@ import ConfirmModal from '../../components/ConfirmModal/index.jsx';
 import Pagination from '../../components/Pagination/index.jsx';
 import LoadingState from '../../components/LoadingState/index.jsx';
 import ErrorState from '../../components/ErrorState/index.jsx';
+import { getStoredPageSize, setStoredPageSize, PAGE_SIZE_OPTIONS } from '../../utils/pagination.js';
 import './index.css';
 
 // Sensitive keys that must NEVER be rendered in UI or audit inspector
@@ -169,7 +170,7 @@ const AuditEvents = () => {
 
   // Server-Side Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(getStoredPageSize);
   const [totalEvents, setTotalEvents] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
@@ -215,7 +216,11 @@ const AuditEvents = () => {
       const total = res?.pagination?.totalEvents ?? res?.total ?? list.length;
       setTotalEvents(total);
       const pages = res?.pagination?.totalPages ?? (total > 0 ? Math.ceil(total / pageSize) : 1);
-      setTotalPages(Math.max(1, pages));
+      const validPages = Math.max(1, pages);
+      setTotalPages(validPages);
+      if (currentPage > validPages) {
+        setCurrentPage(validPages);
+      }
     } catch (err) {
       setError('Unable to load institutional audit trails.');
     } finally {
@@ -399,9 +404,11 @@ const AuditEvents = () => {
                 totalPages={totalPages}
                 onPageChange={(page) => setCurrentPage(page)}
                 onPageSizeChange={(size) => {
+                  setStoredPageSize(size);
                   setPageSize(size);
                   setCurrentPage(1);
                 }}
+                pageSizeOptions={PAGE_SIZE_OPTIONS}
                 disabled={isLoading}
               />
             }

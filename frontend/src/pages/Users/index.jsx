@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { ShieldAlert, RefreshCw, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ShieldAlert, RefreshCw, Search } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import adminService from '../../services/adminService.js';
 import { formatDate } from '../../utils/formatDate.js';
@@ -10,16 +10,17 @@ import StatusBadge from '../../components/StatusBadge/index.jsx';
 import ConfirmModal from '../../components/ConfirmModal/index.jsx';
 import LoadingState from '../../components/LoadingState/index.jsx';
 import ErrorState from '../../components/ErrorState/index.jsx';
+import Pagination from '../../components/Pagination/index.jsx';
+import { getStoredPageSize, setStoredPageSize, PAGE_SIZE_OPTIONS } from '../../utils/pagination.js';
 import './index.css';
-
-const PAGE_SIZE = 4;
 
 const Users = () => {
   const { user: currentAdmin } = useAuth();
   const [users, setUsers] = useState([]);
+  const [pageSize, setPageSize] = useState(getStoredPageSize);
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: PAGE_SIZE,
+    limit: getStoredPageSize(),
     totalUsers: 0,
     totalPages: 0,
   });
@@ -36,13 +37,13 @@ const Users = () => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [modalError, setModalError] = useState(null);
 
-  const fetchUsers = useCallback(async (page = currentPage, search = searchTerm, role = roleFilter, status = statusFilter) => {
+  const fetchUsers = useCallback(async (page = currentPage, currentLimit = pageSize, search = searchTerm, role = roleFilter, status = statusFilter) => {
     setIsLoading(true);
     setError(null);
     try {
       const query = {
         page,
-        limit: PAGE_SIZE,
+        limit: currentLimit,
       };
       if (search && search.trim()) query.search = search.trim();
       if (role) query.role = role;
@@ -50,28 +51,30 @@ const Users = () => {
 
       const data = await adminService.getUsers(query);
       setUsers(data?.users || data || []);
-      if (data?.pagination) {
-        setPagination(data.pagination);
-      } else {
-        const total = data?.total ?? (data?.length || 0);
-        setPagination({
-          page,
-          limit: PAGE_SIZE,
-          totalUsers: total,
-          totalPages: total > 0 ? Math.ceil(total / PAGE_SIZE) : 0,
-        });
+      const total = Number(data?.pagination?.totalUsers ?? data?.total ?? (data?.length || 0));
+      const pages = Number(data?.pagination?.totalPages ?? (total > 0 ? Math.ceil(total / currentLimit) : 0));
+
+      setPagination({
+        page,
+        limit: currentLimit,
+        totalUsers: total,
+        totalPages: pages,
+      });
+
+      if (pages > 0 && page > pages) {
+        setCurrentPage(pages);
       }
     } catch (err) {
       setError('Unable to fetch administrative user accounts.');
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, searchTerm, roleFilter, statusFilter]);
+  }, [currentPage, pageSize, searchTerm, roleFilter, statusFilter]);
 
   // Initial load and filter effect
   useEffect(() => {
-    fetchUsers(currentPage, searchTerm, roleFilter, statusFilter);
-  }, [currentPage, searchTerm, roleFilter, statusFilter]);
+    fetchUsers(currentPage, pageSize, searchTerm, roleFilter, statusFilter);
+  }, [currentPage, pageSize, searchTerm, roleFilter, statusFilter]);
 
   const handleSearchChange = (e) => {
     const val = e.target.value;
@@ -94,6 +97,12 @@ const Users = () => {
     setCurrentPage(newPage);
   };
 
+  const handlePageSizeChange = (newSize) => {
+    setStoredPageSize(newSize);
+    setPageSize(newSize);
+    setCurrentPage(1);
+  };
+
   const handleOpenStatusModal = (userItem, newStatus) => {
     setSelectedUserForStatus(userItem);
     setTargetStatus(newStatus);
@@ -108,7 +117,7 @@ const Users = () => {
     try {
       await adminService.updateUserStatus(selectedUserForStatus.id, targetStatus);
       setSelectedUserForStatus(null);
-      await fetchUsers(currentPage, searchTerm, roleFilter, statusFilter);
+      await fetchUsers(currentPage, pageSize, searchTerm, roleFilter, statusFilter);
     } catch (err) {
       setModalError(getErrorMessage(err));
     } finally {
@@ -194,8 +203,6 @@ const Users = () => {
 
   const totalUsers = Number(pagination?.totalUsers ?? 0);
   const totalPages = Number(pagination?.totalPages ?? 0);
-  const startItem = totalUsers === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const endItem = Math.min(currentPage * PAGE_SIZE, totalUsers);
 
   return (
     <DashboardLayout
@@ -265,58 +272,31 @@ const Users = () => {
         {isLoading ? (
           <LoadingState message="Retrieving institutional user register..." />
         ) : error ? (
-          <ErrorState message={error} onRetry={() => fetchUsers(currentPage, searchTerm, roleFilter, statusFilter)} />
+          <ErrorState message={error} onRetry={() => fetchUsers(currentPage, pageSize, searchTerm, roleFilter, statusFilter)} />
         ) : (
-          <div>
-            <DataTable
-              columns={columns}
-              data={users}
-              title="Registered Institutional Identities"
-              subtitle={
-                totalUsers > 0
-                  ? `Showing page ${currentPage} of ${Math.max(1, totalPages)} (${totalUsers} total registered users in PostgreSQL database)`
-                  : '0 users found'
-              }
-              emptyMessage="No registered database users found matching criteria."
-            />
-
-            {/* Pagination Controls */}
-            <div className="users-pagination-bar">
-              <div className="users-pagination-info">
-                {totalUsers > 0 ? (
-                  <span>
-                    Showing <strong>{startItem}</strong> to <strong>{endItem}</strong> of <strong>{totalUsers}</strong> registered users
-                  </span>
-                ) : (
-                  <span>0 users</span>
-                )}
-              </div>
-
-              <div className="users-pagination-actions">
-                <button
-                  type="button"
-                  className="users-pagination-btn"
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage <= 1 || isLoading}
-                >
-                  <ChevronLeft size={16} />
-                  <span>Previous</span>
-                </button>
-                <span className="users-page-indicator">
-                  Page {currentPage} of {Math.max(1, totalPages)}
-                </span>
-                <button
-                  type="button"
-                  className="users-pagination-btn"
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage >= totalPages || totalPages === 0 || isLoading}
-                >
-                  <span>Next</span>
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          </div>
+          <DataTable
+            columns={columns}
+            data={users}
+            title="Registered Institutional Identities"
+            subtitle={
+              totalUsers > 0
+                ? `Showing page ${currentPage} of ${Math.max(1, totalPages)} (${totalUsers} total registered users in PostgreSQL database)`
+                : '0 users found'
+            }
+            pagination={
+              <Pagination
+                currentPage={currentPage}
+                pageSize={pageSize}
+                totalRecords={totalUsers}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+                pageSizeOptions={PAGE_SIZE_OPTIONS}
+                disabled={isLoading}
+              />
+            }
+            emptyMessage="No registered database users found matching criteria."
+          />
         )}
 
         {/* STATUS CHANGE CONFIRMATION MODAL */}

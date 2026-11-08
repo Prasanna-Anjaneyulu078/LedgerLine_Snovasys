@@ -146,9 +146,9 @@ export const adminService = {
     const normalizedUsers = rawList.map(normalizeUser);
     const pagination = payload?.pagination || {
       page: Number(query.page) || 1,
-      limit: Number(query.limit) || 4,
+      limit: Number(query.limit) || 15,
       totalUsers: payload?.total ?? normalizedUsers.length,
-      totalPages: Math.ceil((payload?.total ?? normalizedUsers.length) / (Number(query.limit) || 4)),
+      totalPages: Math.ceil((payload?.total ?? normalizedUsers.length) / (Number(query.limit) || 15)),
     };
 
     const result = normalizedUsers;
@@ -179,9 +179,9 @@ export const adminService = {
     const normalized = rawList.map(normalizeAccount);
     const pagination = payload?.pagination || {
       page: Number(query.page) || 1,
-      limit: Number(query.limit) || 10,
+      limit: Number(query.limit) || 15,
       totalAccounts: payload?.total ?? normalized.length,
-      totalPages: Math.ceil((payload?.total ?? normalized.length) / (Number(query.limit) || 10)),
+      totalPages: Math.ceil((payload?.total ?? normalized.length) / (Number(query.limit) || 15)),
     };
 
     const result = normalized;

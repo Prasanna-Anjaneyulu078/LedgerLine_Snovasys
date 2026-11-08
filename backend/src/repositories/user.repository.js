@@ -56,9 +56,9 @@ export class UserRepository {
   /**
    * Retrieve all users with optional filtering and pagination
    */
-  async findAll({ page = 1, limit = 4, offset = null, search = null, role = null, isActive = null, status = null } = {}, client = pool) {
+  async findAll({ page = 1, limit = 15, offset = null, search = null, role = null, isActive = null, status = null } = {}, client = pool) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 4));
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 15));
     const offsetNum = offset !== null && offset !== undefined
       ? Math.max(0, parseInt(offset, 10) || 0)
       : (pageNum - 1) * limitNum;

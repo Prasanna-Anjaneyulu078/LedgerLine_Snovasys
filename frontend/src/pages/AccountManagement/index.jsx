@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Wallet, ShieldAlert, RefreshCw, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Wallet, ShieldAlert, RefreshCw, Search } from 'lucide-react';
 import adminService from '../../services/adminService.js';
 import { formatCurrency } from '../../utils/formatCurrency.js';
 import { getErrorMessage } from '../../services/api.js';
@@ -11,15 +11,16 @@ import ConfirmModal from '../../components/ConfirmModal/index.jsx';
 import FormInput from '../../components/FormInput/index.jsx';
 import LoadingState from '../../components/LoadingState/index.jsx';
 import ErrorState from '../../components/ErrorState/index.jsx';
+import Pagination from '../../components/Pagination/index.jsx';
+import { getStoredPageSize, setStoredPageSize, PAGE_SIZE_OPTIONS } from '../../utils/pagination.js';
 import './index.css';
-
-const PAGE_SIZE = 6;
 
 const AccountManagement = () => {
   const [accounts, setAccounts] = useState([]);
+  const [pageSize, setPageSize] = useState(getStoredPageSize);
   const [pagination, setPagination] = useState({
     page: 1,
-    limit: PAGE_SIZE,
+    limit: getStoredPageSize(),
     totalAccounts: 0,
     totalPages: 0,
   });
@@ -38,6 +39,7 @@ const AccountManagement = () => {
 
   const fetchAccounts = useCallback(async (
     page = currentPage,
+    currentLimit = pageSize,
     search = searchTerm,
     status = statusFilter,
     type = typeFilter
@@ -47,7 +49,7 @@ const AccountManagement = () => {
     try {
       const query = {
         page,
-        limit: PAGE_SIZE,
+        limit: currentLimit,
       };
       if (search && search.trim()) query.search = search.trim();
       if (status) query.status = status;
@@ -57,27 +59,29 @@ const AccountManagement = () => {
       const list = data?.accounts || (Array.isArray(data) ? data : []);
       setAccounts(list);
 
-      if (data?.pagination) {
-        setPagination(data.pagination);
-      } else {
-        const total = data?.total ?? list.length;
-        setPagination({
-          page,
-          limit: PAGE_SIZE,
-          totalAccounts: total,
-          totalPages: total > 0 ? Math.ceil(total / PAGE_SIZE) : 0,
-        });
+      const total = Number(data?.pagination?.totalAccounts ?? data?.total ?? list.length);
+      const pages = Number(data?.pagination?.totalPages ?? (total > 0 ? Math.ceil(total / currentLimit) : 0));
+
+      setPagination({
+        page,
+        limit: currentLimit,
+        totalAccounts: total,
+        totalPages: pages,
+      });
+
+      if (pages > 0 && page > pages) {
+        setCurrentPage(pages);
       }
     } catch (err) {
       setError('Unable to fetch institutional accounts from backend database.');
     } finally {
       setIsLoading(false);
     }
-  }, [currentPage, searchTerm, statusFilter, typeFilter]);
+  }, [currentPage, pageSize, searchTerm, statusFilter, typeFilter]);
 
   useEffect(() => {
-    fetchAccounts(currentPage, searchTerm, statusFilter, typeFilter);
-  }, [currentPage, searchTerm, statusFilter, typeFilter]);
+    fetchAccounts(currentPage, pageSize, searchTerm, statusFilter, typeFilter);
+  }, [currentPage, pageSize, searchTerm, statusFilter, typeFilter]);
 
   const handleSearchChange = (e) => {
     setSearchTerm(e.target.value);
@@ -99,6 +103,12 @@ const AccountManagement = () => {
     setCurrentPage(newPage);
   };
 
+  const handlePageSizeChange = (newSize) => {
+    setStoredPageSize(newSize);
+    setPageSize(newSize);
+    setCurrentPage(1);
+  };
+
   const handleOpenStatusModal = (acc) => {
     setSelectedAccountForStatus(acc);
     setTargetStatus(acc.status);
@@ -113,7 +123,7 @@ const AccountManagement = () => {
     try {
       await adminService.updateAccountStatus(selectedAccountForStatus.id, targetStatus);
       setSelectedAccountForStatus(null);
-      await fetchAccounts(currentPage, searchTerm, statusFilter, typeFilter);
+      await fetchAccounts(currentPage, pageSize, searchTerm, statusFilter, typeFilter);
     } catch (err) {
       setModalError(getErrorMessage(err));
     } finally {
@@ -199,8 +209,6 @@ const AccountManagement = () => {
 
   const totalAccounts = pagination.totalAccounts;
   const totalPages = pagination.totalPages;
-  const startItem = totalAccounts === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const endItem = Math.min(currentPage * PAGE_SIZE, totalAccounts);
 
   return (
     <DashboardLayout
@@ -271,60 +279,31 @@ const AccountManagement = () => {
         {isLoading ? (
           <LoadingState message="Retrieving institutional accounts from PostgreSQL..." />
         ) : error ? (
-          <ErrorState message={error} onRetry={() => fetchAccounts(currentPage, searchTerm, statusFilter, typeFilter)} />
+          <ErrorState message={error} onRetry={() => fetchAccounts(currentPage, pageSize, statusFilter, typeFilter)} />
         ) : (
-          <div>
-            <DataTable
-              columns={columns}
-              data={accounts}
-              title="Institutional Account Portfolio"
-              subtitle={
-                totalAccounts > 0
-                  ? `Showing page ${currentPage} of ${Math.max(1, totalPages)} (${totalAccounts} total registered accounts in PostgreSQL database)`
-                  : '0 accounts found'
-              }
-              emptyMessage="No institutional accounts found matching criteria."
-            />
-
-            {/* Pagination Controls */}
-            <div className="account-mgmt-pagination-bar">
-              <div className="account-mgmt-pagination-info">
-                {totalAccounts > 0 ? (
-                  <span>
-                    Showing <strong>{startItem}</strong> to <strong>{endItem}</strong> of <strong>{totalAccounts}</strong> accounts
-                  </span>
-                ) : (
-                  <span>0 accounts</span>
-                )}
-              </div>
-
-              <div className="account-mgmt-pagination-actions">
-                <button
-                  type="button"
-                  className="account-mgmt-pagination-btn"
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage <= 1 || isLoading}
-                >
-                  <ChevronLeft size={16} />
-                  <span>Previous</span>
-                </button>
-
-                <span className="account-mgmt-page-indicator">
-                  Page {currentPage} of {Math.max(1, totalPages)}
-                </span>
-
-                <button
-                  type="button"
-                  className="account-mgmt-pagination-btn"
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage >= totalPages || isLoading}
-                >
-                  <span>Next</span>
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          </div>
+          <DataTable
+            columns={columns}
+            data={accounts}
+            title="Institutional Account Portfolio"
+            subtitle={
+              totalAccounts > 0
+                ? `Showing page ${currentPage} of ${Math.max(1, totalPages)} (${totalAccounts} total registered accounts in PostgreSQL database)`
+                : '0 accounts found'
+            }
+            pagination={
+              <Pagination
+                currentPage={currentPage}
+                pageSize={pageSize}
+                totalRecords={totalAccounts}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+                pageSizeOptions={PAGE_SIZE_OPTIONS}
+                disabled={isLoading}
+              />
+            }
+            emptyMessage="No institutional accounts found matching criteria."
+          />
         )}
 
         {/* STATUS CHANGE CONFIRMATION MODAL */}

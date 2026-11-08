@@ -86,9 +86,9 @@ export class LedgerRepository {
    * Find global ledger records (auditor / admin view)
    * With authoritative database-aggregated credit and debit totals
    */
-  async findAll({ limit = 50, offset = null, page = null, entryType = null, search = null } = {}, client = pool) {
+  async findAll({ limit = 15, offset = null, page = null, entryType = null, search = null } = {}, client = pool) {
     const pageNum = page ? Math.max(1, parseInt(page, 10) || 1) : null;
-    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 50));
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 15));
     const offsetNum = offset !== null && offset !== undefined
       ? Math.max(0, parseInt(offset, 10) || 0)
       : pageNum

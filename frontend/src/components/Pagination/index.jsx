@@ -1,5 +1,6 @@
 import React from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS, setStoredPageSize } from '../../utils/pagination.js';
 import './index.css';
 
 /**
@@ -8,13 +9,13 @@ import './index.css';
  */
 const Pagination = ({
   currentPage = 1,
-  pageSize = 10,
+  pageSize = DEFAULT_PAGE_SIZE,
   totalRecords = 0,
   totalPages = 1,
   onPageChange,
   onPageSizeChange,
   disabled = false,
-  pageSizeOptions = [10, 25, 50],
+  pageSizeOptions = PAGE_SIZE_OPTIONS,
 }) => {
   const safeTotalPages = Math.max(1, totalPages);
   const safeCurrentPage = Math.min(Math.max(1, currentPage), safeTotalPages);
@@ -31,6 +32,7 @@ const Pagination = ({
 
   const handlePageSizeChange = (e) => {
     const newSize = parseInt(e.target.value, 10);
+    setStoredPageSize(newSize);
     if (onPageSizeChange) {
       onPageSizeChange(newSize);
     }
@@ -63,7 +65,17 @@ const Pagination = ({
       {/* Range and Total Display */}
       <div className="pagination-info-group">
         <span className="pagination-range-text">
-          Showing <strong>{startRecord}–{endRecord}</strong> of <strong>{totalRecords}</strong> records
+          {totalRecords === 0 ? (
+            'Showing 0 records'
+          ) : (
+            <>
+              Showing <strong>{startRecord}–{endRecord}</strong> of <strong>{totalRecords}</strong>
+            </>
+          )}
+        </span>
+
+        <span className="pagination-page-indicator">
+          Page <strong>{safeCurrentPage}</strong> of <strong>{safeTotalPages}</strong>
         </span>
 
         {/* Page Size Selector */}

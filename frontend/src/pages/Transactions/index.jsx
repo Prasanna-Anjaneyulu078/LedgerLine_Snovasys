@@ -26,6 +26,7 @@ import FormInput from '../../components/FormInput/index.jsx';
 import Pagination from '../../components/Pagination/index.jsx';
 import LoadingState from '../../components/LoadingState/index.jsx';
 import ErrorState from '../../components/ErrorState/index.jsx';
+import { getStoredPageSize, setStoredPageSize, PAGE_SIZE_OPTIONS } from '../../utils/pagination.js';
 import './index.css';
 
 const Transactions = () => {
@@ -39,7 +40,7 @@ const Transactions = () => {
 
   // Server-Side Pagination & Filtering
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(getStoredPageSize);
   const [totalTransactions, setTotalTransactions] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [searchTerm, setSearchTerm] = useState('');
@@ -117,7 +118,11 @@ const Transactions = () => {
       const total = res?.pagination?.totalTransactions ?? res?.total ?? list.length;
       setTotalTransactions(total);
       const pages = res?.pagination?.totalPages ?? (total > 0 ? Math.ceil(total / pageSize) : 1);
-      setTotalPages(Math.max(1, pages));
+      const validPages = Math.max(1, pages);
+      setTotalPages(validPages);
+      if (currentPage > validPages) {
+        setCurrentPage(validPages);
+      }
     } catch (err) {
       setError('Unable to load transactions from ledger.');
     } finally {
@@ -639,9 +644,11 @@ const Transactions = () => {
                 totalPages={totalPages}
                 onPageChange={(page) => setCurrentPage(page)}
                 onPageSizeChange={(size) => {
+                  setStoredPageSize(size);
                   setPageSize(size);
                   setCurrentPage(1);
                 }}
+                pageSizeOptions={PAGE_SIZE_OPTIONS}
                 disabled={isLoading}
               />
             }

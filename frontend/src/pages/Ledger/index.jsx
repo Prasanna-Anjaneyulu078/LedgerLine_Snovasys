@@ -6,8 +6,6 @@ import {
   Filter,
   RotateCcw,
   Search,
-  ChevronLeft,
-  ChevronRight,
   FileCheck2,
   AlertTriangle,
   CheckCircle2,
@@ -24,12 +22,13 @@ import FormInput from '../../components/FormInput/index.jsx';
 import StatusBadge from '../../components/StatusBadge/index.jsx';
 import LoadingState from '../../components/LoadingState/index.jsx';
 import ErrorState from '../../components/ErrorState/index.jsx';
+import Pagination from '../../components/Pagination/index.jsx';
+import { getStoredPageSize, setStoredPageSize, PAGE_SIZE_OPTIONS } from '../../utils/pagination.js';
 import './index.css';
-
-const PAGE_SIZE = 25;
 
 const Ledger = () => {
   const { role } = useAuth();
+  const [pageSize, setPageSize] = useState(getStoredPageSize);
   const [ledgerData, setLedgerData] = useState({
     entries: [],
     total: 0,
@@ -51,13 +50,13 @@ const Ledger = () => {
   const [verifyError, setVerifyError] = useState(null);
 
   const fetchLedger = useCallback(
-    async (page = currentPage, type = filterType, search = searchTerm) => {
+    async (page = currentPage, currentLimit = pageSize, type = filterType, search = searchTerm) => {
       setIsLoading(true);
       setError(null);
       try {
         const query = {
           page,
-          limit: PAGE_SIZE,
+          limit: currentLimit,
         };
         if (type && type !== 'ALL') query.entryType = type;
         if (search && search.trim()) query.search = search.trim();
@@ -66,7 +65,8 @@ const Ledger = () => {
         const list = data?.entries || (Array.isArray(data) ? data : []);
 
         const totalCount = data?.total ?? list.length;
-        const totalPages = data?.pagination?.totalPages || (totalCount > 0 ? Math.ceil(totalCount / PAGE_SIZE) : 1);
+        const totalPages = data?.pagination?.totalPages || (totalCount > 0 ? Math.ceil(totalCount / currentLimit) : 1);
+        const validPages = Math.max(1, totalPages);
 
         setLedgerData({
           entries: list,
@@ -83,23 +83,27 @@ const Ledger = () => {
             : '₹0.00',
           pagination: data?.pagination || {
             page,
-            limit: PAGE_SIZE,
+            limit: currentLimit,
             totalEntries: totalCount,
-            totalPages,
+            totalPages: validPages,
           },
         });
+
+        if (page > validPages) {
+          setCurrentPage(validPages);
+        }
       } catch (err) {
         setError('Unable to load institutional global ledger entries from backend.');
       } finally {
         setIsLoading(false);
       }
     },
-    [currentPage, filterType, searchTerm]
+    [currentPage, pageSize, filterType, searchTerm]
   );
 
   useEffect(() => {
-    fetchLedger(currentPage, filterType, searchTerm);
-  }, [currentPage, filterType, searchTerm]);
+    fetchLedger(currentPage, pageSize, filterType, searchTerm);
+  }, [currentPage, pageSize, filterType, searchTerm]);
 
   const handleVerifyAccountConsistency = async () => {
     if (!verifyAccountNumber.trim()) {
@@ -139,10 +143,14 @@ const Ledger = () => {
     setCurrentPage(newPage);
   };
 
+  const handlePageSizeChange = (newSize) => {
+    setStoredPageSize(newSize);
+    setPageSize(newSize);
+    setCurrentPage(1);
+  };
+
   const totalEntries = ledgerData.total;
-  const totalPages = ledgerData.pagination?.totalPages || (totalEntries > 0 ? Math.ceil(totalEntries / PAGE_SIZE) : 1);
-  const startItem = totalEntries === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const endItem = Math.min(currentPage * PAGE_SIZE, totalEntries);
+  const totalPages = ledgerData.pagination?.totalPages || (totalEntries > 0 ? Math.ceil(totalEntries / pageSize) : 1);
 
   return (
     <DashboardLayout
@@ -279,59 +287,30 @@ const Ledger = () => {
         {isLoading ? (
           <LoadingState message="Auditing global double-entry ledger register from PostgreSQL..." />
         ) : error ? (
-          <ErrorState message={error} onRetry={() => fetchLedger(currentPage, filterType, searchTerm)} />
+          <ErrorState message={error} onRetry={() => fetchLedger(currentPage, pageSize, filterType, searchTerm)} />
         ) : (
-          <div>
-            <GlobalLedgerTable
-              entries={ledgerData.entries}
-              title="Double-Entry General Ledger"
-              subtitle={
-                totalEntries > 0
-                  ? `Showing page ${currentPage} of ${Math.max(1, totalPages)} (${totalEntries} total journal entries registered in PostgreSQL database)`
-                  : '0 journal entries found'
-              }
-              emptyMessage="No ledger postings found matching selected criteria."
-            />
-
-            {/* Server-Side Pagination Bar */}
-            <div className="ledger-pagination-bar">
-              <div className="ledger-pagination-info">
-                {totalEntries > 0 ? (
-                  <span>
-                    Showing <strong>{startItem}</strong> to <strong>{endItem}</strong> of <strong>{totalEntries}</strong> entries
-                  </span>
-                ) : (
-                  <span>0 entries</span>
-                )}
-              </div>
-
-              <div className="ledger-pagination-actions">
-                <button
-                  type="button"
-                  className="ledger-pagination-btn"
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage <= 1 || isLoading}
-                >
-                  <ChevronLeft size={16} />
-                  <span>Previous</span>
-                </button>
-
-                <span className="ledger-page-indicator">
-                  Page {currentPage} of {Math.max(1, totalPages)}
-                </span>
-
-                <button
-                  type="button"
-                  className="ledger-pagination-btn"
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage >= totalPages || isLoading}
-                >
-                  <span>Next</span>
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-          </div>
+          <GlobalLedgerTable
+            entries={ledgerData.entries}
+            title="Double-Entry General Ledger"
+            subtitle={
+              totalEntries > 0
+                ? `Showing page ${currentPage} of ${Math.max(1, totalPages)} (${totalEntries} total journal entries registered in PostgreSQL database)`
+                : '0 journal entries found'
+            }
+            pagination={
+              <Pagination
+                currentPage={currentPage}
+                pageSize={pageSize}
+                totalRecords={totalEntries}
+                totalPages={totalPages}
+                onPageChange={handlePageChange}
+                onPageSizeChange={handlePageSizeChange}
+                pageSizeOptions={PAGE_SIZE_OPTIONS}
+                disabled={isLoading}
+              />
+            }
+            emptyMessage="No ledger postings found matching selected criteria."
+          />
         )}
 
         {/* ACCOUNT CONSISTENCY AUDIT MODAL (GET /ledger/{accountNumber}) */}

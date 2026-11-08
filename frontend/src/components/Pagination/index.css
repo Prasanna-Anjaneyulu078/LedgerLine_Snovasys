@@ -38,6 +38,17 @@
   font-weight: 700;
 }
 
+.pagination-page-indicator {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.pagination-page-indicator strong {
+  color: var(--text-color);
+  font-family: monospace;
+  font-weight: 700;
+}
+
 .pagination-size-selector {
   display: flex;
   align-items: center;
