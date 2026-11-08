@@ -165,12 +165,32 @@ export const swaggerDocument = {
     },
     '/auth/login': {
       post: {
-        summary: 'Authenticate and receive JWT token',
+        summary: 'Authenticate and receive JWT access token with persistent HttpOnly refresh cookie',
         requestBody: {
           required: true,
           content: { 'application/json': { schema: { $ref: '#/components/schemas/UserLogin' } } },
         },
         responses: { 200: { description: 'Login successful' } },
+      },
+    },
+    '/auth/refresh': {
+      post: {
+        summary: 'Rotate refresh token and issue new access token using persistent HttpOnly cookie',
+        description: 'Verifies the persistent HttpOnly refresh cookie, rotates the token in PostgreSQL, and returns a fresh short-lived JWT access token.',
+        responses: {
+          200: { description: 'Token refreshed successfully' },
+          401: { description: 'Invalid, expired, or revoked refresh token' },
+          403: { description: 'User account deactivated' },
+        },
+      },
+    },
+    '/auth/logout': {
+      post: {
+        summary: 'Invalidate active refresh token session and clear persistent cookie',
+        description: 'Revokes the refresh token record in the database and clears the HttpOnly cookie.',
+        responses: {
+          200: { description: 'Logged out successfully' },
+        },
       },
     },
     '/auth/me': {

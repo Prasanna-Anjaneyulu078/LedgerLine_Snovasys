@@ -35,6 +35,14 @@ export const accountService = {
   },
 
   /**
+   * Retrieve full account record by account number or ID
+   */
+  async getAccount(identifier) {
+    const response = await api.get(`/accounts/${identifier}`);
+    return normalizeAccount(response.data?.data || response.data);
+  },
+
+  /**
    * Retrieve balance details for a specific account
    */
   async getAccountBalance(identifier) {

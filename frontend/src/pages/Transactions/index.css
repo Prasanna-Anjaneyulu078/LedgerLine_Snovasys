@@ -199,3 +199,66 @@
   font-size: 0.8125rem;
   margin-bottom: 1.5rem;
 }
+
+/* Idempotency Protection Badges & Notices */
+.idempotency-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: var(--primary-light);
+  border: 1px solid #BFDBFE;
+  color: #1E40AF;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.45rem 0.75rem;
+  border-radius: var(--border-radius-sm);
+  margin-bottom: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.idempotency-icon {
+  color: #2563EB;
+  flex-shrink: 0;
+}
+
+.idempotency-retry-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  color: var(--warning-text);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--border-radius-sm);
+  margin-bottom: 1rem;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+
+.tx-uncertain-alert {
+  background-color: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  color: var(--warning-text);
+  padding: 0.875rem 1rem;
+  border-radius: var(--border-radius-sm);
+  font-size: 0.8125rem;
+  margin-bottom: 1rem;
+  line-height: 1.45;
+  box-sizing: border-box;
+}
+
+.tx-uncertain-alert-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  margin-bottom: 0.35rem;
+  color: #92400E;
+}
+
+.tx-uncertain-alert p {
+  margin: 0;
+}

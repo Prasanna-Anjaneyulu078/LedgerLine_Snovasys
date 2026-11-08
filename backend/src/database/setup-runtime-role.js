@@ -91,7 +91,7 @@ export async function setupRuntimeRole({
     // 3. Grant table permissions strictly by application need
     await client.query(`
       GRANT SELECT, INSERT, UPDATE ON users, accounts, transactions TO "${escapedRole}";
-      GRANT SELECT, INSERT, UPDATE, DELETE ON idempotency_keys TO "${escapedRole}";
+      GRANT SELECT, INSERT, UPDATE, DELETE ON idempotency_keys, refresh_tokens TO "${escapedRole}";
       GRANT SELECT, INSERT ON audit_events TO "${escapedRole}";
       GRANT SELECT, INSERT ON ledger_entries TO "${escapedRole}";
       REVOKE UPDATE, DELETE, TRUNCATE ON ledger_entries FROM "${escapedRole}";

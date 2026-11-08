@@ -9,13 +9,15 @@ import {
   AlertTriangle,
   CheckCircle2,
   RotateCcw,
+  ShieldCheck,
+  RefreshCw,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import transactionService from '../../services/transactionService.js';
 import accountService from '../../services/accountService.js';
 import { formatCurrency } from '../../utils/formatCurrency.js';
 import { formatDate } from '../../utils/formatDate.js';
-import { getErrorMessage } from '../../services/api.js';
+import { getErrorMessage, generateIdempotencyKey } from '../../services/api.js';
 import DashboardLayout from '../../layouts/DashboardLayout/index.jsx';
 import DataTable from '../../components/DataTable/index.jsx';
 import StatusBadge from '../../components/StatusBadge/index.jsx';
@@ -41,9 +43,15 @@ const Transactions = () => {
   // Transaction Modals: 'deposit', 'withdraw', 'transfer', or null
   const [activeModal, setActiveModal] = useState(null);
   const [selectedTxForDetails, setSelectedTxForDetails] = useState(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState(null);
   const [formSuccess, setFormSuccess] = useState(null);
+
+  // Idempotency & safe retry state
+  const [idempotencyKey, setIdempotencyKey] = useState(null);
+  const [isRetryAttempt, setIsRetryAttempt] = useState(false);
+  const [uncertainOutcome, setUncertainOutcome] = useState(false);
 
   // Form states
   const [formAccountId, setFormAccountId] = useState('');
@@ -97,90 +105,266 @@ const Transactions = () => {
     setFormDescription('');
     setFormError(null);
     setFormSuccess(null);
+    setIdempotencyKey(null);
+    setIsRetryAttempt(false);
+    setUncertainOutcome(false);
   };
 
   const closeModal = () => {
+    if (isSubmitting) return; // Prevent closing mid-flight
     setActiveModal(null);
     resetForm();
   };
 
+  // Form field modification handlers: any change treats the submission as a new logical operation
+  // and invalidates the cached idempotency key to prevent payload tampering conflicts (HTTP 409).
+  const handleAccountIdChange = (e) => {
+    setFormAccountId(e.target.value);
+    if (idempotencyKey) {
+      setIdempotencyKey(null);
+      setIsRetryAttempt(false);
+      setUncertainOutcome(false);
+    }
+    if (formError) setFormError(null);
+  };
+
+  const handleDestAccountIdChange = (e) => {
+    setFormDestAccountId(e.target.value);
+    if (idempotencyKey) {
+      setIdempotencyKey(null);
+      setIsRetryAttempt(false);
+      setUncertainOutcome(false);
+    }
+    if (formError) setFormError(null);
+  };
+
+  const handleAmountChange = (e) => {
+    setFormAmount(e.target.value);
+    if (idempotencyKey) {
+      setIdempotencyKey(null);
+      setIsRetryAttempt(false);
+      setUncertainOutcome(false);
+    }
+    if (formError) setFormError(null);
+  };
+
+  const handleDescriptionChange = (e) => {
+    setFormDescription(e.target.value);
+    if (idempotencyKey) {
+      setIdempotencyKey(null);
+      setIsRetryAttempt(false);
+      setUncertainOutcome(false);
+    }
+    if (formError) setFormError(null);
+  };
+
   const handleDepositSubmit = async () => {
+    if (isSubmitting) return;
+
     if (!formAccountId || !formAmount || parseFloat(formAmount) <= 0) {
       setFormError('Please enter a valid target account and positive amount.');
       return;
     }
+
+    // Reuse existing key if retrying the same operation; otherwise generate a fresh UUID key
+    const activeKey = idempotencyKey || generateIdempotencyKey();
+    if (!idempotencyKey) {
+      setIdempotencyKey(activeKey);
+    }
+
     setIsSubmitting(true);
     setFormError(null);
+    setUncertainOutcome(false);
+
     try {
-      await transactionService.deposit({
-        accountNumber: formAccountId,
-        amount: parseFloat(formAmount),
-        description: formDescription || 'Account deposit',
-      });
+      await transactionService.deposit(
+        {
+          accountNumber: formAccountId,
+          amount: parseFloat(formAmount),
+          description: formDescription || 'Account deposit',
+        },
+        activeKey
+      );
       setFormSuccess('Deposit successfully executed and posted to ledger.');
+      setIdempotencyKey(null);
+      setIsRetryAttempt(false);
+      setUncertainOutcome(false);
+
       setTimeout(() => {
         closeModal();
         loadData();
       }, 1200);
     } catch (err) {
-      setFormError(getErrorMessage(err));
+      const errMsg = getErrorMessage(err);
+      const isTimeout =
+        err?.code === 'ECONNABORTED' ||
+        String(err?.message || '').toLowerCase().includes('timeout');
+      const isNetworkErr = err?.code === 'ERR_NETWORK' || !err?.response;
+      const status = err?.response?.status;
+
+      if (isTimeout || isNetworkErr || status === 408 || status === 504) {
+        setUncertainOutcome(true);
+        setIsRetryAttempt(true);
+        setFormError(
+          'Network timeout or connection interrupted. The server may have already processed this deposit. Check your Transaction Journal to verify, or click "Retry Deposit" below to safely re-verify with duplicate protection.'
+        );
+      } else if (status >= 500 || status === 429) {
+        setIsRetryAttempt(true);
+        setFormError(`${errMsg} You may safely click "Retry Deposit" to attempt completion.`);
+      } else {
+        setIdempotencyKey(null);
+        setIsRetryAttempt(false);
+        setFormError(errMsg);
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleWithdrawSubmit = async () => {
+    if (isSubmitting) return;
+
     if (!formAccountId || !formAmount || parseFloat(formAmount) <= 0) {
       setFormError('Please enter a valid source account and positive amount.');
       return;
     }
+
+    // Reuse existing key if retrying the same operation; otherwise generate a fresh UUID key
+    const activeKey = idempotencyKey || generateIdempotencyKey();
+    if (!idempotencyKey) {
+      setIdempotencyKey(activeKey);
+    }
+
     setIsSubmitting(true);
     setFormError(null);
+    setUncertainOutcome(false);
+
     try {
-      await transactionService.withdraw({
-        accountNumber: formAccountId,
-        amount: parseFloat(formAmount),
-        description: formDescription || 'Account withdrawal',
-      });
+      await transactionService.withdraw(
+        {
+          accountNumber: formAccountId,
+          amount: parseFloat(formAmount),
+          description: formDescription || 'Account withdrawal',
+        },
+        activeKey
+      );
       setFormSuccess('Withdrawal verified, balance updated and posted to ledger.');
+      setIdempotencyKey(null);
+      setIsRetryAttempt(false);
+      setUncertainOutcome(false);
+
       setTimeout(() => {
         closeModal();
         loadData();
       }, 1200);
     } catch (err) {
-      setFormError(getErrorMessage(err));
+      const errMsg = getErrorMessage(err);
+      const isTimeout =
+        err?.code === 'ECONNABORTED' ||
+        String(err?.message || '').toLowerCase().includes('timeout');
+      const isNetworkErr = err?.code === 'ERR_NETWORK' || !err?.response;
+      const status = err?.response?.status;
+
+      if (isTimeout || isNetworkErr || status === 408 || status === 504) {
+        setUncertainOutcome(true);
+        setIsRetryAttempt(true);
+        setFormError(
+          'Network timeout or connection interrupted. The server may have already processed this withdrawal. Check your Transaction Journal to verify, or click "Retry Withdrawal" below to safely re-verify with duplicate protection.'
+        );
+      } else if (status >= 500 || status === 429) {
+        setIsRetryAttempt(true);
+        setFormError(`${errMsg} You may safely click "Retry Withdrawal" to attempt completion.`);
+      } else {
+        setIdempotencyKey(null);
+        setIsRetryAttempt(false);
+        setFormError(errMsg);
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleTransferSubmit = async () => {
+    if (isSubmitting) return;
+
     if (!formAccountId || !formDestAccountId || !formAmount || parseFloat(formAmount) <= 0) {
-      setFormError('Please specify source, destination, and a valid amount.');
+      setFormError('Please specify source, destination, and a valid positive amount.');
       return;
     }
     if (formAccountId === formDestAccountId) {
       setFormError('Source and destination accounts must be distinct.');
       return;
     }
+
+    // Reuse existing key if retrying the same operation; otherwise generate a fresh UUID key
+    const activeKey = idempotencyKey || generateIdempotencyKey();
+    if (!idempotencyKey) {
+      setIdempotencyKey(activeKey);
+    }
+
     setIsSubmitting(true);
     setFormError(null);
+    setUncertainOutcome(false);
+
     try {
-      await transactionService.transfer({
-        sourceAccountNumber: formAccountId,
-        destinationAccountNumber: formDestAccountId,
-        amount: parseFloat(formAmount),
-        description: formDescription || 'Inter-account transfer',
-      });
+      await transactionService.transfer(
+        {
+          sourceAccountNumber: formAccountId,
+          destinationAccountNumber: formDestAccountId,
+          amount: parseFloat(formAmount),
+          description: formDescription || 'Inter-account transfer',
+        },
+        activeKey
+      );
       setFormSuccess('Double-entry transfer completed and verified in ledger.');
+      setIdempotencyKey(null);
+      setIsRetryAttempt(false);
+      setUncertainOutcome(false);
+
       setTimeout(() => {
         closeModal();
         loadData();
       }, 1200);
     } catch (err) {
-      setFormError(getErrorMessage(err));
+      const errMsg = getErrorMessage(err);
+      const isTimeout =
+        err?.code === 'ECONNABORTED' ||
+        String(err?.message || '').toLowerCase().includes('timeout');
+      const isNetworkErr = err?.code === 'ERR_NETWORK' || !err?.response;
+      const status = err?.response?.status;
+
+      if (isTimeout || isNetworkErr || status === 408 || status === 504) {
+        setUncertainOutcome(true);
+        setIsRetryAttempt(true);
+        setFormError(
+          'Network timeout or connection interrupted. The server may have already processed this transfer. Check your Transaction Journal to verify, or click "Retry Transfer" below to safely re-verify with duplicate protection.'
+        );
+      } else if (status >= 500 || status === 429) {
+        setIsRetryAttempt(true);
+        setFormError(`${errMsg} You may safely click "Retry Transfer" to attempt completion.`);
+      } else {
+        setIdempotencyKey(null);
+        setIsRetryAttempt(false);
+        setFormError(errMsg);
+      }
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleOpenTransactionDetails = async (row) => {
+    setSelectedTxForDetails(row);
+    setIsLoadingDetails(true);
+    try {
+      // Authoritative GET /transactions/{transactionId} call carrying double-entry ledger postings
+      const fullTx = await transactionService.getTransactionById(row.id || row.reference);
+      if (fullTx) {
+        setSelectedTxForDetails(fullTx);
+      }
+    } catch (err) {
+      console.warn('Failed to load transaction ledger details:', err);
+    } finally {
+      setIsLoadingDetails(false);
     }
   };
 
@@ -256,7 +440,7 @@ const Transactions = () => {
           type="button"
           className="btn-secondary"
           style={{ height: '30px', padding: '0 8px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-          onClick={() => setSelectedTxForDetails(row)}
+          onClick={() => handleOpenTransactionDetails(row)}
         >
           <Eye size={12} />
           <span>Details</span>
@@ -414,7 +598,7 @@ const Transactions = () => {
         <ConfirmModal
           isOpen={activeModal === 'deposit'}
           title="Deposit Funds"
-          confirmText="Execute Deposit"
+          confirmText={isRetryAttempt ? 'Retry Deposit' : 'Execute Deposit'}
           onConfirm={handleDepositSubmit}
           onClose={closeModal}
           isLoading={isSubmitting}
@@ -426,18 +610,49 @@ const Transactions = () => {
             </div>
           ) : (
             <div>
-              {formError && (
+              {/* Idempotency Protection Indicator Badge */}
+              <div className="idempotency-badge">
+                <ShieldCheck size={16} className="idempotency-icon" />
+                <span>Duplicate transaction protection is enabled.</span>
+              </div>
+
+              {/* Uncertain Outcome Alert */}
+              {uncertainOutcome && (
+                <div className="tx-uncertain-alert">
+                  <div className="tx-uncertain-alert-header">
+                    <AlertTriangle size={16} />
+                    <span>Uncertain Transaction Outcome</span>
+                  </div>
+                  <p>
+                    A network timeout or connection interruption occurred before the server response was received.
+                    The ledger may have completed this operation. Please verify your <strong>Transaction Journal</strong>.
+                    If you choose to retry, duplicate protection guarantees no double-charging.
+                  </p>
+                </div>
+              )}
+
+              {/* Retry with Same Key Notice */}
+              {isRetryAttempt && !uncertainOutcome && (
+                <div className="idempotency-retry-notice">
+                  <RefreshCw size={14} className="retry-icon" />
+                  <span>Safe Retry Active: Resubmitting with original transaction key to prevent duplicate ledger postings.</span>
+                </div>
+              )}
+
+              {formError && !uncertainOutcome && (
                 <div style={{ padding: '8px 12px', backgroundColor: 'var(--danger-bg)', color: 'var(--danger-text)', borderRadius: '4px', marginBottom: '12px', fontSize: '0.8125rem' }}>
                   {formError}
                 </div>
               )}
+
               <FormInput
                 label="Target Credit Account"
                 type="select"
                 value={formAccountId}
-                onChange={(e) => setFormAccountId(e.target.value)}
+                onChange={handleAccountIdChange}
                 options={accountOptions}
                 required
+                disabled={isSubmitting}
               />
               <FormInput
                 label="Deposit Amount"
@@ -445,17 +660,19 @@ const Transactions = () => {
                 step="0.01"
                 min="1"
                 value={formAmount}
-                onChange={(e) => setFormAmount(e.target.value)}
+                onChange={handleAmountChange}
                 placeholder="0.00"
                 prefix="₹"
                 required
+                disabled={isSubmitting}
               />
               <FormInput
                 label="Transaction Description / Reference Note"
                 type="text"
                 value={formDescription}
-                onChange={(e) => setFormDescription(e.target.value)}
+                onChange={handleDescriptionChange}
                 placeholder="e.g. Inward institutional deposit"
+                disabled={isSubmitting}
               />
             </div>
           )}
@@ -465,7 +682,7 @@ const Transactions = () => {
         <ConfirmModal
           isOpen={activeModal === 'withdraw'}
           title="Withdraw Funds"
-          confirmText="Confirm Withdrawal"
+          confirmText={isRetryAttempt ? 'Retry Withdrawal' : 'Confirm Withdrawal'}
           onConfirm={handleWithdrawSubmit}
           onClose={closeModal}
           isLoading={isSubmitting}
@@ -477,18 +694,49 @@ const Transactions = () => {
             </div>
           ) : (
             <div>
-              {formError && (
+              {/* Idempotency Protection Indicator Badge */}
+              <div className="idempotency-badge">
+                <ShieldCheck size={16} className="idempotency-icon" />
+                <span>Duplicate transaction protection is enabled.</span>
+              </div>
+
+              {/* Uncertain Outcome Alert */}
+              {uncertainOutcome && (
+                <div className="tx-uncertain-alert">
+                  <div className="tx-uncertain-alert-header">
+                    <AlertTriangle size={16} />
+                    <span>Uncertain Transaction Outcome</span>
+                  </div>
+                  <p>
+                    A network timeout or connection interruption occurred before the server response was received.
+                    The ledger may have completed this operation. Please verify your <strong>Transaction Journal</strong>.
+                    If you choose to retry, duplicate protection guarantees no double-charging.
+                  </p>
+                </div>
+              )}
+
+              {/* Retry with Same Key Notice */}
+              {isRetryAttempt && !uncertainOutcome && (
+                <div className="idempotency-retry-notice">
+                  <RefreshCw size={14} className="retry-icon" />
+                  <span>Safe Retry Active: Resubmitting with original transaction key to prevent duplicate ledger postings.</span>
+                </div>
+              )}
+
+              {formError && !uncertainOutcome && (
                 <div style={{ padding: '8px 12px', backgroundColor: 'var(--danger-bg)', color: 'var(--danger-text)', borderRadius: '4px', marginBottom: '12px', fontSize: '0.8125rem' }}>
                   {formError}
                 </div>
               )}
+
               <FormInput
                 label="Source Debit Account"
                 type="select"
                 value={formAccountId}
-                onChange={(e) => setFormAccountId(e.target.value)}
+                onChange={handleAccountIdChange}
                 options={accountOptions}
                 required
+                disabled={isSubmitting}
               />
               <FormInput
                 label="Withdrawal Amount"
@@ -496,17 +744,19 @@ const Transactions = () => {
                 step="0.01"
                 min="1"
                 value={formAmount}
-                onChange={(e) => setFormAmount(e.target.value)}
+                onChange={handleAmountChange}
                 placeholder="0.00"
                 prefix="₹"
                 required
+                disabled={isSubmitting}
               />
               <FormInput
                 label="Disbursement Description"
                 type="text"
                 value={formDescription}
-                onChange={(e) => setFormDescription(e.target.value)}
+                onChange={handleDescriptionChange}
                 placeholder="e.g. Vendor operational payout"
+                disabled={isSubmitting}
               />
             </div>
           )}
@@ -516,7 +766,7 @@ const Transactions = () => {
         <ConfirmModal
           isOpen={activeModal === 'transfer'}
           title="Inter-Account Transfer"
-          confirmText="Execute Transfer"
+          confirmText={isRetryAttempt ? 'Retry Transfer' : 'Execute Transfer'}
           onConfirm={handleTransferSubmit}
           onClose={closeModal}
           isLoading={isSubmitting}
@@ -528,26 +778,58 @@ const Transactions = () => {
             </div>
           ) : (
             <div>
-              {formError && (
+              {/* Idempotency Protection Indicator Badge */}
+              <div className="idempotency-badge">
+                <ShieldCheck size={16} className="idempotency-icon" />
+                <span>Duplicate transaction protection is enabled.</span>
+              </div>
+
+              {/* Uncertain Outcome Alert */}
+              {uncertainOutcome && (
+                <div className="tx-uncertain-alert">
+                  <div className="tx-uncertain-alert-header">
+                    <AlertTriangle size={16} />
+                    <span>Uncertain Transaction Outcome</span>
+                  </div>
+                  <p>
+                    A network timeout or connection interruption occurred before the server response was received.
+                    The ledger may have completed this operation. Please verify your <strong>Transaction Journal</strong>.
+                    If you choose to retry, duplicate protection guarantees no double-charging.
+                  </p>
+                </div>
+              )}
+
+              {/* Retry with Same Key Notice */}
+              {isRetryAttempt && !uncertainOutcome && (
+                <div className="idempotency-retry-notice">
+                  <RefreshCw size={14} className="retry-icon" />
+                  <span>Safe Retry Active: Resubmitting with original transaction key to prevent duplicate ledger postings.</span>
+                </div>
+              )}
+
+              {formError && !uncertainOutcome && (
                 <div style={{ padding: '8px 12px', backgroundColor: 'var(--danger-bg)', color: 'var(--danger-text)', borderRadius: '4px', marginBottom: '12px', fontSize: '0.8125rem' }}>
                   {formError}
                 </div>
               )}
+
               <FormInput
                 label="Source (Debit) Account"
                 type="select"
                 value={formAccountId}
-                onChange={(e) => setFormAccountId(e.target.value)}
+                onChange={handleAccountIdChange}
                 options={accountOptions}
                 required
+                disabled={isSubmitting}
               />
               <FormInput
                 label="Destination (Credit) Account"
                 type="select"
                 value={formDestAccountId}
-                onChange={(e) => setFormDestAccountId(e.target.value)}
+                onChange={handleDestAccountIdChange}
                 options={allDestOptions}
                 required
+                disabled={isSubmitting}
               />
               <FormInput
                 label="Transfer Amount"
@@ -555,17 +837,19 @@ const Transactions = () => {
                 step="0.01"
                 min="1"
                 value={formAmount}
-                onChange={(e) => setFormAmount(e.target.value)}
+                onChange={handleAmountChange}
                 placeholder="0.00"
                 prefix="₹"
                 required
+                disabled={isSubmitting}
               />
               <FormInput
                 label="Transfer Purpose / Ledger Note"
                 type="text"
                 value={formDescription}
-                onChange={(e) => setFormDescription(e.target.value)}
+                onChange={handleDescriptionChange}
                 placeholder="e.g. Liquidity balancing"
+                disabled={isSubmitting}
               />
             </div>
           )}
@@ -638,6 +922,42 @@ const Transactions = () => {
                   {selectedTxForDetails.description || 'No additional remarks.'}
                 </div>
               </div>
+
+              {/* Authoritative Double-Entry Ledger Postings from GET /transactions/{id} */}
+              {selectedTxForDetails.ledgerEntries && selectedTxForDetails.ledgerEntries.length > 0 && (
+                <div style={{ marginTop: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Associated Double-Entry Ledger Postings</span>
+                    <span>{selectedTxForDetails.ledgerEntries.length} entries</span>
+                  </div>
+                  <div style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius-sm)', overflow: 'hidden' }}>
+                    <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse', textAlign: 'left' }}>
+                      <thead>
+                        <tr style={{ background: 'var(--surface-secondary)', borderBottom: '1px solid var(--border-color)' }}>
+                          <th style={{ padding: '6px 8px' }}>Account Number</th>
+                          <th style={{ padding: '6px 8px' }}>Entry Type</th>
+                          <th style={{ padding: '6px 8px', textAlign: 'right' }}>Amount</th>
+                          <th style={{ padding: '6px 8px', textAlign: 'right' }}>Balance After</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedTxForDetails.ledgerEntries.map((le, idx) => (
+                          <tr key={le.id || idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            <td style={{ padding: '6px 8px', fontWeight: 600 }}>{le.account_number || le.accountNumber}</td>
+                            <td style={{ padding: '6px 8px' }}><StatusBadge status={le.entry_type || le.entryType} /></td>
+                            <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: (le.entry_type || le.entryType) === 'CREDIT' ? 'var(--success-color)' : 'var(--text-color)' }}>
+                              {(le.entry_type || le.entryType) === 'CREDIT' ? '+' : '-'}₹{le.amountFormatted || (Number(le.amountPaise || le.amount || 0) / 100).toFixed(2)}
+                            </td>
+                            <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace' }}>
+                              ₹{le.balanceAfterFormatted || (Number(le.balanceAfterPaise || le.balance_after || 0) / 100).toFixed(2)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           </ConfirmModal>
         )}

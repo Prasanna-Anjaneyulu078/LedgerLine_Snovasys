@@ -12,7 +12,7 @@ export function formatCurrency(amount, includeSymbol = true) {
   if (typeof amount === 'bigint') {
     num = Number(amount) / 100;
   } else if (typeof amount === 'string') {
-    const clean = amount.trim();
+    const clean = amount.replace(/[₹,\s]/g, '').trim();
     if (!clean || isNaN(Number(clean))) {
       return includeSymbol ? '₹0.00' : '0.00';
     }

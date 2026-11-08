@@ -19,6 +19,7 @@ const MIGRATION_TABLE_MAP = {
   '005_create_idempotency_keys.sql': 'idempotency_keys',
   '006_create_audit_events.sql': 'audit_events',
   '007_prevent_ledger_modification.sql': 'ledger_entries',
+  '008_create_refresh_tokens.sql': 'refresh_tokens',
 };
 
 /**

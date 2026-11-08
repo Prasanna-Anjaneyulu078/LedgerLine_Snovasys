@@ -59,10 +59,10 @@ export async function cleanDatabase(retries = 2) {
       const tableCheckRes = await client.query(`
         SELECT table_name FROM information_schema.tables 
         WHERE table_schema = 'public' 
-          AND table_name IN ('users', 'accounts', 'transactions', 'ledger_entries', 'idempotency_keys', 'audit_events');
+          AND table_name IN ('users', 'accounts', 'transactions', 'ledger_entries', 'idempotency_keys', 'audit_events', 'refresh_tokens');
       `);
       const existingTables = new Set(tableCheckRes.rows.map((r) => r.table_name));
-      const requiredTables = ['users', 'accounts', 'transactions', 'ledger_entries', 'idempotency_keys', 'audit_events'];
+      const requiredTables = ['users', 'accounts', 'transactions', 'ledger_entries', 'idempotency_keys', 'audit_events', 'refresh_tokens'];
       const missingTables = requiredTables.filter((t) => !existingTables.has(t));
 
       if (missingTables.length > 0) {
@@ -77,7 +77,7 @@ export async function cleanDatabase(retries = 2) {
 
     // 3. Truncate in safe dependency order without outer transaction block to prevent deadlocks
     await client.query(
-      'TRUNCATE TABLE idempotency_keys, audit_events, ledger_entries, transactions, accounts, users CASCADE;'
+      'TRUNCATE TABLE refresh_tokens, idempotency_keys, audit_events, ledger_entries, transactions, accounts, users CASCADE;'
     );
   } catch (err) {
     if (client) {

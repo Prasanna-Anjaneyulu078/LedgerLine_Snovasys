@@ -8,11 +8,20 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  FileCheck2,
+  AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import ledgerService from '../../services/ledgerService.js';
+import { formatCurrency } from '../../utils/formatCurrency.js';
+import { formatDate } from '../../utils/formatDate.js';
+import { getErrorMessage } from '../../services/api.js';
 import DashboardLayout from '../../layouts/DashboardLayout/index.jsx';
 import GlobalLedgerTable from '../../components/GlobalLedgerTable/index.jsx';
+import ConfirmModal from '../../components/ConfirmModal/index.jsx';
+import FormInput from '../../components/FormInput/index.jsx';
+import StatusBadge from '../../components/StatusBadge/index.jsx';
 import LoadingState from '../../components/LoadingState/index.jsx';
 import ErrorState from '../../components/ErrorState/index.jsx';
 import './index.css';
@@ -33,6 +42,13 @@ const Ledger = () => {
   const [filterType, setFilterType] = useState('ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Account Ledger & Consistency Verification Modal State
+  const [isConsistencyModalOpen, setIsConsistencyModalOpen] = useState(false);
+  const [verifyAccountNumber, setVerifyAccountNumber] = useState('');
+  const [accountLedgerData, setAccountLedgerData] = useState(null);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verifyError, setVerifyError] = useState(null);
 
   const fetchLedger = useCallback(
     async (page = currentPage, type = filterType, search = searchTerm) => {
@@ -85,6 +101,24 @@ const Ledger = () => {
     fetchLedger(currentPage, filterType, searchTerm);
   }, [currentPage, filterType, searchTerm]);
 
+  const handleVerifyAccountConsistency = async () => {
+    if (!verifyAccountNumber.trim()) {
+      setVerifyError('Please enter an account number to verify.');
+      return;
+    }
+    setIsVerifying(true);
+    setVerifyError(null);
+    try {
+      // Authoritative GET /ledger/{accountNumber} consistency audit call
+      const data = await ledgerService.getAccountLedger(verifyAccountNumber.trim());
+      setAccountLedgerData(data);
+    } catch (err) {
+      setVerifyError(getErrorMessage(err));
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
   const handleFilterChange = (newType) => {
     setFilterType(newType);
     setCurrentPage(1);
@@ -131,7 +165,20 @@ const Ledger = () => {
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => {
+                setVerifyError(null);
+                setAccountLedgerData(null);
+                setIsConsistencyModalOpen(true);
+              }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              <FileCheck2 size={15} />
+              <span>Verify Account Consistency</span>
+            </button>
             <button
               type="button"
               className="btn-secondary"
@@ -286,6 +333,103 @@ const Ledger = () => {
             </div>
           </div>
         )}
+
+        {/* ACCOUNT CONSISTENCY AUDIT MODAL (GET /ledger/{accountNumber}) */}
+        <ConfirmModal
+          isOpen={isConsistencyModalOpen}
+          title="Account Ledger & Consistency Audit"
+          confirmText="Audit Consistency"
+          onConfirm={handleVerifyAccountConsistency}
+          onClose={() => {
+            setIsConsistencyModalOpen(false);
+            setAccountLedgerData(null);
+            setVerifyError(null);
+          }}
+          isLoading={isVerifying}
+        >
+          <div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-end', marginBottom: '1rem' }}>
+              <div style={{ flex: 1 }}>
+                <FormInput
+                  label="Target Account Identifier (e.g. LL-ACC-1001)"
+                  type="text"
+                  placeholder="LL-ACC-..."
+                  value={verifyAccountNumber}
+                  onChange={(e) => setVerifyAccountNumber(e.target.value)}
+                  disabled={isVerifying}
+                  required
+                />
+              </div>
+            </div>
+
+            {verifyError && (
+              <div style={{ padding: '8px 12px', backgroundColor: 'var(--danger-bg)', color: 'var(--danger-text)', borderRadius: '4px', marginBottom: '12px', fontSize: '0.8125rem' }}>
+                {verifyError}
+              </div>
+            )}
+
+            {accountLedgerData && (
+              <div style={{ marginTop: '0.75rem' }}>
+                <div style={{ padding: '10px 12px', borderRadius: 'var(--border-radius-sm)', marginBottom: '1rem', background: accountLedgerData.isBalanceConsistent ? 'var(--success-bg)' : 'var(--danger-bg)', border: `1px solid ${accountLedgerData.isBalanceConsistent ? 'var(--success-border)' : 'var(--danger-border)'}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 700, color: accountLedgerData.isBalanceConsistent ? 'var(--success-text)' : 'var(--danger-text)', fontSize: '0.875rem' }}>
+                    {accountLedgerData.isBalanceConsistent ? <ShieldCheck size={18} /> : <AlertTriangle size={18} />}
+                    <span>{accountLedgerData.isBalanceConsistent ? 'CONSISTENCY VERIFIED: Cryptographically Balanced' : 'DISCREPANCY DETECTED: Ledger sum does not equal account balance'}</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '0.75rem', marginBottom: '1rem' }}>
+                  <div style={{ padding: '0.75rem', background: 'var(--surface-secondary)', borderRadius: 'var(--border-radius-sm)', border: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: '0.6875rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>Account Balance</div>
+                    <div style={{ fontSize: '0.875rem', fontWeight: 700 }} className="tabular-nums">
+                      ₹{accountLedgerData.currentBalanceFormatted}
+                    </div>
+                  </div>
+                  <div style={{ padding: '0.75rem', background: 'var(--surface-secondary)', borderRadius: 'var(--border-radius-sm)', border: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: '0.6875rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>Ledger Calculated Sum</div>
+                    <div style={{ fontSize: '0.875rem', fontWeight: 700 }} className="tabular-nums">
+                      ₹{(Number(accountLedgerData.ledgerCalculatedBalancePaise) / 100).toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+
+                {accountLedgerData.entries && accountLedgerData.entries.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Account Journal Entries</span>
+                      <span>{accountLedgerData.totalEntries || accountLedgerData.entries.length} postings</span>
+                    </div>
+                    <div style={{ maxHeight: '180px', overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius-sm)' }}>
+                      <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse', textAlign: 'left' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--surface-secondary)', borderBottom: '1px solid var(--border-color)' }}>
+                            <th style={{ padding: '6px 8px' }}>Ref</th>
+                            <th style={{ padding: '6px 8px' }}>Type</th>
+                            <th style={{ padding: '6px 8px', textAlign: 'right' }}>Amount</th>
+                            <th style={{ padding: '6px 8px', textAlign: 'right' }}>Balance After</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {accountLedgerData.entries.map((ent, idx) => (
+                            <tr key={ent.id || idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                              <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>{ent.transactionReference || ent.transaction_reference}</td>
+                              <td style={{ padding: '6px 8px' }}><StatusBadge status={ent.entryType || ent.entry_type} /></td>
+                              <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: (ent.entryType || ent.entry_type) === 'CREDIT' ? 'var(--success-color)' : 'var(--text-color)' }}>
+                                {(ent.entryType || ent.entry_type) === 'CREDIT' ? '+' : '-'}₹{ent.amountFormatted || (Number(ent.amountPaise || ent.amount || 0) / 100).toFixed(2)}
+                              </td>
+                              <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace' }}>
+                                ₹{ent.balanceAfterFormatted || (Number(ent.balanceAfterPaise || ent.balance_after || 0) / 100).toFixed(2)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </ConfirmModal>
       </div>
     </DashboardLayout>
   );

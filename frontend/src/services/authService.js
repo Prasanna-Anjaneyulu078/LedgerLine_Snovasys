@@ -1,4 +1,4 @@
-import api from './api.js';
+import api, { setAccessToken } from './api.js';
 
 export const authService = {
   /**
@@ -8,6 +8,9 @@ export const authService = {
   async login(email, password) {
     const response = await api.post('/auth/login', { email, password });
     const payload = response.data?.data || response.data;
+    if (payload?.token) {
+      setAccessToken(payload.token);
+    }
     return {
       user: {
         id: payload.user?.id,
@@ -46,6 +49,9 @@ export const authService = {
     });
 
     const payload = response.data?.data || response.data;
+    if (payload?.token) {
+      setAccessToken(payload.token);
+    }
     return {
       user: {
         id: payload.user?.id,
@@ -58,6 +64,45 @@ export const authService = {
       },
       token: payload.token,
     };
+  },
+
+  /**
+   * Restore/refresh session via HttpOnly cookie
+   * Returns { user, token }
+   */
+  async refreshToken() {
+    const response = await api.post('/auth/refresh');
+    const payload = response.data?.data || response.data;
+    if (payload?.token) {
+      setAccessToken(payload.token);
+    }
+    return {
+      user: {
+        id: payload.user?.id,
+        name: payload.user?.fullName || payload.user?.name,
+        fullName: payload.user?.fullName || payload.user?.name,
+        email: payload.user?.email,
+        role: payload.user?.role,
+        isActive: payload.user?.isActive ?? payload.user?.is_active ?? true,
+        createdAt: payload.user?.createdAt || payload.user?.created_at,
+      },
+      token: payload.token,
+    };
+  },
+
+  /**
+   * Terminate active session and clear server-side refresh token & cookie
+   */
+  async logout() {
+    try {
+      await api.post('/auth/logout');
+    } catch (err) {
+      // In case network or token already invalid, continue cleaning client state
+      console.warn('Backend logout encountered error:', err);
+    } finally {
+      setAccessToken(null);
+    }
+    return true;
   },
 
   /**

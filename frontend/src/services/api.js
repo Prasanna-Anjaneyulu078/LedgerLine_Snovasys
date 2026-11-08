@@ -2,70 +2,144 @@ import axios from 'axios';
 
 const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || '/api/v1';
 
+// In-memory access token storage (short-lived access token, never in localStorage/cookies)
+let inMemoryAccessToken = null;
+
+export const setAccessToken = (token) => {
+  inMemoryAccessToken = token || null;
+};
+
+export const getAccessToken = () => inMemoryAccessToken;
+
 export const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Secure cross-origin/same-site cookie transport
   timeout: 15000,
 });
 
-// Interceptor to inject bearer token
+// Interceptor to inject in-memory bearer access token
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem('ledgerline_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    if (inMemoryAccessToken) {
+      config.headers.Authorization = `Bearer ${inMemoryAccessToken}`;
     }
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// Interceptor to handle responses and session expiration
+// Concurrency control for token refreshing
+let isRefreshing = false;
+let refreshSubscribers = [];
+
+function subscribeTokenRefresh(callback) {
+  refreshSubscribers.push(callback);
+}
+
+function onRefreshed(error, newToken) {
+  refreshSubscribers.forEach((callback) => callback(error, newToken));
+  refreshSubscribers = [];
+}
+
+// Interceptor to handle responses, centralized token refresh, and session expiration
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response) {
-      const { status, data, config } = error.response;
-      const isAuthEndpoint = config?.url?.includes('/auth/login') || config?.url?.includes('/auth/register');
+  async (error) => {
+    const originalRequest = error.config;
 
-      // 401 Unauthorized handling (token expired, revoked, or invalid)
-      if (status === 401 && !isAuthEndpoint) {
-        const requestToken = config?.headers?.Authorization?.replace(/^Bearer\s+/i, '');
-        const currentToken = localStorage.getItem('ledgerline_token');
+    if (!error.response) {
+      return Promise.reject(error);
+    }
 
-        // Only clear session if the failed request actually used the currently stored token.
-        // This prevents accidental removal of a newly established session due to a stale in-flight request.
-        if (!requestToken || requestToken === currentToken) {
-          localStorage.removeItem('ledgerline_token');
-          localStorage.removeItem('ledgerline_user');
-          window.dispatchEvent(
-            new CustomEvent('ledgerline:session_expired', {
-              detail: { reason: 'unauthorized', message: data?.message || 'Authentication session has expired.' },
-            })
-          );
-        }
+    const { status, data } = error.response;
+    const isAuthEndpoint =
+      originalRequest?.url?.includes('/auth/login') ||
+      originalRequest?.url?.includes('/auth/register') ||
+      originalRequest?.url?.includes('/auth/refresh') ||
+      originalRequest?.url?.includes('/auth/logout');
+
+    // 401 Unauthorized handling: attempt silent token refresh via HttpOnly cookie
+    if (status === 401 && !isAuthEndpoint && !originalRequest?._retry) {
+      originalRequest._retry = true;
+
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          subscribeTokenRefresh((refreshErr, newToken) => {
+            if (refreshErr) {
+              return reject(refreshErr);
+            }
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            resolve(api(originalRequest));
+          });
+        });
       }
 
-      // 403 Forbidden handling - specifically for deactivated/suspended accounts
-      if (status === 403) {
-        const msg = String(data?.message || '').toLowerCase();
-        if (msg.includes('deactivated') || msg.includes('suspended')) {
-          const requestToken = config?.headers?.Authorization?.replace(/^Bearer\s+/i, '');
-          const currentToken = localStorage.getItem('ledgerline_token');
-          if (!requestToken || requestToken === currentToken) {
-            localStorage.removeItem('ledgerline_token');
-            localStorage.removeItem('ledgerline_user');
-            window.dispatchEvent(
-              new CustomEvent('ledgerline:session_expired', {
-                detail: { reason: 'deactivated', message: data?.message || 'User account is deactivated.' },
-              })
-            );
-          }
+      isRefreshing = true;
+
+      try {
+        // Direct call to refresh endpoint using credentials (HttpOnly cookie)
+        const refreshResponse = await axios.post(
+          `${API_BASE_URL}/auth/refresh`,
+          {},
+          { withCredentials: true, timeout: 10000 }
+        );
+
+        const newPayload = refreshResponse.data?.data || refreshResponse.data;
+        const newAccessToken = newPayload?.token;
+
+        if (!newAccessToken) {
+          throw new Error('Refresh endpoint did not return a valid access token');
         }
+
+        setAccessToken(newAccessToken);
+        onRefreshed(null, newAccessToken);
+
+        // Notify AuthContext of session renewal
+        window.dispatchEvent(
+          new CustomEvent('ledgerline:token_refreshed', {
+            detail: { token: newAccessToken, user: newPayload?.user },
+          })
+        );
+
+        originalRequest.headers.Authorization = `Bearer ${newAccessToken}`;
+        return api(originalRequest);
+      } catch (refreshErr) {
+        setAccessToken(null);
+        onRefreshed(refreshErr, null);
+
+        window.dispatchEvent(
+          new CustomEvent('ledgerline:session_expired', {
+            detail: {
+              reason: 'unauthorized',
+              message: 'Your authentication session has expired. Please log in again.',
+            },
+          })
+        );
+        return Promise.reject(refreshErr);
+      } finally {
+        isRefreshing = false;
       }
     }
+
+    // 403 Forbidden handling - specifically for deactivated/suspended accounts
+    if (status === 403) {
+      const msg = String(data?.message || '').toLowerCase();
+      if (msg.includes('deactivated') || msg.includes('suspended')) {
+        setAccessToken(null);
+        window.dispatchEvent(
+          new CustomEvent('ledgerline:session_expired', {
+            detail: {
+              reason: 'deactivated',
+              message: data?.message || 'Your user account is deactivated.',
+            },
+          })
+        );
+      }
+    }
+
     return Promise.reject(error);
   }
 );
@@ -135,7 +209,14 @@ export function getErrorMessage(error) {
 }
 
 export function generateIdempotencyKey() {
-  return `IDEM-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 export default api;

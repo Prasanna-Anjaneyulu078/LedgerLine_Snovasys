@@ -26,13 +26,59 @@ const app = express();
 // Security HTTP headers
 app.use(helmet());
 
-// CORS configuration
+// CORS configuration with exact origin verification for credentials support
+const defaultOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:5000',
+  'http://127.0.0.1:5000',
+];
+const configuredOrigins = env.CORS_ORIGIN && env.CORS_ORIGIN !== '*'
+  ? env.CORS_ORIGIN.split(',').map((o) => o.trim())
+  : [];
+const allowedOrigins = Array.from(new Set([...defaultOrigins, ...configuredOrigins]));
+
 app.use(
   cors({
-    origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN.split(','),
+    origin: (origin, callback) => {
+      // Allow requests with no origin (such as mobile apps, curl, server-to-server, or test runners)
+      if (!origin) return callback(null, true);
+      if (
+        allowedOrigins.includes(origin) ||
+        (env.NODE_ENV !== 'production' && /^http:\/\/localhost(:\d+)?$/.test(origin)) ||
+        (env.NODE_ENV !== 'production' && /^http:\/\/127\.0\.0\.1(:\d+)?$/.test(origin))
+      ) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: true,
   })
 );
+
+// Cookie parsing middleware (zero external dependency, populates req.cookies)
+app.use((req, res, next) => {
+  req.cookies = {};
+  const cookieHeader = req.headers.cookie;
+  if (cookieHeader) {
+    const pairs = cookieHeader.split(';');
+    for (const pair of pairs) {
+      const idx = pair.indexOf('=');
+      if (idx > 0) {
+        const key = pair.substring(0, idx).trim();
+        const val = pair.substring(idx + 1).trim();
+        try {
+          req.cookies[key] = decodeURIComponent(val);
+        } catch {
+          req.cookies[key] = val;
+        }
+      }
+    }
+  }
+  next();
+});
 
 // Body parsing with limits
 app.use(express.json({ limit: '1mb' }));
@@ -48,8 +94,8 @@ app.use(generalLimiter);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
-// Health Check Endpoint (Deployment and Monitoring requirement)
-app.get('/health', async (req, res, next) => {
+// Health Check Endpoint Handler (Deployment and Monitoring requirement)
+const healthHandler = async (req, res, next) => {
   try {
     const dbStatus = await checkDatabaseConnection();
     res.status(200).json(
@@ -75,7 +121,9 @@ app.get('/health', async (req, res, next) => {
       error: err.message,
     });
   }
-});
+};
+
+app.get('/health', healthHandler);
 
 // Root Information Endpoint
 app.get('/', (req, res) => {
@@ -94,6 +142,7 @@ app.get('/', (req, res) => {
 
 // API v1 Routes
 const apiV1Router = express.Router();
+apiV1Router.get('/health', healthHandler);
 apiV1Router.use('/auth', authRouter);
 apiV1Router.use('/accounts', accountRouter);
 apiV1Router.use('/transactions', transactionRouter);

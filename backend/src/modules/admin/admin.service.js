@@ -99,27 +99,59 @@ export class AdminService {
     const txnsData = txnsRes.rows[0];
     const auditData = auditRes.rows[0];
 
+    const totalUsers = Number(usersData.total_users || 0);
+    const activeUsers = Number(usersData.active_users || 0);
+    const inactiveUsers = Math.max(0, totalUsers - activeUsers);
+
+    const totalAccounts = Number(accountsData.total_accounts || 0);
+    const activeAccounts = Number(accountsData.active_accounts || 0);
+    const inactiveAccounts = Math.max(0, totalAccounts - activeAccounts);
+
+    const totalTransactions = Number(txnsData.total_transactions || 0);
+    const successfulTransactions = Number(txnsData.successful_transactions || 0);
+    const refusedTransactions = Number(txnsData.refused_transactions || 0);
+    const failedTransactions = Number(txnsData.failed_transactions || 0);
+    const unsuccessfulTransactions = refusedTransactions + failedTransactions;
+
+    const totalAuditLogs = Number(auditData.total_audit_logs || 0);
+
     const overview = {
-      totalUsers: usersData.total_users,
-      activeUsers: usersData.active_users,
-      inactiveUsers: usersData.total_users - usersData.active_users,
-      totalAccounts: accountsData.total_accounts,
-      activeAccounts: accountsData.active_accounts,
-      inactiveAccounts: accountsData.total_accounts - accountsData.active_accounts,
+      totalUsers,
+      total_users: totalUsers,
+      activeUsers,
+      active_users: activeUsers,
+      inactiveUsers,
+      inactive_users: inactiveUsers,
+      totalAccounts,
+      total_accounts: totalAccounts,
+      activeAccounts,
+      active_accounts: activeAccounts,
+      inactiveAccounts,
+      inactive_accounts: inactiveAccounts,
       totalVaultBalancePaise: accountsData.total_vault_balance_paise,
+      total_vault_balance_paise: accountsData.total_vault_balance_paise,
       totalVaultBalanceFormatted: formatRupees(accountsData.total_vault_balance_paise),
-      totalTransactions: txnsData.total_transactions,
-      successfulTransactions: txnsData.successful_transactions,
-      refusedTransactions: txnsData.refused_transactions,
-      failedTransactions: txnsData.failed_transactions,
-      unsuccessfulTransactions: txnsData.refused_transactions + txnsData.failed_transactions,
+      totalTransactions,
+      total_transactions: totalTransactions,
+      successfulTransactions,
+      successful_transactions: successfulTransactions,
+      refusedTransactions,
+      refused_transactions: refusedTransactions,
+      failedTransactions,
+      failed_transactions: failedTransactions,
+      unsuccessfulTransactions,
+      unsuccessful_transactions: unsuccessfulTransactions,
       totalDepositsPaise: txnsData.total_deposits_paise,
+      total_deposits_paise: txnsData.total_deposits_paise,
       totalDepositsFormatted: formatRupees(txnsData.total_deposits_paise),
       totalWithdrawalsPaise: txnsData.total_withdrawals_paise,
+      total_withdrawals_paise: txnsData.total_withdrawals_paise,
       totalWithdrawalsFormatted: formatRupees(txnsData.total_withdrawals_paise),
       totalTransferVolumePaise: txnsData.total_transfer_volume_paise,
+      total_transfer_volume_paise: txnsData.total_transfer_volume_paise,
       totalTransferVolumeFormatted: formatRupees(txnsData.total_transfer_volume_paise),
-      totalAuditLogs: auditData.total_audit_logs,
+      totalAuditLogs,
+      total_audit_logs: totalAuditLogs,
     };
 
     const transactionTypeDistribution = typeDistRes.rows.map((row) => ({

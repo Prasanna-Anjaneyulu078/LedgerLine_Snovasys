@@ -198,6 +198,156 @@
   text-decoration: underline;
 }
 
+.chart-empty-state {
+  padding: 3rem 1rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+}
+
+.admin-operational-health-card {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: var(--surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-sm);
+}
+
+.operational-health-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.operational-health-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text-color);
+}
+
+.operational-status-badge {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+}
+
+.operational-status-optimal {
+  background-color: #DCFCE7;
+  color: #166534;
+  border: 1px solid #BBF7D0;
+}
+
+.operational-status-normal {
+  background-color: #EFF6FF;
+  color: #1E40AF;
+  border: 1px solid #DBEAFE;
+}
+
+.operational-health-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.operational-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.operational-metric-label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.operational-metric-value {
+  font-size: 1.125rem;
+  font-weight: 700;
+  font-family: monospace;
+  color: var(--text-color);
+}
+
+.operational-metric-sub {
+  font-size: 0.6875rem;
+  color: var(--text-secondary);
+}
+
+/* Audit stream details styling */
+.audit-details-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 320px;
+}
+
+.audit-meta-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.audit-meta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  background-color: var(--surface-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 0.6875rem;
+  line-height: 1.2;
+}
+
+.audit-meta-chip-key {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.audit-meta-chip-val {
+  font-weight: 600;
+  font-family: monospace;
+  color: var(--text-color);
+}
+
+.audit-expand-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.6875rem;
+  color: var(--primary-color);
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+  margin-top: 2px;
+  width: fit-content;
+}
+
+.audit-expand-btn:hover {
+  text-decoration: underline;
+}
+
+.audit-no-details {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.audit-text-detail {
+  font-size: 0.75rem;
+  color: var(--text-color);
+}
+
 @media (max-width: 1200px) {
   .admin-stats-grid {
     grid-template-columns: repeat(2, 1fr);

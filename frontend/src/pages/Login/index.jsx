@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -20,12 +20,12 @@ const Login = () => {
   const [errorMsg, setErrorMsg] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { login, user, isAuthenticated, authError } = useAuth();
+  const { login, user, isAuthenticated, isLoading, authError } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
   // If already authenticated and not experiencing a session error, navigate to appropriate dashboard
-  React.useEffect(() => {
+  useEffect(() => {
     if (isAuthenticated && user && !authError) {
       const intendedDestination = location.state?.from?.pathname;
       if (intendedDestination && isSafeInternalPath(intendedDestination) && !intendedDestination.includes('/login')) {
@@ -36,6 +36,19 @@ const Login = () => {
       }
     }
   }, [isAuthenticated, user, authError, navigate, location.state]);
+
+  // If session is restoring from persistent cookie, display loading screen so login form never flashes
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' }}>
+        <div style={{ textAlign: 'center', fontFamily: 'var(--font-body)', color: '#64748B' }}>
+          <div style={{ width: '32px', height: '32px', border: '3px solid #E2E8F0', borderTopColor: '#2563EB', borderRadius: '50%', margin: '0 auto 12px', animation: 'spin 0.8s linear infinite' }} />
+          <p>Verifying institutional credentials...</p>
+          <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+        </div>
+      </div>
+    );
+  }
 
   const activeError = errorMsg || authError;
 

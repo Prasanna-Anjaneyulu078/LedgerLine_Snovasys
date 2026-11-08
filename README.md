@@ -261,18 +261,32 @@ All API endpoints follow standardized REST design principles rooted under `/api/
 1. **Public Registration (`POST /api/v1/auth/register`):**
    - Requires `{ fullName, email, password }` matching strict password complexity (min 8 chars, uppercase, lowercase, digit, special character).
    - Server-enforced role: Always assigns `ACCOUNT_HOLDER`. Client-supplied roles are rejected with HTTP 400.
+   - Sets a secure, persistent `HttpOnly` refresh token cookie and returns a short-lived access token.
 2. **Login (`POST /api/v1/auth/login`):**
    - Requires `{ email, password }`.
-   - Returns signed JWT bearer token and sanitized user profile.
-3. **Session Verification (`GET /api/v1/auth/me`):**
+   - Returns a short-lived signed JWT access token in the response payload and sets a secure `HttpOnly` persistent refresh token cookie (`Max-Age: 7 days`, `Path=/`, `SameSite=Lax`).
+   - Refresh tokens are never exposed to JavaScript or stored in `localStorage`.
+3. **Session Restoration on Reopening (`POST /api/v1/auth/refresh`):**
+   - When the user returns or reopens the browser, `AuthContext` calls `/auth/refresh`.
+   - The browser automatically submits the `HttpOnly` cookie via credentialed CORS (`withCredentials: true`).
+   - The backend validates the token against hashed records in PostgreSQL, rotates the refresh token (issuing a new `HttpOnly` cookie), and returns a fresh access token with user details.
+   - Reopening LedgerLine seamlessly restores the session without prompting for login.
+4. **Transparent Token Refresh & Request Queueing:**
+   - Axios response interceptors catch 401 Unauthorized responses for in-flight requests.
+   - Concurrency control queues simultaneous requests during refresh, executing a single-flight token rotation and retrying queued requests with the new access token.
+5. **Token Reuse & Breach Detection:**
+   - The `refresh_tokens` table tracks rotated tokens via `replaced_by_token_hash`.
+   - If an already-rotated token is presented again (indicating potential token theft), the server immediately revokes all active sessions for that user and records an audit event (`AUTH_REFRESH_TOKEN_REUSE_DETECTED`).
+6. **Explicit Logout (`POST /api/v1/auth/logout`):**
+   - Revokes the refresh token record in the database.
+   - Clears the `HttpOnly` cookie with identical attributes.
+   - Clears in-memory client state, ensuring subsequent visits require fresh login.
+7. **Session Verification (`GET /api/v1/auth/me`):**
    - Validates `Authorization: Bearer <token>`.
    - Returns active user details and associated accounts.
-4. **Token Injection & Stale Request Protection:**
-   - Axios request interceptors attach `Authorization: Bearer <token>` automatically.
-   - Response interceptors distinguish failed auth attempts from session invalidation. Stale requests with previous tokens are prevented from removing newly established sessions.
 
 ### Key API Endpoints
-- **Authentication:** `POST /auth/register`, `POST /auth/login`, `GET /auth/me`
+- **Authentication:** `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
 - **Accounts:** `GET /accounts`, `POST /accounts`, `GET /accounts/:accountNumber`, `GET /accounts/:accountNumber/balance`
 - **Transactions:** `POST /transactions/deposit`, `POST /transactions/withdraw`, `POST /transactions/transfer`, `GET /transactions`
 - **Statements:** `GET /statements/:accountNumber`
@@ -285,6 +299,9 @@ All API endpoints follow standardized REST design principles rooted under `/api/
 ## 9. Implemented Features & Known Limitations
 
 ### Implemented Features
+- **Persistent Cookie-Based Authentication:** Secure `HttpOnly` refresh token cookies persist sessions across browser closures while preventing XSS token theft.
+- **Cryptographic Refresh Token Rotation:** SHA-256 hashed refresh tokens rotated upon each refresh with token reuse breach detection.
+- **Single-Flight Concurrency Refresh:** Axios response interceptors coordinate simultaneous requests during token renewal.
 - **Deterministic Lock Ordering:** Prevents deadlock between simultaneous reciprocal transfers.
 - **Strict Concurrency Safety:** `SELECT ... FOR UPDATE` row locks guarantee accurate balances under concurrent load.
 - **Database-Level Immutability:** Append-only triggers prevent modifying or deleting ledger entries.
@@ -295,8 +312,6 @@ All API endpoints follow standardized REST design principles rooted under `/api/
 
 ### Known Limitations
 - **In-Memory Rate Limiting:** Single-instance `express-rate-limit` counts in process memory. Multi-node clusters require a distributed Redis store.
-- **Access Token Expiration Without Silent Refresh:** JWT tokens expire after their configured duration (default 15 minutes). Users must re-authenticate as rotating refresh tokens are not implemented.
-- **Storage Medium (`localStorage` vs. `HttpOnly` Cookies):** Tokens reside in browser `localStorage`. While immune to CSRF, `localStorage` is accessible to JavaScript within the origin.
 - **Single Currency:** The ledger engine operates strictly in Indian Rupees (INR / paise) and does not support multi-currency foreign exchange operations.
 - **Database Immutability Scope:** PostgreSQL row triggers protect against standard SQL modifications, but cannot prevent direct schema alterations by superusers (`neondb_owner`).
 
@@ -308,7 +323,7 @@ This section verifies the full compliance of LedgerLine against the ten official
 
 | # | Official Requirement | Status | Implementation File(s) & Endpoints | Test Suite Coverage | Verification Evidence |
 | :-: | :--- | :---: | :--- | :--- | :--- |
-| **1** | **Authentication & Three Distinct Roles** (`ADMIN`, `ACCOUNT_HOLDER`, `AUDITOR`) | **COMPLETE** | • `backend/src/modules/auth/auth.routes.js`<br/>• `backend/src/modules/auth/auth.service.js`<br/>• `backend/src/middleware/authenticate.js`<br/>• `backend/src/middleware/authorize.js`<br/>• `POST /api/v1/auth/register`<br/>• `POST /api/v1/auth/login`<br/>• `GET /api/v1/auth/me` | `backend/tests/integration/auth.test.js`<br/>`backend/tests/integration/authorization.test.js` | 18 auth tests passing. Password bcrypt hashing (12 rounds), JWT verification, and strict role discrimination (`ADMIN`, `ACCOUNT_HOLDER`, `AUDITOR`) verified. |
+| **1** | **Authentication & Three Distinct Roles** (`ADMIN`, `ACCOUNT_HOLDER`, `AUDITOR`) | **COMPLETE** | • `backend/src/modules/auth/auth.routes.js`<br/>• `backend/src/modules/auth/auth.service.js`<br/>• `backend/src/middleware/authenticate.js`<br/>• `backend/src/middleware/authorize.js`<br/>• `backend/src/database/migrations/008_create_refresh_tokens.sql`<br/>• `POST /api/v1/auth/register`<br/>• `POST /api/v1/auth/login`<br/>• `POST /api/v1/auth/refresh`<br/>• `POST /api/v1/auth/logout`<br/>• `GET /api/v1/auth/me` | `backend/tests/integration/auth.test.js`<br/>`backend/tests/integration/cookie_auth.test.js`<br/>`backend/tests/integration/authorization.test.js` | 26 auth integration tests passing. Persistent `HttpOnly` cookie authentication, refresh token rotation, token reuse breach detection, bcrypt hashing (12 rounds), JWT verification, and strict role discrimination (`ADMIN`, `ACCOUNT_HOLDER`, `AUDITOR`) verified. |
 | **2** | **Account Creation, Balances & Statements** | **COMPLETE** | • `backend/src/modules/accounts/account.routes.js`<br/>• `backend/src/modules/accounts/account.service.js`<br/>• `POST /api/v1/accounts`<br/>• `GET /api/v1/accounts`<br/>• `GET /api/v1/accounts/:accountNumber/balance`<br/>• `GET /api/v1/statements/:accountNumber` | `backend/tests/integration/accounts.test.js`<br/>`backend/tests/integration/statements.test.js` | Creation with 0 initial balance, real-time balance queries in minor units (paise) and formatted rupees, and running balance ledger statements. |
 | **3** | **Deposits, Withdrawals & Transfers** | **COMPLETE** | • `backend/src/modules/transactions/transaction.routes.js`<br/>• `backend/src/modules/transactions/transaction.service.js`<br/>• `POST /api/v1/transactions/deposit`<br/>• `POST /api/v1/transactions/withdraw`<br/>• `POST /api/v1/transactions/transfer` | `backend/tests/integration/deposit.test.js`<br/>`backend/tests/integration/withdrawal.test.js`<br/>`backend/tests/integration/transfer.test.js` | Direct deposit, balance-checked withdrawal, and balanced double-entry transfer (debit source, credit dest). |
 | **4** | **Conservation of Money** | **COMPLETE** | • `backend/src/modules/transactions/transaction.service.js`<br/>• `backend/src/modules/ledger/ledger.service.js`<br/>• `backend/src/repositories/ledger.repository.js` | `backend/tests/integration/transfer.test.js` (`Successful transfer preserves money conservation`) | Internal transfers strictly preserve aggregate system balance. Sum of all credits equals sum of all debits. Verified via pre/post database balance sum assertions. |
@@ -317,7 +332,7 @@ This section verifies the full compliance of LedgerLine against the ten official
 | **7** | **Concurrency Safety & Deadlock Prevention** | **COMPLETE** | • `backend/src/repositories/account.repository.js` (`findTwoForUpdate`)<br/>• `backend/src/modules/transactions/transaction.service.js` | `backend/tests/integration/concurrency.test.js`<br/>`backend/tests/integration/transfer.test.js` | Row locks acquired with `SELECT ... FOR UPDATE`. In transfers, account UUIDs are sorted deterministically (`ORDER BY id ASC FOR UPDATE`) eliminating deadlocks (`40P01`). Validated with simultaneous competing withdrawals and opposite-direction transfers. |
 | **8** | **Statements with Refused Attempts & Initiators** | **COMPLETE** | • `backend/src/modules/statements/statement.service.js`<br/>• `backend/src/modules/statements/statement.routes.js`<br/>• `GET /api/v1/statements/:accountNumber`<br/>• `backend/src/repositories/audit.repository.js` | `backend/tests/integration/statements.test.js`<br/>`backend/tests/integration/authorization.test.js` | Statement output includes `committedPostings` with `initiator` (name of initiating user) and `resultingRunningBalanceFormatted`, plus `refusedAttempts` extracted from the audit log with refusal reasons. |
 | **9** | **Account-Level Authorization (IDOR Prevention)** | **COMPLETE** | • `backend/src/middleware/authorize.js` (`authorizeAccountAccess`)<br/>• `backend/src/modules/transactions/transaction.service.js` | `backend/tests/integration/authorization.test.js`<br/>`backend/tests/integration/accounts.test.js` | Account holders are strictly blocked (`403 Forbidden`) from viewing balances, downloading statements, or initiating transactions on accounts they do not own. Auditors are blocked from money-movement. |
-| **10** | **Automated Integrity & Authorization Tests** | **COMPLETE** | • `backend/tests/integration/`<br/>• `backend/tests/unit/money.test.js` | Jest + Supertest (`npm test --prefix backend`) | **118/118 passing across 10 test suites** against live Neon PostgreSQL database. Real isolation, genuine concurrency, real rollbacks. Zero mocking of database engine. |
+| **10** | **Automated Integrity & Authorization Tests** | **COMPLETE** | • `backend/tests/integration/`<br/>• `backend/tests/unit/money.test.js` | Jest + Supertest (`npm test --prefix backend`) | **126/126 passing across 11 test suites** against live Neon PostgreSQL database. Real isolation, genuine concurrency, real rollbacks. Zero mocking of database engine. |
 
 ---
 

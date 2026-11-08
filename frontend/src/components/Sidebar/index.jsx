@@ -21,9 +21,9 @@ const Sidebar = ({ isMobileOpen, onCloseMobile }) => {
   const { user, role, logout } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login', { replace: true });
   };
 
   const getInitials = (name) => {

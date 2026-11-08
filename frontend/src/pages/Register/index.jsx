@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, ArrowRight, Shield } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
@@ -18,15 +18,28 @@ const Register = () => {
   const [errorMsg, setErrorMsg] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { register, user, isAuthenticated } = useAuth();
+  const { register, user, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
 
   // If already authenticated, navigate to dashboard
-  React.useEffect(() => {
+  useEffect(() => {
     if (isAuthenticated && user) {
       navigate('/dashboard', { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
+
+  // If session is restoring from persistent cookie, display loading screen
+  if (isLoading) {
+    return (
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' }}>
+        <div style={{ textAlign: 'center', fontFamily: 'var(--font-body)', color: '#64748B' }}>
+          <div style={{ width: '32px', height: '32px', border: '3px solid #E2E8F0', borderTopColor: '#2563EB', borderRadius: '50%', margin: '0 auto 12px', animation: 'spin 0.8s linear infinite' }} />
+          <p>Verifying institutional credentials...</p>
+          <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
+        </div>
+      </div>
+    );
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
