@@ -15,12 +15,14 @@ import {
 } from 'lucide-react';
 import adminService from '../../services/adminService.js';
 import ledgerService from '../../services/ledgerService.js';
+import transactionService from '../../services/transactionService.js';
 import { formatDate } from '../../utils/formatDate.js';
 import { formatCurrency, formatPaise } from '../../utils/formatCurrency.js';
 import DashboardLayout from '../../layouts/DashboardLayout/index.jsx';
 import StatCard from '../../components/StatCard/index.jsx';
 import DataTable from '../../components/DataTable/index.jsx';
 import StatusBadge from '../../components/StatusBadge/index.jsx';
+import ConfirmModal from '../../components/ConfirmModal/index.jsx';
 import LoadingState from '../../components/LoadingState/index.jsx';
 import ErrorState from '../../components/ErrorState/index.jsx';
 import './index.css';
@@ -47,8 +49,8 @@ function formatChartDate(dateStr) {
  * Converts raw JSON and null values into formatted, readable key-value chips.
  * Handles paise-to-INR formatting, credential protection, and expandable overflow.
  */
-function AuditDetailsCell({ row }) {
-  const [expanded, setExpanded] = useState(false);
+function AuditDetailsCell({ row, initialExpanded = false }) {
+  const [expanded, setExpanded] = useState(initialExpanded);
 
   let metaObj = null;
   if (row.metadata && typeof row.metadata === 'object') {
@@ -158,6 +160,27 @@ const AdminDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Inspector Modals
+  const [selectedTxForDetails, setSelectedTxForDetails] = useState(null);
+  const [isLoadingTxDetails, setIsLoadingTxDetails] = useState(false);
+  const [selectedAuditEventForDetails, setSelectedAuditEventForDetails] = useState(null);
+
+  const handleOpenTransactionDetails = async (row) => {
+    const refOrId = row.id || row.transactionReference || row.reference;
+    setSelectedTxForDetails(row);
+    setIsLoadingTxDetails(true);
+    try {
+      const fullTx = await transactionService.getTransactionById(refOrId);
+      if (fullTx) {
+        setSelectedTxForDetails(fullTx);
+      }
+    } catch (err) {
+      console.warn('Failed to load transaction ledger details:', err);
+    } finally {
+      setIsLoadingTxDetails(false);
+    }
+  };
+
   const loadData = async () => {
     setIsLoading(true);
     setError(null);
@@ -228,61 +251,50 @@ const AdminDashboard = () => {
       header: 'Reference',
       accessor: 'transactionReference',
       render: (row) => (
-        <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-color)' }}>
-          {row.transactionReference || '—'}
-        </span>
+        <button
+          type="button"
+          className="table-link-btn"
+          onClick={() => handleOpenTransactionDetails(row)}
+          title="Click to view full transaction and double-entry ledger postings"
+          style={{
+            fontWeight: 600,
+            fontFamily: 'monospace',
+            textAlign: 'left',
+          }}
+        >
+          {row.transactionReference || row.reference || '—'}
+        </button>
       ),
     },
     {
       header: 'Type',
       accessor: 'transactionType',
-      render: (row) => <StatusBadge status={row.transactionType} />,
-    },
-    {
-      header: 'Accounts Involved',
-      render: (row) => {
-        if (row.transactionType === 'TRANSFER') {
-          return (
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              {row.sourceAccountNumber || '—'} &rarr; {row.destinationAccountNumber || '—'}
-            </span>
-          );
-        }
-        if (row.transactionType === 'DEPOSIT') {
-          return (
-            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-              To: {row.destinationAccountNumber || '—'}
-            </span>
-          );
-        }
-        return (
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-            From: {row.sourceAccountNumber || '—'}
-          </span>
-        );
-      },
+      render: (row) => <StatusBadge status={row.transactionType || row.type} />,
     },
     {
       header: 'Amount',
       accessor: 'amountFormatted',
       align: 'right',
-      render: (row) => (
-        <span
-          style={{
-            fontWeight: 600,
-            fontFamily: 'monospace',
-            color:
-              row.transactionType === 'DEPOSIT'
-                ? 'var(--success-color)'
-                : row.transactionType === 'WITHDRAWAL'
-                ? 'var(--danger-color)'
-                : 'var(--text-color)',
-          }}
-        >
-          {row.transactionType === 'DEPOSIT' ? '+' : row.transactionType === 'WITHDRAWAL' ? '-' : ''}
-          {formatCurrency(row.amountFormatted)}
-        </span>
-      ),
+      render: (row) => {
+        const type = row.transactionType || row.type;
+        const isDeposit = type === 'DEPOSIT';
+        const isWithdrawal = type === 'WITHDRAWAL';
+        const isRefused = row.status === 'REFUSED';
+        const color = isRefused
+          ? 'var(--text-secondary)'
+          : isDeposit
+          ? 'var(--success-color)'
+          : isWithdrawal
+          ? 'var(--danger-color)'
+          : 'var(--text-color)';
+        const prefix = isRefused ? '' : isDeposit ? '+' : isWithdrawal ? '-' : '';
+        const amt = row.amountFormatted || (row.amount !== undefined ? formatCurrency(row.amount) : '0.00');
+        return (
+          <span style={{ fontWeight: 700, fontFamily: 'monospace', color }}>
+            {prefix}{formatCurrency(amt)}
+          </span>
+        );
+      },
     },
     {
       header: 'Status',
@@ -290,55 +302,45 @@ const AdminDashboard = () => {
       align: 'center',
       render: (row) => <StatusBadge status={row.status} />,
     },
-    {
-      header: 'Timestamp',
-      accessor: 'createdAt',
-      align: 'right',
-      render: (row) => (
-        <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-          {formatDate(row.createdAt)}
-        </span>
-      ),
-    },
   ];
 
   const auditColumns = [
     {
-      header: 'Timestamp',
-      accessor: 'timestamp',
-      render: (row) => (
-        <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
-          {formatDate(row.timestamp || row.createdAt)}
-        </span>
-      ),
-    },
-    {
       header: 'Actor',
       accessor: 'actorEmail',
       render: (row) => (
-        <span style={{ fontWeight: 600, color: 'var(--text-color)' }}>
-          {row.actorEmail}
-        </span>
+        <button
+          type="button"
+          className="table-link-btn"
+          onClick={() => setSelectedAuditEventForDetails(row)}
+          title="Click to inspect audit event details"
+          style={{
+            fontWeight: 600,
+            textAlign: 'left',
+          }}
+        >
+          {row.actorEmail || 'System / Automated'}
+        </button>
       ),
-    },
-    {
-      header: 'Role',
-      accessor: 'actorRole',
-      render: (row) => <StatusBadge status={row.actorRole} />,
     },
     {
       header: 'Action',
       accessor: 'action',
       render: (row) => (
-        <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+        <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-color)' }}>
           {row.action}
         </span>
       ),
     },
     {
-      header: 'Details',
-      accessor: 'details',
-      render: (row) => <AuditDetailsCell row={row} />,
+      header: 'Timestamp',
+      accessor: 'timestamp',
+      align: 'right',
+      render: (row) => (
+        <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
+          {formatDate(row.timestamp || row.createdAt)}
+        </span>
+      ),
     },
   ];
 
@@ -637,6 +639,232 @@ const AdminDashboard = () => {
               emptyMessage="No audit events logged yet."
             />
           </div>
+
+          {/* TRANSACTION DETAILS MODAL */}
+          {selectedTxForDetails && (
+            <ConfirmModal
+              isOpen={!!selectedTxForDetails}
+              title={`Transaction Record: ${selectedTxForDetails.transactionReference || selectedTxForDetails.reference || 'Details'}`}
+              confirmText="Close Inspector"
+              cancelText="Dismiss"
+              onConfirm={() => setSelectedTxForDetails(null)}
+              onClose={() => setSelectedTxForDetails(null)}
+            >
+              <div>
+                {selectedTxForDetails.refusalReason && (
+                  <div className="tx-refusal-alert">
+                    <strong>Refusal Notification:</strong> {selectedTxForDetails.refusalReason}
+                  </div>
+                )}
+
+                <div className="tx-details-grid">
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Reference Number</div>
+                    <div className="tx-detail-value tabular-nums" style={{ fontFamily: 'monospace' }}>
+                      {selectedTxForDetails.transactionReference || selectedTxForDetails.reference}
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Transaction Type</div>
+                    <div className="tx-detail-value">
+                      <StatusBadge status={selectedTxForDetails.transactionType || selectedTxForDetails.type} />
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Posting Status</div>
+                    <div className="tx-detail-value">
+                      <StatusBadge status={selectedTxForDetails.status} />
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Transacted Amount</div>
+                    <div
+                      className="tx-detail-value tabular-nums"
+                      style={{
+                        color:
+                          (selectedTxForDetails.transactionType || selectedTxForDetails.type) === 'DEPOSIT'
+                            ? 'var(--success-color)'
+                            : 'var(--text-color)',
+                      }}
+                    >
+                      {formatCurrency(selectedTxForDetails.amountFormatted || selectedTxForDetails.amount)}
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Source Account</div>
+                    <div className="tx-detail-value tabular-nums">
+                      {selectedTxForDetails.sourceAccountNumber || selectedTxForDetails.source_account_number || 'External Liquidity / Cash Vault'}
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Destination Account</div>
+                    <div className="tx-detail-value tabular-nums">
+                      {selectedTxForDetails.destinationAccountNumber || selectedTxForDetails.destination_account_number || 'External Payout / Cash Vault'}
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Initiator</div>
+                    <div className="tx-detail-value">
+                      {selectedTxForDetails.initiatorName || selectedTxForDetails.initiator_name || 'Authorized User / System'}
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Timestamp</div>
+                    <div className="tx-detail-value tabular-nums">
+                      {formatDate(selectedTxForDetails.createdAt || selectedTxForDetails.timestamp)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="tx-detail-box" style={{ width: '100%', boxSizing: 'border-box' }}>
+                  <div className="tx-detail-label">Full Description / Remarks</div>
+                  <div className="tx-detail-value" style={{ fontWeight: 400, marginTop: '4px' }}>
+                    {selectedTxForDetails.description || 'No additional remarks.'}
+                  </div>
+                </div>
+
+                {/* Authoritative Double-Entry Ledger Postings */}
+                {selectedTxForDetails.ledgerEntries && selectedTxForDetails.ledgerEntries.length > 0 && (
+                  <div style={{ marginTop: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                    <div
+                      style={{
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        textTransform: 'uppercase',
+                        color: 'var(--text-secondary)',
+                        marginBottom: '0.5rem',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                      }}
+                    >
+                      <span>Associated Double-Entry Ledger Postings</span>
+                      <span>{selectedTxForDetails.ledgerEntries.length} entries</span>
+                    </div>
+                    <div style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius-sm)', overflow: 'hidden' }}>
+                      <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse', textAlign: 'left' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--surface-secondary)', borderBottom: '1px solid var(--border-color)' }}>
+                            <th style={{ padding: '6px 8px' }}>Account Number</th>
+                            <th style={{ padding: '6px 8px' }}>Entry Type</th>
+                            <th style={{ padding: '6px 8px', textAlign: 'right' }}>Amount</th>
+                            <th style={{ padding: '6px 8px', textAlign: 'right' }}>Balance After</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedTxForDetails.ledgerEntries.map((le, idx) => (
+                            <tr key={le.id || idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                              <td style={{ padding: '6px 8px', fontWeight: 600 }}>{le.account_number || le.accountNumber}</td>
+                              <td style={{ padding: '6px 8px' }}><StatusBadge status={le.entry_type || le.entryType} /></td>
+                              <td
+                                style={{
+                                  padding: '6px 8px',
+                                  textAlign: 'right',
+                                  fontWeight: 600,
+                                  color: (le.entry_type || le.entryType) === 'CREDIT' ? 'var(--success-color)' : 'var(--text-color)',
+                                }}
+                              >
+                                {(le.entry_type || le.entryType) === 'CREDIT' ? '+' : '-'}₹{le.amountFormatted || (Number(le.amountPaise || le.amount || 0) / 100).toFixed(2)}
+                              </td>
+                              <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace' }}>
+                                ₹{le.balanceAfterFormatted || (Number(le.balanceAfterPaise || le.balance_after || 0) / 100).toFixed(2)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </ConfirmModal>
+          )}
+
+          {/* AUDIT EVENT DETAILS MODAL */}
+          {selectedAuditEventForDetails && (
+            <ConfirmModal
+              isOpen={!!selectedAuditEventForDetails}
+              title={`Audit Event: ${selectedAuditEventForDetails.action || 'Security Log'}`}
+              confirmText="Close Inspector"
+              cancelText="Dismiss"
+              onConfirm={() => setSelectedAuditEventForDetails(null)}
+              onClose={() => setSelectedAuditEventForDetails(null)}
+            >
+              <div>
+                <div className="tx-details-grid">
+                  <div className="tx-detail-box" style={{ gridColumn: 'span 2' }}>
+                    <div className="tx-detail-label">Event ID (UUID)</div>
+                    <div className="tx-detail-value tabular-nums" style={{ fontFamily: 'monospace', fontSize: '0.8125rem', wordBreak: 'break-all' }}>
+                      {selectedAuditEventForDetails.id || '—'}
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Actor</div>
+                    <div className="tx-detail-value">
+                      {selectedAuditEventForDetails.actorEmail || 'System / Automated'}
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Actor Role</div>
+                    <div className="tx-detail-value">
+                      <StatusBadge status={selectedAuditEventForDetails.actorRole || 'SYSTEM'} />
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Action Executed</div>
+                    <div className="tx-detail-value" style={{ fontFamily: 'monospace' }}>
+                      {selectedAuditEventForDetails.action || '—'}
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Event Status</div>
+                    <div className="tx-detail-value">
+                      <StatusBadge status={selectedAuditEventForDetails.status || 'SUCCESS'} />
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Target Resource</div>
+                    <div className="tx-detail-value" style={{ fontFamily: 'monospace', fontSize: '0.8125rem' }}>
+                      {selectedAuditEventForDetails.resource || '—'}
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">IP Address</div>
+                    <div className="tx-detail-value tabular-nums" style={{ fontFamily: 'monospace' }}>
+                      {selectedAuditEventForDetails.ipAddress || 'Internal / Direct'}
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box" style={{ gridColumn: 'span 2' }}>
+                    <div className="tx-detail-label">Timestamp</div>
+                    <div className="tx-detail-value tabular-nums">
+                      {formatDate(selectedAuditEventForDetails.timestamp || selectedAuditEventForDetails.createdAt)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="tx-detail-box" style={{ width: '100%', boxSizing: 'border-box' }}>
+                  <div className="tx-detail-label">Sanitized Event Details & Metadata</div>
+                  <div style={{ marginTop: '6px' }}>
+                    <AuditDetailsCell row={selectedAuditEventForDetails} initialExpanded={true} />
+                  </div>
+                </div>
+              </div>
+            </ConfirmModal>
+          )}
         </div>
       )}
     </DashboardLayout>

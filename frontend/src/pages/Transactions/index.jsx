@@ -380,27 +380,32 @@ const Transactions = () => {
       header: 'Reference',
       accessor: 'reference',
       render: (row) => (
-        <span style={{ fontWeight: 600, color: 'var(--text-color)' }}>
-          {row.reference}
-        </span>
+        <button
+          type="button"
+          className="table-link-btn"
+          onClick={() => handleOpenTransactionDetails(row)}
+          title="Click to view full transaction and double-entry ledger postings"
+          style={{
+            fontWeight: 600,
+            fontFamily: 'monospace',
+            textAlign: 'left',
+          }}
+        >
+          {row.reference || row.transactionReference || '—'}
+        </button>
       ),
     },
     {
       header: 'Type',
       accessor: 'type',
-      render: (row) => <StatusBadge status={row.type} />,
-    },
-    {
-      header: 'Description',
-      accessor: 'description',
-      render: (row) => <span>{row.description || '—'}</span>,
+      render: (row) => <StatusBadge status={row.type || row.transactionType} />,
     },
     {
       header: 'Amount',
       accessor: 'amount',
       align: 'right',
       render: (row) => {
-        const isCredit = row.type === 'DEPOSIT';
+        const isCredit = (row.type || row.transactionType) === 'DEPOSIT';
         const color =
           row.status === 'REFUSED'
             ? 'var(--text-secondary)'
@@ -409,7 +414,7 @@ const Transactions = () => {
             : 'var(--text-color)';
         const prefix = row.status === 'REFUSED' ? '' : isCredit ? '+' : '-';
         return (
-          <span style={{ fontWeight: 700, color }}>
+          <span style={{ fontWeight: 700, fontFamily: 'monospace', color }}>
             {prefix}
             {formatCurrency(row.amount)}
           </span>
@@ -427,24 +432,9 @@ const Transactions = () => {
       accessor: 'createdAt',
       align: 'right',
       render: (row) => (
-        <span style={{ color: 'var(--text-secondary)' }}>
+        <span style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>
           {formatDate(row.createdAt)}
         </span>
-      ),
-    },
-    {
-      header: 'Action',
-      align: 'center',
-      render: (row) => (
-        <button
-          type="button"
-          className="btn-secondary"
-          style={{ height: '30px', padding: '0 8px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-          onClick={() => handleOpenTransactionDetails(row)}
-        >
-          <Eye size={12} />
-          <span>Details</span>
-        </button>
       ),
     },
   ];
@@ -898,6 +888,20 @@ const Transactions = () => {
                   <div className="tx-detail-label">Posting Status</div>
                   <div className="tx-detail-value">
                     <StatusBadge status={selectedTxForDetails.status} />
+                  </div>
+                </div>
+
+                <div className="tx-detail-box">
+                  <div className="tx-detail-label">Source Account</div>
+                  <div className="tx-detail-value tabular-nums">
+                    {selectedTxForDetails.sourceAccountNumber || selectedTxForDetails.source_account_number || 'External Liquidity / Cash Vault'}
+                  </div>
+                </div>
+
+                <div className="tx-detail-box">
+                  <div className="tx-detail-label">Destination Account</div>
+                  <div className="tx-detail-value tabular-nums">
+                    {selectedTxForDetails.destinationAccountNumber || selectedTxForDetails.destination_account_number || 'External Payout / Cash Vault'}
                   </div>
                 </div>
 
