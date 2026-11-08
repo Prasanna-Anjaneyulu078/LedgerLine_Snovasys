@@ -191,7 +191,6 @@ npm run dev
 For detailed technical references, implementation specifics, and threat modeling, refer to the dedicated documentation files:
 
 - 📖 **[Backend Documentation](backend/README.md)**: Architecture, raw SQL schema, Express routing, transaction processing, idempotency, and Render deployment.
-- 🎨 **[Frontend Documentation](frontend/README.md)**: React 19 architecture, Vite build pipeline, route guards, Axios interceptors, component library, and design tokens.
+- 🎨 **[Frontend Documentation](frontend/README.md)**: React 19 architecture, Vite build pipeline, route guards, Axios interceptors, component library, API integration contracts, and design tokens.
 - 🛡️ **[Threat Model & Security Hardening](THREATS.md)**: Comprehensive 14-threat security evaluation, attack vectors, and automated mitigations.
 - 🤖 **[AI Engineering Prompt History](PROMPTS.md)**: Verbatim prompt logs, architectural decisions, and bug fix histories.
-- 📐 **[Frontend Integration Plan](FRONTEND_INTEGRATION_PLAN.md)**: Component layouts, state models, and design system specifications.
