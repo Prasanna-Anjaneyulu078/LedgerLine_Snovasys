@@ -93,7 +93,12 @@ export const ledgerService = {
     const result = normalized;
     result.events = normalized;
     result.total = payload?.total ?? normalized.length;
-    result.pagination = payload?.pagination;
+    result.pagination = payload?.pagination || {
+      page: Number(query.page) || 1,
+      limit: Number(query.limit) || 10,
+      totalEvents: payload?.total ?? normalized.length,
+      totalPages: Math.ceil((payload?.total ?? normalized.length) / (Number(query.limit) || 10)),
+    };
     return result;
   },
 };

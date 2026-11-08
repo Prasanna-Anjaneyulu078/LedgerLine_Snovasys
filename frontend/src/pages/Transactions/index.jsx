@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   ArrowDownLeft,
@@ -23,6 +23,7 @@ import DataTable from '../../components/DataTable/index.jsx';
 import StatusBadge from '../../components/StatusBadge/index.jsx';
 import ConfirmModal from '../../components/ConfirmModal/index.jsx';
 import FormInput from '../../components/FormInput/index.jsx';
+import Pagination from '../../components/Pagination/index.jsx';
 import LoadingState from '../../components/LoadingState/index.jsx';
 import ErrorState from '../../components/ErrorState/index.jsx';
 import './index.css';
@@ -36,9 +37,25 @@ const Transactions = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Server-Side Pagination & Filtering
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalTransactions, setTotalTransactions] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
   // Filters
   const [typeFilter, setTypeFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+
+  // Debounce search input to prevent rapid duplicate queries
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
 
   // Transaction Modals: 'deposit', 'withdraw', 'transfer', or null
   const [activeModal, setActiveModal] = useState(null);
@@ -59,33 +76,62 @@ const Transactions = () => {
   const [formAmount, setFormAmount] = useState('');
   const [formDescription, setFormDescription] = useState('');
 
-  const loadData = async () => {
+  // Fetch accounts on mount for action modals
+  useEffect(() => {
+    accountService.getAccounts()
+      .then((accs) => {
+        setAccounts(accs || []);
+        if (accs && accs.length > 0) {
+          setFormAccountId(accs[0].accountNumber || accs[0].id);
+          if (accs.length > 1) {
+            setFormDestAccountId(accs[1].accountNumber || accs[1].id);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Server-side transaction fetching with filters, search, and pagination
+  const fetchTransactions = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const [txs, accs] = await Promise.all([
-        transactionService.getTransactions(),
-        accountService.getAccounts(),
-      ]);
-      setTransactions(txs || []);
-      setAccounts(accs || []);
-
-      if (accs && accs.length > 0) {
-        setFormAccountId(accs[0].accountNumber || accs[0].id);
-        if (accs.length > 1) {
-          setFormDestAccountId(accs[1].accountNumber || accs[1].id);
-        }
+      const query = {
+        page: currentPage,
+        limit: pageSize,
+      };
+      if (typeFilter !== 'ALL') {
+        query.type = typeFilter;
       }
+      if (statusFilter !== 'ALL') {
+        query.status = statusFilter;
+      }
+      if (debouncedSearch && debouncedSearch.trim() !== '') {
+        query.search = debouncedSearch.trim();
+      }
+
+      const res = await transactionService.getTransactions(query);
+      const list = res?.transactions || (Array.isArray(res) ? res : []);
+      setTransactions(list);
+
+      const total = res?.pagination?.totalTransactions ?? res?.total ?? list.length;
+      setTotalTransactions(total);
+      const pages = res?.pagination?.totalPages ?? (total > 0 ? Math.ceil(total / pageSize) : 1);
+      setTotalPages(Math.max(1, pages));
     } catch (err) {
       setError('Unable to load transactions from ledger.');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentPage, pageSize, typeFilter, statusFilter, debouncedSearch]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    fetchTransactions();
+  }, [fetchTransactions]);
+
+  const loadData = useCallback(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
 
   // Check URL query parameters for action
   useEffect(() => {
@@ -368,13 +414,6 @@ const Transactions = () => {
     }
   };
 
-  // Filtered transactions
-  const filteredTransactions = transactions.filter((tx) => {
-    if (typeFilter !== 'ALL' && tx.type !== typeFilter) return false;
-    if (statusFilter !== 'ALL' && tx.status !== statusFilter) return false;
-    return true;
-  });
-
   const columns = [
     {
       header: 'Reference',
@@ -525,7 +564,10 @@ const Transactions = () => {
                 id="tx-type-filter"
                 className="filter-select"
                 value={typeFilter}
-                onChange={(e) => setTypeFilter(e.target.value)}
+                onChange={(e) => {
+                  setTypeFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
               >
                 <option value="ALL">All Types</option>
                 <option value="DEPOSIT">Deposit</option>
@@ -542,7 +584,10 @@ const Transactions = () => {
                 id="tx-status-filter"
                 className="filter-select"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
               >
                 <option value="ALL">All Statuses</option>
                 <option value="SUCCESS">Success</option>
@@ -550,13 +595,15 @@ const Transactions = () => {
               </select>
             </div>
 
-            {(typeFilter !== 'ALL' || statusFilter !== 'ALL') && (
+            {(typeFilter !== 'ALL' || statusFilter !== 'ALL' || searchTerm.trim() !== '') && (
               <button
                 type="button"
                 className="filter-reset-btn"
                 onClick={() => {
                   setTypeFilter('ALL');
                   setStatusFilter('ALL');
+                  setSearchTerm('');
+                  setCurrentPage(1);
                 }}
                 title="Reset active filters"
               >
@@ -575,11 +622,29 @@ const Transactions = () => {
         ) : (
           <DataTable
             columns={columns}
-            data={filteredTransactions}
+            data={transactions}
             title="Transaction Journal"
-            subtitle={`${filteredTransactions.length} transaction entries on record`}
-            searchPlaceholder="Search by ref or description..."
-            searchField="reference"
+            subtitle={`${totalTransactions} total transaction entries in database`}
+            searchPlaceholder="Search by ref, description, or account..."
+            searchValue={searchTerm}
+            onSearchChange={(val) => {
+              setSearchTerm(val);
+              setCurrentPage(1);
+            }}
+            pagination={
+              <Pagination
+                currentPage={currentPage}
+                pageSize={pageSize}
+                totalRecords={totalTransactions}
+                totalPages={totalPages}
+                onPageChange={(page) => setCurrentPage(page)}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setCurrentPage(1);
+                }}
+                disabled={isLoading}
+              />
+            }
             emptyMessage="No transactions matched the selected filters."
           />
         )}

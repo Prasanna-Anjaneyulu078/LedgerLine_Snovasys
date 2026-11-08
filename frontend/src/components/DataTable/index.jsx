@@ -10,11 +10,25 @@ const DataTable = ({
   actions,
   searchPlaceholder = 'Search records...',
   searchField,
+  searchValue,
+  onSearchChange,
+  pagination,
   emptyMessage = 'No records found matching criteria.',
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
+  const [internalSearchTerm, setInternalSearchTerm] = useState('');
+  const isServerSearch = typeof onSearchChange === 'function';
+  const searchTerm = isServerSearch ? (searchValue ?? '') : internalSearchTerm;
+
+  const handleSearchChange = (e) => {
+    if (isServerSearch) {
+      onSearchChange(e.target.value);
+    } else {
+      setInternalSearchTerm(e.target.value);
+    }
+  };
 
   const filteredData = React.useMemo(() => {
+    if (isServerSearch) return data || [];
     if (!searchTerm || !data) return data || [];
     const term = searchTerm.toLowerCase();
 
@@ -26,11 +40,11 @@ const DataTable = ({
         (val) => val && String(val).toLowerCase().includes(term)
       );
     });
-  }, [data, searchTerm, searchField]);
+  }, [data, searchTerm, searchField, isServerSearch]);
 
   return (
     <div className="data-table-container">
-      {(title || actions || searchField) && (
+      {(title || actions || searchField || isServerSearch) && (
         <div className="data-table-toolbar">
           <div className="data-table-title-area">
             {title && <h3 className="data-table-title">{title}</h3>}
@@ -38,14 +52,14 @@ const DataTable = ({
           </div>
 
           <div className="data-table-actions">
-            {searchField && (
+            {(searchField || isServerSearch) && (
               <div className="data-table-search">
                 <Search size={14} className="data-table-search-icon" />
                 <input
                   type="text"
                   placeholder={searchPlaceholder}
                   value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onChange={handleSearchChange}
                 />
               </div>
             )}
@@ -105,6 +119,7 @@ const DataTable = ({
           </tbody>
         </table>
       </div>
+      {pagination}
     </div>
   );
 };

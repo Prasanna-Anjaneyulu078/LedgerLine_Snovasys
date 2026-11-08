@@ -37,6 +37,7 @@ export class AuditRepository {
       actorId = null,
       action = null,
       resourceType = null,
+      status = null,
       startDate = null,
       endDate = null,
       search = null,
@@ -66,14 +67,23 @@ export class AuditRepository {
       conditions.push(`ae.actor_id = $${params.length}`);
     }
 
-    if (action) {
-      params.push(action);
+    if (action && action !== 'ALL' && typeof action === 'string' && action.trim() !== '') {
+      params.push(action.trim());
       conditions.push(`ae.action = $${params.length}`);
     }
 
     if (resourceType) {
       params.push(resourceType);
       conditions.push(`ae.resource_type = $${params.length}`);
+    }
+
+    if (status && status !== 'ALL' && typeof status === 'string' && status.trim() !== '') {
+      const s = status.trim().toUpperCase();
+      if (s === 'FAILURE' || s === 'REFUSED') {
+        conditions.push(`(ae.action ILIKE '%FAILURE%' OR ae.action ILIKE '%REFUSED%')`);
+      } else if (s === 'SUCCESS') {
+        conditions.push(`(ae.action NOT ILIKE '%FAILURE%' AND ae.action NOT ILIKE '%REFUSED%')`);
+      }
     }
 
     if (startDate) {

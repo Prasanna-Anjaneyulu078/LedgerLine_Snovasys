@@ -1,5 +1,5 @@
 import React from 'react';
-import { Building2, ShieldCheck, Lock } from 'lucide-react';
+import { Building2 } from 'lucide-react';
 import './index.css';
 
 const AuthLayout = ({ children, title, subtitle }) => {
@@ -36,11 +36,6 @@ const AuthLayout = ({ children, title, subtitle }) => {
               <span>Cryptographic idempotency protection</span>
             </div>
           </div>
-        </div>
-
-        <div className="auth-security-badge">
-          <ShieldCheck size={18} style={{ color: 'var(--success-color)' }} />
-          <span>FIPS 140-2 Level Ledger Protocol &bull; Audit Sealed</span>
         </div>
       </aside>
 

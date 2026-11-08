@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { ShieldAlert, RefreshCw, Filter, RotateCcw } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import ledgerService from '../../services/ledgerService.js';
@@ -7,6 +7,7 @@ import DashboardLayout from '../../layouts/DashboardLayout/index.jsx';
 import DataTable from '../../components/DataTable/index.jsx';
 import StatusBadge from '../../components/StatusBadge/index.jsx';
 import ConfirmModal from '../../components/ConfirmModal/index.jsx';
+import Pagination from '../../components/Pagination/index.jsx';
 import LoadingState from '../../components/LoadingState/index.jsx';
 import ErrorState from '../../components/ErrorState/index.jsx';
 import './index.css';
@@ -141,59 +142,105 @@ function SanitizedAuditInspector({ row }) {
   );
 }
 
+const ALL_AUDIT_ACTIONS = [
+  'AUTH_LOGIN_SUCCESS',
+  'AUTH_LOGIN_FAILURE',
+  'AUTH_LOGIN_REFUSED',
+  'AUTH_REGISTER_SUCCESS',
+  'AUTH_REGISTER_FAILURE',
+  'AUTH_LOGOUT_SUCCESS',
+  'AUTH_REFRESH_SUCCESS',
+  'ACCOUNT_CREATED',
+  'ADMIN_USER_STATUS_UPDATED',
+  'ADMIN_ACCOUNT_STATUS_UPDATED',
+  'TRANSACTION_DEPOSIT_SUCCESS',
+  'TRANSACTION_DEPOSIT_REFUSED',
+  'TRANSACTION_WITHDRAW_SUCCESS',
+  'TRANSACTION_WITHDRAW_REFUSED',
+  'TRANSACTION_TRANSFER_SUCCESS',
+  'TRANSACTION_TRANSFER_REFUSED',
+];
+
 const AuditEvents = () => {
   const { role } = useAuth();
   const [events, setEvents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Server-Side Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalEvents, setTotalEvents] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
   // Filters
   const [actionFilter, setActionFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
 
+  // Debounce search input to avoid duplicate queries
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
   // Inspector Modal
   const [selectedEventForDetails, setSelectedEventForDetails] = useState(null);
 
-  const fetchEvents = async () => {
+  const fetchEvents = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await ledgerService.getAuditEvents();
-      setEvents(data || []);
+      const query = {
+        page: currentPage,
+        limit: pageSize,
+      };
+      if (actionFilter !== 'ALL') {
+        query.action = actionFilter;
+      }
+      if (statusFilter !== 'ALL') {
+        query.status = statusFilter;
+      }
+      if (debouncedSearch && debouncedSearch.trim() !== '') {
+        query.search = debouncedSearch.trim();
+      }
+
+      const res = await ledgerService.getAuditEvents(query);
+      const list = res?.events || (Array.isArray(res) ? res : []);
+      setEvents(list);
+
+      const total = res?.pagination?.totalEvents ?? res?.total ?? list.length;
+      setTotalEvents(total);
+      const pages = res?.pagination?.totalPages ?? (total > 0 ? Math.ceil(total / pageSize) : 1);
+      setTotalPages(Math.max(1, pages));
     } catch (err) {
       setError('Unable to load institutional audit trails.');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [currentPage, pageSize, actionFilter, statusFilter, debouncedSearch]);
 
   useEffect(() => {
     fetchEvents();
-  }, []);
+  }, [fetchEvents]);
 
   const uniqueActions = useMemo(() => {
-    const set = new Set(events.map((e) => e.action).filter(Boolean));
+    const set = new Set([...ALL_AUDIT_ACTIONS, ...events.map((e) => e.action).filter(Boolean)]);
     return Array.from(set).sort();
   }, [events]);
 
-  const uniqueStatuses = useMemo(() => {
-    const set = new Set(events.map((e) => e.status).filter(Boolean));
-    return Array.from(set).sort();
-  }, [events]);
+  const uniqueStatuses = ['SUCCESS', 'FAILURE'];
 
-  const filteredEvents = useMemo(() => {
-    return events.filter((e) => {
-      if (actionFilter !== 'ALL' && e.action !== actionFilter) return false;
-      if (statusFilter !== 'ALL' && e.status !== statusFilter) return false;
-      return true;
-    });
-  }, [events, actionFilter, statusFilter]);
-
-  const hasActiveFilters = actionFilter !== 'ALL' || statusFilter !== 'ALL';
+  const hasActiveFilters = actionFilter !== 'ALL' || statusFilter !== 'ALL' || searchTerm.trim() !== '';
 
   const resetFilters = () => {
     setActionFilter('ALL');
     setStatusFilter('ALL');
+    setSearchTerm('');
+    setCurrentPage(1);
   };
 
   const columns = [
@@ -281,9 +328,12 @@ const AuditEvents = () => {
               <select
                 className="filter-select"
                 value={actionFilter}
-                onChange={(e) => setActionFilter(e.target.value)}
+                onChange={(e) => {
+                  setActionFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
               >
-                <option value="ALL">All Actions ({events.length})</option>
+                <option value="ALL">All Actions</option>
                 {uniqueActions.map((act) => (
                   <option key={act} value={act}>
                     {act}
@@ -297,7 +347,10 @@ const AuditEvents = () => {
               <select
                 className="filter-select"
                 value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
               >
                 <option value="ALL">All Statuses</option>
                 {uniqueStatuses.map((st) => (
@@ -329,10 +382,30 @@ const AuditEvents = () => {
         ) : (
           <DataTable
             columns={columns}
-            data={filteredEvents}
+            data={events}
             title="Institutional Event Register"
-            subtitle={`${filteredEvents.length} chronological security events`}
+            subtitle={`${totalEvents} total chronological security events`}
             searchPlaceholder="Search by actor, action, or resource..."
+            searchValue={searchTerm}
+            onSearchChange={(val) => {
+              setSearchTerm(val);
+              setCurrentPage(1);
+            }}
+            pagination={
+              <Pagination
+                currentPage={currentPage}
+                pageSize={pageSize}
+                totalRecords={totalEvents}
+                totalPages={totalPages}
+                onPageChange={(page) => setCurrentPage(page)}
+                onPageSizeChange={(size) => {
+                  setPageSize(size);
+                  setCurrentPage(1);
+                }}
+                disabled={isLoading}
+              />
+            }
+            emptyMessage="No audit events matched the selected filters."
           />
         )}
 
