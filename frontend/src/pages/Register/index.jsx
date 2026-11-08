@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AlertCircle, ArrowRight, Shield } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
+import { getRoleDashboardRoute } from '../../utils/roleHelpers.js';
 import AuthLayout from '../../layouts/AuthLayout/index.jsx';
 import FormInput from '../../components/FormInput/index.jsx';
 import './index.css';
@@ -21,10 +22,10 @@ const Register = () => {
   const { register, user, isAuthenticated, isLoading } = useAuth();
   const navigate = useNavigate();
 
-  // If already authenticated, navigate to dashboard
+  // If already authenticated, navigate to permitted dashboard
   useEffect(() => {
     if (isAuthenticated && user) {
-      navigate('/dashboard', { replace: true });
+      navigate(getRoleDashboardRoute(user.role), { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
 
@@ -80,7 +81,7 @@ const Register = () => {
     setIsSubmitting(false);
 
     if (result.success) {
-      navigate('/dashboard', { replace: true });
+      navigate(getRoleDashboardRoute(result.user?.role || 'ACCOUNT_HOLDER'), { replace: true });
     } else {
       setErrorMsg(result.error || 'Registration failed.');
     }

@@ -1,4 +1,5 @@
 import api, { setAccessToken } from './api.js';
+import { normalizeAuthUser } from '../utils/roleHelpers.js';
 
 export const authService = {
   /**
@@ -12,15 +13,7 @@ export const authService = {
       setAccessToken(payload.token);
     }
     return {
-      user: {
-        id: payload.user?.id,
-        name: payload.user?.fullName || payload.user?.name,
-        fullName: payload.user?.fullName || payload.user?.name,
-        email: payload.user?.email,
-        role: payload.user?.role,
-        isActive: payload.user?.isActive ?? payload.user?.is_active ?? true,
-        createdAt: payload.user?.createdAt || payload.user?.created_at,
-      },
+      user: normalizeAuthUser(payload.user || payload),
       token: payload.token,
     };
   },
@@ -53,15 +46,7 @@ export const authService = {
       setAccessToken(payload.token);
     }
     return {
-      user: {
-        id: payload.user?.id,
-        name: payload.user?.fullName || payload.user?.name,
-        fullName: payload.user?.fullName || payload.user?.name,
-        email: payload.user?.email,
-        role: payload.user?.role,
-        isActive: payload.user?.isActive ?? payload.user?.is_active ?? true,
-        createdAt: payload.user?.createdAt || payload.user?.created_at,
-      },
+      user: normalizeAuthUser(payload.user || payload),
       token: payload.token,
     };
   },
@@ -77,15 +62,7 @@ export const authService = {
       setAccessToken(payload.token);
     }
     return {
-      user: {
-        id: payload.user?.id,
-        name: payload.user?.fullName || payload.user?.name,
-        fullName: payload.user?.fullName || payload.user?.name,
-        email: payload.user?.email,
-        role: payload.user?.role,
-        isActive: payload.user?.isActive ?? payload.user?.is_active ?? true,
-        createdAt: payload.user?.createdAt || payload.user?.created_at,
-      },
+      user: normalizeAuthUser(payload.user || payload),
       token: payload.token,
     };
   },
@@ -114,15 +91,7 @@ export const authService = {
 
     const userData = payload.user || payload;
     return {
-      user: {
-        id: userData.id,
-        name: userData.fullName || userData.full_name || userData.name,
-        fullName: userData.fullName || userData.full_name || userData.name,
-        email: userData.email,
-        role: userData.role,
-        isActive: userData.isActive ?? userData.is_active ?? true,
-        createdAt: userData.createdAt || userData.created_at,
-      },
+      user: normalizeAuthUser(userData),
       accounts: payload.accounts || userData.accounts || [],
     };
   },

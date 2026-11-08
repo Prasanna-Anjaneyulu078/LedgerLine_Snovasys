@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
-import { getRoleDashboardRoute } from '../../utils/roleHelpers.js';
+import { getRoleDashboardRoute, isRouteAllowedForRole } from '../../utils/roleHelpers.js';
 import AuthLayout from '../../layouts/AuthLayout/index.jsx';
 import FormInput from '../../components/FormInput/index.jsx';
 import './index.css';
@@ -24,16 +24,19 @@ const Login = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // If already authenticated and not experiencing a session error, navigate to appropriate dashboard
+  const getPermittedDestination = (intended, role) => {
+    if (intended && isSafeInternalPath(intended) && isRouteAllowedForRole(intended, role)) {
+      return intended;
+    }
+    return getRoleDashboardRoute(role);
+  };
+
+  // If already authenticated and not experiencing a session error, navigate to permitted dashboard
   useEffect(() => {
     if (isAuthenticated && user && !authError) {
       const intendedDestination = location.state?.from?.pathname;
-      if (intendedDestination && isSafeInternalPath(intendedDestination) && !intendedDestination.includes('/login')) {
-        navigate(intendedDestination, { replace: true });
-      } else {
-        const dest = getRoleDashboardRoute(user.role);
-        navigate(dest, { replace: true });
-      }
+      const targetRoute = getPermittedDestination(intendedDestination, user.role);
+      navigate(targetRoute, { replace: true });
     }
   }, [isAuthenticated, user, authError, navigate, location.state]);
 
@@ -67,14 +70,10 @@ const Login = () => {
     setIsSubmitting(false);
 
     if (result.success && result.user) {
-      // Automatic role-based redirect with internal path validation
+      // Automatic role-based redirect with internal path clearance
       const intendedDestination = location.state?.from?.pathname;
-      if (intendedDestination && isSafeInternalPath(intendedDestination) && !intendedDestination.includes('/login')) {
-        navigate(intendedDestination, { replace: true });
-      } else {
-        const dest = getRoleDashboardRoute(result.user.role);
-        navigate(dest, { replace: true });
-      }
+      const targetRoute = getPermittedDestination(intendedDestination, result.user.role);
+      navigate(targetRoute, { replace: true });
     } else {
       setErrorMsg(result.error || 'Authentication failed. Please verify credentials.');
     }
