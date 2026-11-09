@@ -18,6 +18,7 @@ describe('Financial Transactions & Money Conservation Tests', () => {
     const res = await request(app)
       .post('/api/v1/transactions/deposit')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', 'd0000000-0000-4000-8000-000000000001')
       .send({
         accountId: fixtures.aliceAccount.id,
         amount: '50.00', // 5,000 paise
@@ -47,6 +48,7 @@ describe('Financial Transactions & Money Conservation Tests', () => {
     const res = await request(app)
       .post('/api/v1/transactions/withdraw')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', 'd0000000-0000-4000-8000-000000000002')
       .send({
         accountId: fixtures.aliceAccount.id,
         amount: '30.00', // 3,000 paise
@@ -74,6 +76,7 @@ describe('Financial Transactions & Money Conservation Tests', () => {
     const res = await request(app)
       .post('/api/v1/transactions/withdraw')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', 'd0000000-0000-4000-8000-000000000003')
       .send({
         accountId: fixtures.aliceAccount.id,
         amount: '150.00', // 15,000 paise > available 10,000 paise
@@ -99,6 +102,7 @@ describe('Financial Transactions & Money Conservation Tests', () => {
     const res = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', 'd0000000-0000-4000-8000-000000000004')
       .send({
         sourceAccountId: fixtures.aliceAccount.id,
         destinationAccountId: fixtures.bobAccount.id,

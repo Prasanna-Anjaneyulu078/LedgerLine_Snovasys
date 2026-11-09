@@ -202,6 +202,7 @@ describe('Database-Level Append-Only Ledger Immutability & Role Permission Tests
     const depositRes = await request(app)
       .post('/api/v1/transactions/deposit')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', 'e0000000-0000-4000-8000-000000000001')
       .send({
         accountId: fixtures.aliceAccount.id,
         amount: '25.00', // 2,500 paise
@@ -215,6 +216,7 @@ describe('Database-Level Append-Only Ledger Immutability & Role Permission Tests
     const transferRes = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', 'e0000000-0000-4000-8000-000000000002')
       .send({
         sourceAccountId: fixtures.aliceAccount.id,
         destinationAccountId: fixtures.bobAccount.id,
@@ -264,6 +266,7 @@ describe('Database-Level Append-Only Ledger Immutability & Role Permission Tests
     const failRes = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', 'e0000000-0000-4000-8000-000000000003')
       .send({
         sourceAccountId: fixtures.aliceAccount.id,
         destinationAccountId: fixtures.bobAccount.id,

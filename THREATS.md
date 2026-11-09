@@ -128,6 +128,7 @@ This document provides a systematic threat model, vulnerability analysis, and se
     5. Rollback on failure: If validation fails, the transaction rolls back and cleans up the key reservation, allowing clean client retries.
 - **6. Verification and Test Evidence:**
   - *Automated Tests:* `tests/integration/idempotency.test.js`:
+    - Mandatory Header Validation: Missing, empty, whitespace-only, and non-UUID keys are rejected with HTTP 400 Bad Request; valid RFC 4122 UUID keys with leading/trailing whitespace are trimmed and processed normally.
     - Test A: Sequential retry returns original response; database verifies exactly 1 transaction created.
     - Test B: Concurrent retry via `Promise.all` allows exactly 1 transfer; duplicate is prevented.
     - Test C: Same key with changed payload triggers `409 Conflict`.
@@ -720,7 +721,7 @@ Following the implementation and regression testing of the React 19 frontend, th
 - **Residual Risk:** None. Enforced at the SQL query parameterization layer.
 
 ### 6. Transaction Validation & Idempotency Key Handling
-- **Implementation:** Financial transaction forms generate unique client keys (`IDEM-<timestamp>-<random>`) transmitted via the `Idempotency-Key` header.
+- **Implementation:** Financial transaction forms generate unique client keys formatted as RFC 4122 UUIDs (`crypto.randomUUID()`) transmitted via the mandatory `Idempotency-Key` HTTP header. The backend strictly enforces valid UUID syntax on all mutation routes (`/deposit`, `/withdraw`, `/transfer`) via `validateIdempotencyHeader` middleware, rejecting missing, blank, whitespace-only, or invalid non-UUID keys with HTTP 400 Bad Request.
 - **Security Assessment:**
   - Duplicate form submissions or rapid double-clicks replay the cached response without creating duplicate ledger postings.
   - Modifying the transaction amount while reusing the key is detected via SHA-256 request hashing, triggering HTTP 409 Conflict.

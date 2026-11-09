@@ -23,4 +23,6 @@ services:
         value: 12
       - key: LOG_LEVEL
         value: info
+      - key: CORS_ORIGIN
+        sync: false
 

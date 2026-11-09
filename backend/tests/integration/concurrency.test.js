@@ -35,7 +35,7 @@ describe('Concurrency Safety & Race Condition Protection Tests', () => {
     const reqA = request(app)
       .post('/api/v1/transactions/withdraw')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
-      .set('Idempotency-Key', 'racing-withdrawal-key-A')
+      .set('Idempotency-Key', 'c0000000-0000-4000-8000-000000000001')
       .send({
         accountNumber: aliceAccNum,
         amount: '400.00',
@@ -45,7 +45,7 @@ describe('Concurrency Safety & Race Condition Protection Tests', () => {
     const reqB = request(app)
       .post('/api/v1/transactions/withdraw')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
-      .set('Idempotency-Key', 'racing-withdrawal-key-B')
+      .set('Idempotency-Key', 'c0000000-0000-4000-8000-000000000002')
       .send({
         accountNumber: aliceAccNum,
         amount: '300.00',
@@ -113,7 +113,7 @@ describe('Concurrency Safety & Race Condition Protection Tests', () => {
     const reqAliceToBob = request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
-      .set('Idempotency-Key', 'opp-transfer-alice-101')
+      .set('Idempotency-Key', 'c0000000-0000-4000-8000-000000000003')
       .send({
         sourceAccountNumber: fixtures.aliceAccount.account_number,
         destinationAccountNumber: fixtures.bobAccount.account_number,
@@ -124,7 +124,7 @@ describe('Concurrency Safety & Race Condition Protection Tests', () => {
     const reqBobToAlice = request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.bob}`)
-      .set('Idempotency-Key', 'opp-transfer-bob-202')
+      .set('Idempotency-Key', 'c0000000-0000-4000-8000-000000000004')
       .send({
         sourceAccountNumber: fixtures.bobAccount.account_number,
         destinationAccountNumber: fixtures.aliceAccount.account_number,

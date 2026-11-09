@@ -15,10 +15,102 @@ describe('Idempotency Implementation & Concurrent Retry Tests', () => {
   });
 
   // ========================================================
+  // Mandatory Idempotency Header Validation Tests
+  // ========================================================
+  describe('Mandatory Idempotency Header Validation', () => {
+    test('Rejects financial request when Idempotency-Key header is missing with HTTP 400', async () => {
+      const res = await request(app)
+        .post('/api/v1/transactions/transfer')
+        .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+        .send({
+          sourceAccountNumber: fixtures.aliceAccount.account_number,
+          destinationAccountNumber: fixtures.bobAccount.account_number,
+          amount: '10.00',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toMatch(/Idempotency-Key header is required for financial operations/i);
+    });
+
+    test('Rejects financial request when Idempotency-Key header is empty string with HTTP 400', async () => {
+      const res = await request(app)
+        .post('/api/v1/transactions/transfer')
+        .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+        .set('Idempotency-Key', '')
+        .send({
+          sourceAccountNumber: fixtures.aliceAccount.account_number,
+          destinationAccountNumber: fixtures.bobAccount.account_number,
+          amount: '10.00',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toMatch(/Idempotency-Key header is required for financial operations/i);
+    });
+
+    test('Rejects financial request when Idempotency-Key header is whitespace-only with HTTP 400', async () => {
+      const res = await request(app)
+        .post('/api/v1/transactions/transfer')
+        .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+        .set('Idempotency-Key', '   ')
+        .send({
+          sourceAccountNumber: fixtures.aliceAccount.account_number,
+          destinationAccountNumber: fixtures.bobAccount.account_number,
+          amount: '10.00',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toMatch(/Idempotency-Key header is required for financial operations/i);
+    });
+
+    test('Rejects financial request when Idempotency-Key header is an invalid non-UUID string with HTTP 400', async () => {
+      const res = await request(app)
+        .post('/api/v1/transactions/transfer')
+        .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+        .set('Idempotency-Key', 'not-a-valid-uuid')
+        .send({
+          sourceAccountNumber: fixtures.aliceAccount.account_number,
+          destinationAccountNumber: fixtures.bobAccount.account_number,
+          amount: '10.00',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toMatch(/Idempotency-Key header must be a valid RFC 4122 UUID/i);
+    });
+
+    test('Accepts valid RFC 4122 UUID with leading/trailing whitespace, trims it, and processes normally', async () => {
+      const validKey = 'e0000000-0000-4000-8000-000000000005';
+      const res = await request(app)
+        .post('/api/v1/transactions/transfer')
+        .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+        .set('Idempotency-Key', `   ${validKey}   `)
+        .send({
+          sourceAccountNumber: fixtures.aliceAccount.account_number,
+          destinationAccountNumber: fixtures.bobAccount.account_number,
+          amount: '10.00',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+
+      // Verify trimmed key was stored in idempotency_keys
+      const idempRecord = await testPool.query(
+        'SELECT idempotency_key FROM idempotency_keys WHERE user_id = $1 AND idempotency_key = $2',
+        [fixtures.alice.id, validKey]
+      );
+      expect(idempRecord.rows).toHaveLength(1);
+      expect(idempRecord.rows[0].idempotency_key).toBe(validKey);
+    });
+  });
+
+  // ========================================================
   // Test A — Same-key sequential retry
   // ========================================================
   test('Test A — Same-key sequential retry returns cached response without duplicate transactions or ledger entries', async () => {
-    const idempotencyKey = 'seq-retry-key-1001';
+    const idempotencyKey = 'a0000000-0000-4000-8000-000000000001';
     const payload = {
       sourceAccountNumber: fixtures.aliceAccount.account_number,
       destinationAccountNumber: fixtures.bobAccount.account_number,
@@ -91,7 +183,7 @@ describe('Idempotency Implementation & Concurrent Retry Tests', () => {
   // Test B — Same-key concurrent retry
   // ========================================================
   test('Test B — Same-key concurrent retry creates no duplicate transactions and posts only one operation', async () => {
-    const idempotencyKey = 'concurrent-retry-key-2002';
+    const idempotencyKey = 'b0000000-0000-4000-8000-000000000002';
     const payload = {
       sourceAccountNumber: fixtures.aliceAccount.account_number,
       destinationAccountNumber: fixtures.bobAccount.account_number,
@@ -179,7 +271,7 @@ describe('Idempotency Implementation & Concurrent Retry Tests', () => {
   // Test C — Same key, changed payload
   // ========================================================
   test('Test C — Same key with changed payload (amount or destination) returns 409 Conflict with zero side-effects', async () => {
-    const idempotencyKey = 'conflict-test-key-3003';
+    const idempotencyKey = 'c0000000-0000-4000-8000-000000000003';
 
     // 1. Submit initial request: ₹10.00
     const res1 = await request(app)
@@ -260,7 +352,7 @@ describe('Idempotency Implementation & Concurrent Retry Tests', () => {
   // Failed transaction cleanup
   // ========================================================
   test('Failed transaction does not leave inconsistent idempotency reservation and allows clean retry', async () => {
-    const idempotencyKey = 'failed-cleanup-key-4004';
+    const idempotencyKey = 'd0000000-0000-4000-8000-000000000004';
 
     // 1. Submit request that fails (exceeds balance: ₹500.00 > available ₹100.00)
     const failRes = await request(app)

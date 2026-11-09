@@ -76,6 +76,7 @@ describe('Role-Based & Account-Level Authorization Tests', () => {
       const res = await request(app)
         .post('/api/v1/transactions/withdraw')
         .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+        .set('Idempotency-Key', 'a0000000-0000-4000-8000-000000000001')
         .send({
           accountNumber: fixtures.bobAccount.account_number,
           amount: '10.00',
@@ -107,6 +108,7 @@ describe('Role-Based & Account-Level Authorization Tests', () => {
       const res = await request(app)
         .post('/api/v1/transactions/transfer')
         .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+        .set('Idempotency-Key', 'a0000000-0000-4000-8000-000000000002')
         .send({
           sourceAccountNumber: fixtures.bobAccount.account_number,
           destinationAccountNumber: fixtures.aliceAccount.account_number,

@@ -119,15 +119,15 @@ Modern financial ledgers must guarantee zero financial discrepancies, resist con
 
 The database seeder pre-populates four verified demonstration identities for local evaluation:
 
-| Role | Display Name | Email Address | Associated Accounts |
-| :--- | :--- | :--- | :--- |
-| **ADMIN** | Prasanna Anjaneyulu | `prasanna.admin@example.com` | Full administrative oversight |
-| **AUDITOR** | Sasank | `sasank.auditor@example.com` | System-wide read-only inspection |
-| **ACCOUNT_HOLDER** | Kavi | `kavi@example.com` | `LL-ACC-1001` (Savings: ₹5,000.00)<br/>`LL-ACC-1002` (Checking: ₹2,500.00) |
-| **ACCOUNT_HOLDER** | Ravi | `ravi@example.com` | `LL-ACC-2001` (Savings: ₹10,000.00) |
+| Role | Display Name | Email Address | Evaluation Password | Associated Accounts |
+| :--- | :--- | :--- | :--- | :--- |
+| **ADMIN** | Prasanna Anjaneyulu | `prasanna.admin@example.com` | `Prasanna@LL26#Admin` | Full administrative oversight |
+| **AUDITOR** | Sasank | `sasank.auditor@example.com` | `Sasank@LL26#Audit` | System-wide read-only inspection |
+| **ACCOUNT_HOLDER** | Kavi | `kavi@example.com` | `Kavi@LL26#User01` | `LL-ACC-1001` (Savings: ₹5,000.00)<br/>`LL-ACC-1002` (Checking: ₹2,500.00) |
+| **ACCOUNT_HOLDER** | Ravi | `ravi@example.com` | `Ravi@LL26#User02` | `LL-ACC-2001` (Savings: ₹10,000.00) |
 
-> [!WARNING]
-> **Local Demonstration Only:** Demonstration credentials are for local testing and evaluation only. Passwords are logged to the console on server startup (`npm start`) and securely hashed in PostgreSQL. Never store or commit plaintext credentials.
+> [!NOTE]
+> **Local Evaluation Only:** These demonstration credentials are provided solely for reviewer evaluation and automated testing in non-production environments. In PostgreSQL, all passwords are salted and hashed using bcrypt (12 rounds). They are never logged to console or exposed via API.
 
 ---
 

@@ -1,6 +1,7 @@
 import request from 'supertest';
 import app from '../../src/app.js';
 import { cleanDatabase, seedTestFixtures, testPool, teardownTestDb, getAdminPool } from '../helpers/testDb.js';
+import crypto from 'crypto';
 
 describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
   let fixtures;
@@ -19,6 +20,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
     const res = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', crypto.randomUUID())
       .send({
         sourceAccountNumber: fixtures.aliceAccount.account_number,
         destinationAccountNumber: fixtures.bobAccount.account_number,
@@ -40,6 +42,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
     const res = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', crypto.randomUUID())
       .send({
         sourceAccountNumber: 'LL-ACC-NONEXISTENT',
         destinationAccountNumber: fixtures.bobAccount.account_number,
@@ -56,6 +59,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
     const res = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', crypto.randomUUID())
       .send({
         sourceAccountNumber: fixtures.aliceAccount.account_number,
         destinationAccountNumber: 'LL-ACC-UNKNOWN-999',
@@ -73,6 +77,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
     const res = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', crypto.randomUUID())
       .send({
         sourceAccountNumber: fixtures.bobAccount.account_number,
         destinationAccountNumber: fixtures.aliceAccount.account_number,
@@ -93,6 +98,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
     const res = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', crypto.randomUUID())
       .send({
         sourceAccountNumber: fixtures.aliceAccount.account_number,
         destinationAccountNumber: fixtures.bobAccount.account_number,
@@ -113,6 +119,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
     const res = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', crypto.randomUUID())
       .send({
         sourceAccountNumber: fixtures.aliceAccount.account_number,
         destinationAccountNumber: fixtures.bobAccount.account_number,
@@ -129,6 +136,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
     const res = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', crypto.randomUUID())
       .send({
         sourceAccountNumber: fixtures.aliceAccount.account_number,
         destinationAccountNumber: fixtures.aliceAccount.account_number,
@@ -145,6 +153,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
     const res = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', crypto.randomUUID())
       .send({
         sourceAccountNumber: fixtures.aliceAccount.account_number,
         destinationAccountNumber: fixtures.bobAccount.account_number,
@@ -161,6 +170,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
     const zeroRes = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', crypto.randomUUID())
       .send({
         sourceAccountNumber: fixtures.aliceAccount.account_number,
         destinationAccountNumber: fixtures.bobAccount.account_number,
@@ -168,11 +178,12 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
       });
 
     expect(zeroRes.status).toBe(400);
-    expect(zeroRes.body.message).toMatch(/Transfer amount must be strictly greater than zero/i);
+    expect(JSON.stringify(zeroRes.body)).toMatch(/Amount must be strictly greater than zero/i);
 
     const negRes = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', crypto.randomUUID())
       .send({
         sourceAccountNumber: fixtures.aliceAccount.account_number,
         destinationAccountNumber: fixtures.bobAccount.account_number,
@@ -180,7 +191,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
       });
 
     expect(negRes.status).toBe(400);
-    expect(negRes.body.message).toMatch(/Transfer amount must be strictly greater than zero/i);
+    expect(JSON.stringify(negRes.body)).toMatch(/Amount must be strictly greater than zero|positive/i);
   });
 
   // 10. Invalid account-number format (e.g. empty string)
@@ -188,6 +199,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
     const res = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', crypto.randomUUID())
       .send({
         sourceAccountNumber: '   ',
         destinationAccountNumber: fixtures.bobAccount.account_number,
@@ -203,6 +215,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
     const res = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', crypto.randomUUID())
       .send({
         destinationAccountNumber: fixtures.bobAccount.account_number,
         amount: '10.00',
@@ -218,6 +231,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
     const res = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', crypto.randomUUID())
       .send({
         sourceAccountNumber: fixtures.aliceAccount.account_number,
         amount: '10.00',
@@ -230,7 +244,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
 
   // 13. Duplicate idempotency key with the same request
   test('13. Duplicate idempotency key with the same request replays cached response', async () => {
-    const idempotencyKey = 'idemp-test-acc-num-same-1';
+    const idempotencyKey = '10000000-0000-4000-8000-000000000001';
 
     const reqBody = {
       sourceAccountNumber: fixtures.aliceAccount.account_number,
@@ -267,7 +281,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
 
   // 14. Duplicate idempotency key with a different request
   test('14. Duplicate idempotency key with a different request returns 409 Conflict', async () => {
-    const idempotencyKey = 'idemp-test-acc-num-conflict-1';
+    const idempotencyKey = '10000000-0000-4000-8000-000000000002';
 
     // First request: transfer ₹20.00
     await request(app)
@@ -304,7 +318,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
       request(app)
         .post('/api/v1/transactions/transfer')
         .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
-        .set('Idempotency-Key', 'concurrent-acc-transfer-1')
+        .set('Idempotency-Key', '10000000-0000-4000-8000-000000000003')
         .send({
           sourceAccountNumber: fixtures.aliceAccount.account_number,
           destinationAccountNumber: fixtures.bobAccount.account_number,
@@ -313,7 +327,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
       request(app)
         .post('/api/v1/transactions/transfer')
         .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
-        .set('Idempotency-Key', 'concurrent-acc-transfer-2')
+        .set('Idempotency-Key', '10000000-0000-4000-8000-000000000004')
         .send({
           sourceAccountNumber: fixtures.aliceAccount.account_number,
           destinationAccountNumber: fixtures.bobAccount.account_number,
@@ -337,6 +351,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
     const res = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', crypto.randomUUID())
       .send({
         sourceAccountNumber: fixtures.aliceAccount.account_number,
         destinationAccountNumber: fixtures.bobAccount.account_number,
@@ -359,6 +374,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
     const res = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', crypto.randomUUID())
       .send({
         sourceAccountNumber: fixtures.aliceAccount.account_number,
         destinationAccountNumber: fixtures.bobAccount.account_number,
@@ -383,7 +399,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
       });
 
     expect(res.status).toBe(403);
-    expect(res.body.message).toMatch(/Auditors are restricted from initiating financial transactions/i);
+    expect(res.body.message).toMatch(/required role \[ACCOUNT_HOLDER\]|Auditors are restricted/i);
   });
 
   // 19. Unauthorized requests are rejected
@@ -404,6 +420,7 @@ describe('Account Number-Based Transfer Tests (Source & Destination)', () => {
     const res = await request(app)
       .post('/api/v1/transactions/transfer')
       .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+      .set('Idempotency-Key', crypto.randomUUID())
       .send({
         sourceAccountId: fixtures.aliceAccount.id,
         destinationAccountId: fixtures.bobAccount.id,

@@ -1254,7 +1254,8 @@ Stop after the final report and wait for my approval.
 - Production build verified (`vite build` in 257ms).
 
 #### 7. Related Commit
-- Pending user approval.
+- `fafbe12df702b778f85999c7ade2bb3eaccee280` (`docs: add THREATS.md and update PROMPTS.md with frontend architecture audit`)
+- `991a9fbca857462d003060855885cecd4cabc655` (`docs: add backend and frontend documentation and project readmes`)
 
 ---
 
@@ -1308,7 +1309,7 @@ The goal is to make the Admin Panel fully functional and database-driven, not ju
 - Frontend production build: Succeeded with zero errors (`npm run build --prefix frontend`).
 
 #### 7. Related Commit
-- Pending user approval.
+- `b5b4c0b42bd5ac3af51972985eab3003b4c4b99a` (`feat: complete admin dashboard audit, fake data removal, and backend API integration`)
 
 ---
 
@@ -1400,7 +1401,7 @@ Auditors should be responsible for:
 - Adhered strictly to execution constraints: No test suites run, no database mutations performed, and no Git commits staged.
 
 #### 7. Related Commit
-- Pending user approval.
+- `7dadcf6c38ac8c1b618aa518fef4ed723609551c` (`feat: enforce role-based financial operations for account holders, admins, and auditors`)
 
 ---
 
@@ -1471,7 +1472,8 @@ The final accepted decision is:
 - Adhered strictly to execution constraints: No test suites run, no database mutation tests performed, and no Git commits staged.
 
 #### 8. Related Commit
-- Pending user approval.
+- `30b53cdc0c29d4c884286a6b2cfe8fdbcb9c80f6` (`fix: correct incoming and outgoing transfer display`)
+- `6212889985e6bc4d814510e165aeef731d39c676` (`fix: finalize financial workflows and statement security`)
 
 ---
 
@@ -1563,7 +1565,9 @@ Update THREATS.md, API_DOCUMENTATION.md, PROMPTS.md with permission matrix, mone
   - Verified refused attempts are recorded and scoped strictly to target accounts.
 
 #### 7. Related Commit
-- Pending user review and approval (unstaged working tree preserved per strict constraints).
+- `e8a7bfc0a324e2e4ec26e88ecc7b685133fbf7a7` (`feat(frontend): enhance admin and auditor dashboards`)
+- `f4ac5d8c86ca2c66a7770620e9a0ed8faaa6161a` (`test(backend): verify admin and auditor permissions`)
+- `d7a863e23c509b3e991613f4362ba8b613afb6f7` (`docs: document endpoint permissions and audit controls`)
 
 ---
 

@@ -2,6 +2,7 @@ import { jest } from '@jest/globals';
 import request from 'supertest';
 import app from '../../src/app.js';
 import { cleanDatabase, seedTestFixtures, testPool, teardownTestDb } from '../helpers/testDb.js';
+import crypto from 'crypto';
 
 jest.setTimeout(120000);
 
@@ -167,6 +168,7 @@ describe('Complete Backend API Verification & Security Audit Test Suite', () => 
       const res = await request(app)
         .post('/api/v1/transactions/deposit')
         .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+        .set('Idempotency-Key', crypto.randomUUID())
         .send({
           accountNumber: 'TEST-ACC-ALICE-1',
           amount: '50.00',
@@ -194,7 +196,7 @@ describe('Complete Backend API Verification & Security Audit Test Suite', () => 
     });
 
     test('POST /api/v1/transactions/deposit - Idempotency replay with same key and payload', async () => {
-      const key = 'deposit-idemp-test-101';
+      const key = '11111111-2222-4333-8444-555555555555';
       const payload = {
         accountNumber: 'TEST-ACC-ALICE-1',
         amount: '25.00',
@@ -229,6 +231,7 @@ describe('Complete Backend API Verification & Security Audit Test Suite', () => 
       const res = await request(app)
         .post('/api/v1/transactions/withdraw')
         .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+        .set('Idempotency-Key', crypto.randomUUID())
         .send({
           accountNumber: 'TEST-ACC-ALICE-1',
           amount: '40.00',
@@ -257,6 +260,7 @@ describe('Complete Backend API Verification & Security Audit Test Suite', () => 
       const res = await request(app)
         .post('/api/v1/transactions/withdraw')
         .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+        .set('Idempotency-Key', crypto.randomUUID())
         .send({
           accountNumber: 'TEST-ACC-BOB-1',
           amount: '10.00',
@@ -271,6 +275,7 @@ describe('Complete Backend API Verification & Security Audit Test Suite', () => 
       const res = await request(app)
         .post('/api/v1/transactions/withdraw')
         .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+        .set('Idempotency-Key', crypto.randomUUID())
         .send({
           accountNumber: 'TEST-ACC-ALICE-1',
           amount: '500.00', // 50,000 paise > 13,500 paise available
@@ -289,6 +294,7 @@ describe('Complete Backend API Verification & Security Audit Test Suite', () => 
       const res = await request(app)
         .post('/api/v1/transactions/withdraw')
         .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+        .set('Idempotency-Key', crypto.randomUUID())
         .send({
           accountId: fixtures.aliceAccount.id,
           amount: '20.00',
@@ -307,7 +313,7 @@ describe('Complete Backend API Verification & Security Audit Test Suite', () => 
       const res = await request(app)
         .post('/api/v1/transactions/transfer')
         .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
-        .set('Idempotency-Key', 'transfer-audit-test-1')
+        .set('Idempotency-Key', '22222222-3333-4444-8555-666666666666')
         .send({
           sourceAccountNumber: 'TEST-ACC-ALICE-1',
           destinationAccountNumber: 'TEST-ACC-BOB-1',
@@ -342,6 +348,7 @@ describe('Complete Backend API Verification & Security Audit Test Suite', () => 
       const res = await request(app)
         .post('/api/v1/transactions/transfer')
         .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+        .set('Idempotency-Key', crypto.randomUUID())
         .send({
           sourceAccountNumber: 'TEST-ACC-BOB-1',
           destinationAccountNumber: 'TEST-ACC-ALICE-1',
@@ -357,6 +364,7 @@ describe('Complete Backend API Verification & Security Audit Test Suite', () => 
       const res = await request(app)
         .post('/api/v1/transactions/transfer')
         .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+        .set('Idempotency-Key', crypto.randomUUID())
         .send({
           sourceAccountNumber: 'TEST-ACC-ALICE-1',
           destinationAccountNumber: 'TEST-ACC-ALICE-1',
@@ -388,6 +396,7 @@ describe('Complete Backend API Verification & Security Audit Test Suite', () => 
       const depRes = await request(app)
         .post('/api/v1/transactions/deposit')
         .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+        .set('Idempotency-Key', crypto.randomUUID())
         .send({
           accountNumber: 'TEST-ACC-ALICE-1',
           amount: '10.00',
@@ -498,6 +507,7 @@ describe('Complete Backend API Verification & Security Audit Test Suite', () => 
       const depRes = await request(app)
         .post('/api/v1/transactions/deposit')
         .set('Authorization', `Bearer ${fixtures.tokens.alice}`)
+        .set('Idempotency-Key', crypto.randomUUID())
         .send({
           accountNumber: 'TEST-ACC-ALICE-1',
           amount: '10.00',
