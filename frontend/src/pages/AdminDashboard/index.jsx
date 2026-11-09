@@ -865,13 +865,6 @@ const AdminDashboard = () => {
             >
               <div>
                 <div className="tx-details-grid">
-                  <div className="tx-detail-box" style={{ gridColumn: 'span 2' }}>
-                    <div className="tx-detail-label">Event ID (UUID)</div>
-                    <div className="tx-detail-value tabular-nums" style={{ fontFamily: 'monospace', fontSize: '0.8125rem', wordBreak: 'break-all' }}>
-                      {selectedAuditEventForDetails.id || '—'}
-                    </div>
-                  </div>
-
                   <div className="tx-detail-box">
                     <div className="tx-detail-label">Actor</div>
                     <div className="tx-detail-value">

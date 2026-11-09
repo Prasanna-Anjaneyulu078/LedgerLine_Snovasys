@@ -214,11 +214,12 @@ const AccountManagement = () => {
       render: (row) => <StatusBadge status={row.status} />,
     },
     {
-      header: 'Branch & IFSC',
-      accessor: 'branchName',
+      header: 'Created Date',
+      accessor: 'createdAt',
+      align: 'right',
       render: (row) => (
         <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-          {row.branchName} ({row.ifscCode})
+          {formatDate(row.createdAt, false)}
         </span>
       ),
     },
@@ -247,7 +248,7 @@ const AccountManagement = () => {
             Change Status
           </button>
           <Link
-            to={`/admin/statements/${row.id}`}
+            to={`/admin/statements/${row.accountNumber || row.id}`}
             className="btn-secondary"
             style={{ height: '30px', padding: '0 8px', fontSize: '0.75rem', textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}
           >
@@ -470,13 +471,6 @@ const AccountManagement = () => {
                       </div>
                     </div>
                     <div className="account-inspect-box">
-                      <div className="account-inspect-label">Branch & IFSC Code</div>
-                      <div className="account-inspect-value" style={{ fontSize: '0.8125rem' }}>
-                        {inspectedAccountDetails?.branchName || selectedAccountForInspect?.branchName || 'Central Operations Treasury'} (
-                        {inspectedAccountDetails?.ifscCode || selectedAccountForInspect?.ifscCode || 'LLIN0001001'})
-                      </div>
-                    </div>
-                    <div className="account-inspect-box">
                       <div className="account-inspect-label">Provisioned Date</div>
                       <div className="account-inspect-value" style={{ fontSize: '0.8125rem' }}>
                         {formatDate(inspectedAccountDetails?.createdAt || selectedAccountForInspect?.createdAt)}
@@ -508,12 +502,6 @@ const AccountManagement = () => {
                       <div className="account-inspect-label">Email Address</div>
                       <div className="account-inspect-value">
                         {inspectedAccountDetails?.ownerEmail || inspectedAccountDetails?.owner_email || '—'}
-                      </div>
-                    </div>
-                    <div className="account-inspect-box" style={{ gridColumn: 'span 2' }}>
-                      <div className="account-inspect-label">Account Holder User ID / Public Reference</div>
-                      <div className="account-inspect-value tabular-nums" style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                        {inspectedAccountDetails?.ownerId || inspectedAccountDetails?.owner_id || '—'}
                       </div>
                     </div>
                   </div>

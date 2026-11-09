@@ -19,8 +19,6 @@ export function normalizeAccount(acc) {
     holderName: acc.owner_name || acc.holderName || 'Account Holder',
     ownerEmail: acc.owner_email || acc.ownerEmail || acc.email || null,
     ownerId: acc.owner_id || acc.ownerId || null,
-    branchName: acc.branchName || 'Central Operations Treasury',
-    ifscCode: acc.ifscCode || 'LLIN0001001',
     createdAt: acc.created_at || acc.createdAt,
     updatedAt: acc.updated_at || acc.updatedAt || acc.created_at || acc.createdAt,
   };
