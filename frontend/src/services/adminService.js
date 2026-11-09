@@ -1,5 +1,5 @@
 import api from './api.js';
-import { normalizeAccount } from './accountService.js';
+import { normalizeAccount, accountService } from './accountService.js';
 import { formatCurrency } from '../utils/formatCurrency.js';
 
 export function normalizeUser(u) {
@@ -197,6 +197,20 @@ export const adminService = {
   async updateAccountStatus(accountId, status) {
     const response = await api.patch(`/admin/accounts/${accountId}/status`, { status });
     return response.data?.data || response.data;
+  },
+
+  /**
+   * Retrieve full account record with PostgreSQL owner details and balance
+   */
+  async getAccount(identifier) {
+    return accountService.getAccount(identifier);
+  },
+
+  /**
+   * Retrieve recent ledger statement entries for account
+   */
+  async getAccountStatement(identifier, query = {}) {
+    return accountService.getAccountStatement(identifier, query);
   },
 
   /**

@@ -23,6 +23,12 @@ accountRouter.post(
 
 accountRouter.get('/', accountController.getAccounts);
 
+// Safe recipient account lookup for inter-user transfer validation
+accountRouter.get(
+  '/recipient/:accountNumber',
+  accountController.getRecipientAccount
+);
+
 accountRouter.get(
   '/:accountNumber',
   validate(accountIdParamSchema, 'params'),

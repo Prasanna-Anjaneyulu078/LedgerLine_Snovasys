@@ -1404,6 +1404,77 @@ Auditors should be responsible for:
 
 ---
 
+### Phase 10: Inter-User Transfers and Recipient Verification Implementation
+
+**Date:** 2026-11-08
+
+#### 1. Objective
+Enable authenticated `ACCOUNT_HOLDER` users to transfer funds from their own account to another user's eligible account or between their own accounts, while preserving strict source account ownership enforcement, deterministic row-level locking, double-entry ledger balance invariants, and safe recipient verification without leaking sensitive financial details.
+
+#### 2. Original AI Prompt
+*Verbatim prompt from conversation history:*
+```text
+# Task: Implement Inter-User Transfers and Document AI Recommendation in PROMPTS.md
+
+Analyze the existing LedgerLine project and implement the ability for an authenticated ACCOUNT_HOLDER to transfer money from their own account to another user's account.
+
+Also document the original limitation, AI recommendation, and user's correction/decision in the root PROMPTS.md.
+
+## Part 1: Analyze Existing Implementation
+...
+```
+
+#### 3. Initial Limitation
+The Account Holder transfer functionality did not permit transfers from one user's account to another user's account. In the frontend (`frontend/src/pages/Transactions/index.jsx`), the destination account field was a `<select>` dropdown populated exclusively from `accounts` fetched via `accountService.getAccounts()`. Because `GET /api/v1/accounts` restricts results for `ACCOUNT_HOLDER` to only their own accounts, users had no mechanism to input another user's account number (e.g. `LL-ACC-1002`, `LL-ACC-2001`). Furthermore, there was no backend endpoint for an authenticated Account Holder to lookup or validate an external recipient account without receiving HTTP 403 Forbidden or exposing sensitive account balances. In addition, `transactionService.getTransactions` performed in-memory filtering over an unconstrained SQL query when `filterAccountId` was null, which could cause paginated transactions to be omitted for either the sender or the recipient.
+
+#### 4. AI Recommendation
+The AI recommended enabling inter-user transfers while retaining strict source-account ownership validation:
+- Source account must belong to the authenticated sender (enforced both at the API gateway and within the row-locked database transaction).
+- Destination account can belong to another eligible user or to the same user.
+- Backend must validate both accounts and verify active status.
+- Add a dedicated, safe recipient verification endpoint (`GET /api/v1/accounts/recipient/:accountNumber`) returning safe public details (account number, account type, status, and holder name) without exposing account balances, owner IDs, or contact information.
+- Provide a dual-mode recipient interface in the frontend allowing users to input an external recipient account number or pick from their other owned accounts.
+- Implement SQL-level account array filtering (`IN (...)`) in `transactionRepository.findAll` so both sender and recipient reliably see outgoing and incoming transfers in their transaction history with accurate pagination.
+- Preserve deterministic row locking (`findTwoForUpdate`), atomic debit/credit operations, double-entry balancing, BigInt integer paise handling, idempotency protection, and audit logging.
+
+#### 5. User Correction and Final Decision
+The user clarified that the Account Holder dashboard currently does not permit transfers from one user's account to another user's account and requested full implementation of this capability.
+The final accepted decision is:
+- `ACCOUNT_HOLDER` can transfer money from their own account to another user's eligible account.
+- `ACCOUNT_HOLDER` can also transfer between their own eligible accounts.
+- `ADMIN` manages the system but cannot initiate ordinary transfers.
+- `AUDITOR` remains read-only.
+- Source-account ownership must always be enforced by the backend context, never trusting client-supplied claims.
+
+#### 6. Implementation Record
+- `backend/src/repositories/transaction.repository.js`: Added support for `accountIds` parameter in `findAll()`, generating parameterized SQL conditions `(t.source_account_id IN ($1, $2...) OR t.destination_account_id IN ($1, $2...))` for accurate database-level filtering and pagination.
+- `backend/src/modules/transactions/transaction.service.js`:
+  - `getTransactions()`: Passed `accountIds: userAccountIds` when `filterAccountId` is null, ensuring both sender (source) and recipient (destination) see transfers in their transaction history.
+  - `getTransactionById()`: Masked `balanceAfterPaise` and `balanceAfterFormatted` in ledger entries for accounts not owned by the requesting account holder to prevent leaking recipient account balances.
+- `backend/src/modules/accounts/account.service.js`: Added `getRecipientAccount()` returning safe non-sensitive recipient details (`accountNumber`, `accountType`, `currency`, `status`, `holderName`, `isEligible`, `isOwnAccount`).
+- `backend/src/modules/accounts/account.controller.js`: Added `getRecipientAccount` controller action.
+- `backend/src/modules/accounts/account.routes.js`: Registered route `GET /accounts/recipient/:accountNumber` before `/:accountNumber` to avoid wildcard collision.
+- `backend/src/docs/swagger.js`: Documented `GET /accounts/recipient/{accountNumber}` endpoint.
+- `frontend/src/services/accountService.js`: Added `validateRecipientAccount(accountNumber)` API client method.
+- `frontend/src/pages/Transactions/index.jsx`:
+  - Added transfer mode toggle ("Transfer to Another User" vs "Between My Accounts").
+  - Added recipient account number text input with debounced automatic verification and manual "Verify" button.
+  - Added verified recipient details card displaying holder name, account number, account type, and status badge without exposing balances.
+  - Added client-side balance checks and disabled submit button during submission to prevent accidental duplicate transfers.
+  - Updated transaction table Amount column to render `+₹X.XX` in green for incoming transfers and `-₹X.XX` for outgoing transfers.
+- `frontend/src/pages/Transactions/index.css`: Added styles for transfer mode selector, recipient input row, verify button, and verification result card.
+- `backend/docs/API_DOCUMENTATION.md` & `backend/README.md`: Documented recipient validation endpoint and inter-user transfer capabilities.
+
+#### 7. Verification
+- Backend syntax verification: `node --check` passed cleanly across all modified repository, service, controller, and route files.
+- Frontend build verification: `npm --prefix frontend run build` completed cleanly in 397ms with zero errors.
+- Adhered strictly to execution constraints: No test suites run, no database mutation tests performed, and no Git commits staged.
+
+#### 8. Related Commit
+- Pending user approval.
+
+---
+
 ## Documentation Notes
 
 - All original prompts are genuine, verbatim records extracted from active conversation history.

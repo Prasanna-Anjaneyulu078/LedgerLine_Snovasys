@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Wallet, ShieldAlert, RefreshCw, Search } from 'lucide-react';
+import { Wallet, ShieldAlert, RefreshCw, Search, Eye, User, CreditCard, Activity, AlertCircle } from 'lucide-react';
 import adminService from '../../services/adminService.js';
+import accountService from '../../services/accountService.js';
 import { formatCurrency } from '../../utils/formatCurrency.js';
+import { formatDate } from '../../utils/formatDate.js';
 import { getErrorMessage } from '../../services/api.js';
 import DashboardLayout from '../../layouts/DashboardLayout/index.jsx';
 import DataTable from '../../components/DataTable/index.jsx';
@@ -36,6 +38,13 @@ const AccountManagement = () => {
   const [targetStatus, setTargetStatus] = useState('ACTIVE');
   const [isUpdating, setIsUpdating] = useState(false);
   const [modalError, setModalError] = useState(null);
+
+  // Account Inspector Modal
+  const [selectedAccountForInspect, setSelectedAccountForInspect] = useState(null);
+  const [inspectedAccountDetails, setInspectedAccountDetails] = useState(null);
+  const [inspectedStatement, setInspectedStatement] = useState(null);
+  const [isInspecting, setIsInspecting] = useState(false);
+  const [inspectError, setInspectError] = useState(null);
 
   const fetchAccounts = useCallback(async (
     page = currentPage,
@@ -131,6 +140,43 @@ const AccountManagement = () => {
     }
   };
 
+  const handleInspectAccount = async (acc) => {
+    if (!acc) return;
+    const identifier = acc.accountNumber || acc.id;
+    setSelectedAccountForInspect(acc);
+    setInspectedAccountDetails(acc);
+    setInspectedStatement(null);
+    setIsInspecting(true);
+    setInspectError(null);
+
+    try {
+      const [fullAccount, stmt] = await Promise.all([
+        accountService.getAccount(identifier).catch((err) => {
+          console.warn('Extended account details fetch error, falling back to row data:', err);
+          return acc;
+        }),
+        accountService.getAccountStatement(identifier, { limit: 10 }).catch((err) => {
+          console.warn('Recent account statement fetch error:', err);
+          return { entries: [] };
+        }),
+      ]);
+
+      setInspectedAccountDetails(fullAccount || acc);
+      setInspectedStatement(stmt || { entries: [] });
+    } catch (err) {
+      setInspectError(getErrorMessage(err));
+    } finally {
+      setIsInspecting(false);
+    }
+  };
+
+  const handleCloseInspectModal = () => {
+    setSelectedAccountForInspect(null);
+    setInspectedAccountDetails(null);
+    setInspectedStatement(null);
+    setInspectError(null);
+  };
+
   const columns = [
     {
       header: 'Account Number',
@@ -181,6 +227,17 @@ const AccountManagement = () => {
       align: 'center',
       render: (row) => (
         <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+          <button
+            type="button"
+            className="btn-secondary"
+            style={{ height: '30px', padding: '0 8px', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+            onClick={() => handleInspectAccount(row)}
+            title="Inspect complete account details"
+            aria-label={`Inspect account ${row.accountNumber}`}
+          >
+            <Eye size={12} />
+            <span>Inspect</span>
+          </button>
           <button
             type="button"
             className="btn-secondary"
@@ -344,6 +401,199 @@ const AccountManagement = () => {
             )}
           </div>
         </ConfirmModal>
+
+        {/* ACCOUNT INSPECTOR MODAL */}
+        {selectedAccountForInspect && (
+          <ConfirmModal
+            isOpen={!!selectedAccountForInspect}
+            title={`Account Inspector: ${selectedAccountForInspect?.accountNumber || selectedAccountForInspect?.id}`}
+            confirmText="Close Inspector"
+            hideCancel={true}
+            maxWidth="760px"
+            onConfirm={handleCloseInspectModal}
+            onClose={handleCloseInspectModal}
+          >
+            {isInspecting && !inspectedAccountDetails ? (
+              <LoadingState message="Retrieving institutional account record from PostgreSQL database..." />
+            ) : (
+              <div className="account-inspector-modal">
+                {inspectError && (
+                  <div className="account-inspect-error-banner">
+                    <AlertCircle size={16} />
+                    <span>{inspectError}</span>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ height: '24px', padding: '0 8px', fontSize: '0.7rem', marginLeft: 'auto' }}
+                      onClick={() => handleInspectAccount(selectedAccountForInspect)}
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+
+                {/* Section A: Account Overview */}
+                <div className="account-inspect-section">
+                  <h4 className="account-inspect-section-title">
+                    <CreditCard size={14} />
+                    <span>Account Overview</span>
+                  </h4>
+                  <div className="account-inspect-grid">
+                    <div className="account-inspect-box">
+                      <div className="account-inspect-label">Account Number</div>
+                      <div className="account-inspect-value tabular-nums" style={{ fontFamily: 'monospace' }}>
+                        {inspectedAccountDetails?.accountNumber || inspectedAccountDetails?.account_number || selectedAccountForInspect?.accountNumber}
+                      </div>
+                    </div>
+                    <div className="account-inspect-box">
+                      <div className="account-inspect-label">Current / Available Balance</div>
+                      <div className="account-inspect-value tabular-nums" style={{ color: 'var(--primary-color)', fontSize: '1rem' }}>
+                        {formatCurrency(inspectedAccountDetails?.balance ?? selectedAccountForInspect?.balance)}
+                      </div>
+                    </div>
+                    <div className="account-inspect-box">
+                      <div className="account-inspect-label">Account Type</div>
+                      <div className="account-inspect-value">
+                        <StatusBadge status={inspectedAccountDetails?.accountType || inspectedAccountDetails?.account_type || selectedAccountForInspect?.accountType} />
+                      </div>
+                    </div>
+                    <div className="account-inspect-box">
+                      <div className="account-inspect-label">Operational Status</div>
+                      <div className="account-inspect-value">
+                        <StatusBadge status={inspectedAccountDetails?.status || selectedAccountForInspect?.status} />
+                      </div>
+                    </div>
+                    <div className="account-inspect-box">
+                      <div className="account-inspect-label">Currency</div>
+                      <div className="account-inspect-value">
+                        {inspectedAccountDetails?.currency || selectedAccountForInspect?.currency || 'INR'} (Indian Rupee)
+                      </div>
+                    </div>
+                    <div className="account-inspect-box">
+                      <div className="account-inspect-label">Branch & IFSC Code</div>
+                      <div className="account-inspect-value" style={{ fontSize: '0.8125rem' }}>
+                        {inspectedAccountDetails?.branchName || selectedAccountForInspect?.branchName || 'Central Operations Treasury'} (
+                        {inspectedAccountDetails?.ifscCode || selectedAccountForInspect?.ifscCode || 'LLIN0001001'})
+                      </div>
+                    </div>
+                    <div className="account-inspect-box">
+                      <div className="account-inspect-label">Provisioned Date</div>
+                      <div className="account-inspect-value" style={{ fontSize: '0.8125rem' }}>
+                        {formatDate(inspectedAccountDetails?.createdAt || selectedAccountForInspect?.createdAt)}
+                      </div>
+                    </div>
+                    <div className="account-inspect-box">
+                      <div className="account-inspect-label">Last Updated Date</div>
+                      <div className="account-inspect-value" style={{ fontSize: '0.8125rem' }}>
+                        {formatDate(inspectedAccountDetails?.updatedAt || inspectedAccountDetails?.updated_at || inspectedAccountDetails?.createdAt || selectedAccountForInspect?.createdAt)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section B: Account Holder Information */}
+                <div className="account-inspect-section">
+                  <h4 className="account-inspect-section-title">
+                    <User size={14} />
+                    <span>Account Holder Information</span>
+                  </h4>
+                  <div className="account-inspect-grid">
+                    <div className="account-inspect-box">
+                      <div className="account-inspect-label">Account Holder Name</div>
+                      <div className="account-inspect-value" style={{ fontWeight: 600 }}>
+                        {inspectedAccountDetails?.holderName || inspectedAccountDetails?.owner_name || selectedAccountForInspect?.holderName || '—'}
+                      </div>
+                    </div>
+                    <div className="account-inspect-box">
+                      <div className="account-inspect-label">Email Address</div>
+                      <div className="account-inspect-value">
+                        {inspectedAccountDetails?.ownerEmail || inspectedAccountDetails?.owner_email || '—'}
+                      </div>
+                    </div>
+                    <div className="account-inspect-box" style={{ gridColumn: 'span 2' }}>
+                      <div className="account-inspect-label">Account Holder User ID / Public Reference</div>
+                      <div className="account-inspect-value tabular-nums" style={{ fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                        {inspectedAccountDetails?.ownerId || inspectedAccountDetails?.owner_id || '—'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Section C: Recent Account Activity */}
+                <div className="account-inspect-section">
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.75rem' }}>
+                    <h4 className="account-inspect-section-title" style={{ marginBottom: 0 }}>
+                      <Activity size={14} />
+                      <span>Recent Account Activity</span>
+                    </h4>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      {inspectedStatement?.entries?.length || 0} recent postings
+                    </span>
+                  </div>
+
+                  {inspectedStatement?.entries && inspectedStatement.entries.length > 0 ? (
+                    <div className="account-inspect-table-wrapper">
+                      <table className="account-inspect-table">
+                        <thead>
+                          <tr>
+                            <th>Transaction Ref</th>
+                            <th>Type</th>
+                            <th style={{ textAlign: 'right' }}>Debit</th>
+                            <th style={{ textAlign: 'right' }}>Credit</th>
+                            <th style={{ textAlign: 'center' }}>Status</th>
+                            <th style={{ textAlign: 'right' }}>Timestamp</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {inspectedStatement.entries.map((entry, idx) => {
+                            const isDebit = (entry.entryType || entry.entry_type) === 'DEBIT';
+                            const isCredit = (entry.entryType || entry.entry_type) === 'CREDIT';
+                            const formattedAmt = entry.amountFormatted
+                              ? `₹${entry.amountFormatted}`
+                              : formatCurrency(Number(entry.amountPaise || entry.amount || 0) / 100);
+
+                            return (
+                              <tr key={entry.id || idx}>
+                                <td style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                                  {entry.transactionReference || entry.transaction_reference || '—'}
+                                </td>
+                                <td>
+                                  <StatusBadge status={entry.transactionType || entry.transaction_type || entry.entryType} />
+                                </td>
+                                <td style={{ textAlign: 'right', fontWeight: 600, color: isDebit ? 'var(--danger-color, #DC2626)' : 'var(--text-secondary)' }}>
+                                  {isDebit ? formattedAmt : '—'}
+                                </td>
+                                <td style={{ textAlign: 'right', fontWeight: 600, color: isCredit ? 'var(--success-color, #16A34A)' : 'var(--text-secondary)' }}>
+                                  {isCredit ? formattedAmt : '—'}
+                                </td>
+                                <td style={{ textAlign: 'center' }}>
+                                  <StatusBadge status={entry.transactionStatus || entry.transaction_status || 'COMMITTED'} />
+                                </td>
+                                <td style={{ textAlign: 'right', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                  {formatDate(entry.createdAt || entry.created_at)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="account-inspect-empty">
+                      No recent ledger postings found for this account.
+                    </div>
+                  )}
+                </div>
+
+                {/* Read-Only Notice */}
+                <div className="account-inspect-readonly-notice">
+                  <ShieldAlert size={14} />
+                  <span>Read-Only Administrative Inspection. No financial operations or balance mutations permitted from this view.</span>
+                </div>
+              </div>
+            )}
+          </ConfirmModal>
+        )}
       </div>
     </DashboardLayout>
   );

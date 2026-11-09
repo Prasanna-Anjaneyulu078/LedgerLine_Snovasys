@@ -2,7 +2,7 @@ import React from 'react';
 import { Building2 } from 'lucide-react';
 import './index.css';
 
-const AuthLayout = ({ children, title, subtitle }) => {
+const AuthLayout = ({ children }) => {
   return (
     <div className="auth-layout">
       <aside className="auth-sidebar-panel">
@@ -12,7 +12,7 @@ const AuthLayout = ({ children, title, subtitle }) => {
           </div>
           <div>
             <h1 className="auth-brand-title">LedgerLine</h1>
-            <div className="auth-brand-tag">Institutional Financial Core</div>
+            <div className="auth-brand-tag">Secure Financial Ledger Platform</div>
           </div>
         </div>
 
@@ -25,15 +25,15 @@ const AuthLayout = ({ children, title, subtitle }) => {
           <div className="auth-features-list">
             <div className="auth-feature-item">
               <span className="auth-feature-dot" />
-              <span>Immutable append-only ledger accounting</span>
+              <span>Immutable append-only ledger accounting.</span>
             </div>
             <div className="auth-feature-item">
               <span className="auth-feature-dot" />
-              <span>Strict atomic debit/credit reconciliation</span>
+              <span>Atomic debit/credit transaction processing.</span>
             </div>
             <div className="auth-feature-item">
               <span className="auth-feature-dot" />
-              <span>Cryptographic idempotency protection</span>
+              <span>Idempotency-based duplicate transaction protection.</span>
             </div>
           </div>
         </div>

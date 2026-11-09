@@ -15,7 +15,8 @@ LedgerLine strictly enforces separation of concerns across three core system rol
 | :--- | :---: | :---: | :---: | :--- |
 | **Deposit Funds** (`POST /transactions/deposit`) | **Allowed** (Own account) | **Forbidden (403)** | **Forbidden (403)** | Financial money-movement restricted to account owners |
 | **Withdraw Funds** (`POST /transactions/withdraw`) | **Allowed** (Own account) | **Forbidden (403)** | **Forbidden (403)** | Financial money-movement restricted to account owners |
-| **Transfer Funds** (`POST /transactions/transfer`) | **Allowed** (Source owner) | **Forbidden (403)** | **Forbidden (403)** | Balanced double-entry transfer between accounts |
+| **Transfer Funds** (`POST /transactions/transfer`) | **Allowed** (Source owner) | **Forbidden (403)** | **Forbidden (403)** | Balanced double-entry transfer (intra-user or inter-user) |
+| **Verify Recipient Account** (`GET /accounts/recipient/:accNum`) | **Allowed** | **Allowed** | **Allowed** | Safe verification returning non-sensitive recipient details |
 | **List Accounts** (`GET /accounts`) | **Own Accounts** | **All Accounts** | **All Accounts** | Scoped by ownership for Account Holders; system-wide for Admin/Auditor |
 | **Get Account Balance** (`GET /accounts/:id/balance`) | **Own Account** | **All Accounts** | **All Accounts** | Real-time balance computed with audit verification |
 | **Account Statements** (`GET /accounts/:id/statement`) | **Own Account** | **All Accounts** | **All Accounts** | Complete running balance with posted and refused records |
@@ -118,6 +119,30 @@ LedgerLine strictly enforces separation of concerns across three core system rol
       "balancePaise": "500000",
       "balanceFormatted": "5000.00",
       "status": "ACTIVE"
+    }
+  }
+  ```
+
+### Verify Recipient Account (Safe Transfer Lookup)
+- **Method**: `GET`
+- **Path**: `/api/v1/accounts/recipient/:accountNumber`
+- **Headers**: `Authorization: Bearer <TOKEN>`
+- **Authorization**: Any authenticated user.
+- **Description**: Validates an account number (or UUID) for receiving transfers. Returns safe public details (account number, account type, currency, active status, holder name, and eligibility) without exposing sensitive balances, owner IDs, or contact info.
+- **Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "statusCode": 200,
+    "message": "Recipient account verified",
+    "data": {
+      "accountNumber": "LL-ACC-2001",
+      "accountType": "SAVINGS",
+      "currency": "INR",
+      "status": "ACTIVE",
+      "holderName": "Ravi",
+      "isEligible": true,
+      "isOwnAccount": false
     }
   }
   ```

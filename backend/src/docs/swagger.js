@@ -216,6 +216,55 @@ export const swaggerDocument = {
         responses: { 201: { description: 'Account created' } },
       },
     },
+    '/accounts/recipient/{accountNumber}': {
+      get: {
+        summary: 'Safe recipient account verification for inter-user transfers',
+        description:
+          'Validates an account number (or UUID) for receiving transfers. Returns safe public details (account number, account type, currency, active status, and account holder name) without exposing account balances, owner IDs, or personal contact info.',
+        security: [{ BearerAuth: [] }],
+        parameters: [
+          {
+            name: 'accountNumber',
+            in: 'path',
+            required: true,
+            schema: { type: 'string', example: 'LL-ACC-2001' },
+            description: 'Public account number (e.g. LL-ACC-2001) or UUID of recipient account',
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Recipient account verified',
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    success: { type: 'boolean', example: true },
+                    statusCode: { type: 'integer', example: 200 },
+                    message: { type: 'string', example: 'Recipient account verified' },
+                    data: {
+                      type: 'object',
+                      properties: {
+                        accountNumber: { type: 'string', example: 'LL-ACC-2001' },
+                        accountType: { type: 'string', example: 'SAVINGS' },
+                        currency: { type: 'string', example: 'INR' },
+                        status: { type: 'string', example: 'ACTIVE' },
+                        holderName: { type: 'string', example: 'Ravi' },
+                        isEligible: { type: 'boolean', example: true },
+                        isOwnAccount: { type: 'boolean', example: false },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          400: { description: 'Missing or empty account identifier' },
+          401: { description: 'Missing or invalid authentication token' },
+          404: { description: 'Recipient account not found' },
+        },
+      },
+    },
     '/accounts/{accountNumber}': {
       get: {
         summary: 'Get single account details',

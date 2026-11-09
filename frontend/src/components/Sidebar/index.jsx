@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, Link } from 'react-router-dom';
 import {
   LayoutDashboard,
   Wallet,
@@ -12,6 +12,8 @@ import {
   LogOut,
   Building2,
   X,
+  ArrowDownLeft,
+  ArrowUpRight,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { ROLE_LABELS } from '../../utils/roleHelpers.js';
@@ -41,6 +43,7 @@ const Sidebar = ({ isMobileOpen, onCloseMobile }) => {
       <div
         className={`sidebar-backdrop ${isMobileOpen ? 'mobile-open' : ''}`}
         onClick={onCloseMobile}
+        aria-hidden="true"
       />
       <aside className={`sidebar ${isMobileOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-header">
@@ -53,16 +56,14 @@ const Sidebar = ({ isMobileOpen, onCloseMobile }) => {
               <span className="sidebar-brand-tagline">Institutional Core</span>
             </div>
           </div>
-          {isMobileOpen && (
-            <button
-              type="button"
-              className="sidebar-logout-btn"
-              onClick={onCloseMobile}
-              aria-label="Close menu"
-            >
-              <X size={20} />
-            </button>
-          )}
+          <button
+            type="button"
+            className="sidebar-close-btn"
+            onClick={onCloseMobile}
+            aria-label="Close navigation menu"
+          >
+            <X size={20} />
+          </button>
         </div>
 
         <nav className="sidebar-nav">
@@ -110,6 +111,35 @@ const Sidebar = ({ isMobileOpen, onCloseMobile }) => {
                 <FileText size={18} />
                 <span>Statements</span>
               </NavLink>
+
+              {/* Direct Quick Operations for Account Holder in Mobile Drawer */}
+              <div className="sidebar-mobile-operations">
+                <span className="sidebar-nav-section-title">Quick Operations</span>
+                <NavLink
+                  to="/transactions?action=deposit"
+                  className="sidebar-nav-item sidebar-op-item"
+                  onClick={onCloseMobile}
+                >
+                  <ArrowDownLeft size={18} />
+                  <span>Deposit</span>
+                </NavLink>
+                <NavLink
+                  to="/transactions?action=withdraw"
+                  className="sidebar-nav-item sidebar-op-item"
+                  onClick={onCloseMobile}
+                >
+                  <ArrowUpRight size={18} />
+                  <span>Withdrawal</span>
+                </NavLink>
+                <NavLink
+                  to="/transactions?action=transfer"
+                  className="sidebar-nav-item sidebar-op-item"
+                  onClick={onCloseMobile}
+                >
+                  <ArrowLeftRight size={18} />
+                  <span>Money Transfer</span>
+                </NavLink>
+              </div>
             </>
           )}
 
@@ -250,7 +280,12 @@ const Sidebar = ({ isMobileOpen, onCloseMobile }) => {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="sidebar-user-info">
+          <Link
+            to="/profile"
+            className="sidebar-user-info"
+            onClick={onCloseMobile}
+            aria-label="View Profile"
+          >
             <div className="sidebar-user-avatar">{getInitials(user?.name)}</div>
             <div className="sidebar-user-details">
               <span className="sidebar-user-name">{user?.name || 'User'}</span>
@@ -258,7 +293,7 @@ const Sidebar = ({ isMobileOpen, onCloseMobile }) => {
                 {ROLE_LABELS[role] || role}
               </span>
             </div>
-          </div>
+          </Link>
           <button
             type="button"
             className="sidebar-logout-btn"
@@ -266,7 +301,7 @@ const Sidebar = ({ isMobileOpen, onCloseMobile }) => {
             title="Sign out of LedgerLine"
             aria-label="Logout"
           >
-            <LogOut size={16} />
+            <LogOut size={18} />
           </button>
         </div>
       </aside>

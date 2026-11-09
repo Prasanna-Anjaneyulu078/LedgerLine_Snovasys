@@ -799,10 +799,11 @@ export class TransactionService {
       throw AppError.notFound('Transaction not found');
     }
 
-    if (user.role !== 'ADMIN' && user.role !== 'AUDITOR' && txn.initiated_by !== user.id) {
+    let userAccountIds = null;
+    if (user.role !== 'ADMIN' && user.role !== 'AUDITOR') {
       // Check if user is owner of either source or destination account
       const userAccounts = await accountRepository.findByOwnerId(user.id);
-      const userAccountIds = new Set(userAccounts.map((a) => a.id));
+      userAccountIds = new Set(userAccounts.map((a) => a.id));
 
       const isParticipant =
         (txn.source_account_id && userAccountIds.has(txn.source_account_id)) ||
@@ -819,13 +820,20 @@ export class TransactionService {
       ...txn,
       amountPaise: txn.amount.toString(),
       amountFormatted: formatRupees(txn.amount),
-      ledgerEntries: ledgerEntries.map((le) => ({
-        ...le,
-        amountPaise: le.amount.toString(),
-        amountFormatted: formatRupees(le.amount),
-        balanceAfterPaise: le.balance_after.toString(),
-        balanceAfterFormatted: formatRupees(le.balance_after),
-      })),
+      ledgerEntries: ledgerEntries.map((le) => {
+        const canViewBalanceAfter =
+          user.role === 'ADMIN' ||
+          user.role === 'AUDITOR' ||
+          (userAccountIds && userAccountIds.has(le.account_id));
+
+        return {
+          ...le,
+          amountPaise: le.amount.toString(),
+          amountFormatted: formatRupees(le.amount),
+          balanceAfterPaise: canViewBalanceAfter ? le.balance_after.toString() : null,
+          balanceAfterFormatted: canViewBalanceAfter ? formatRupees(le.balance_after) : '—',
+        };
+      }),
     };
   }
 
@@ -870,25 +878,20 @@ export class TransactionService {
       throw AppError.forbidden('You do not have permission to inspect transactions for this account');
     }
 
+    // Enforce account filtering at the SQL level so pagination and totals are accurate
     const result = await transactionRepository.findAll({
       ...query,
       accountId: filterAccountId,
+      accountIds: filterAccountId ? null : userAccountIds,
     });
 
-    // Filter to ensure only transactions related to user's accounts
-    const filtered = result.transactions.filter(
-      (t) =>
-        (t.source_account_id && userAccountIds.includes(t.source_account_id)) ||
-        (t.destination_account_id && userAccountIds.includes(t.destination_account_id))
-    );
-
     return {
-      transactions: filtered.map((t) => ({
+      ...result,
+      transactions: result.transactions.map((t) => ({
         ...t,
         amountPaise: t.amount.toString(),
         amountFormatted: formatRupees(t.amount),
       })),
-      total: filtered.length,
     };
   }
 }

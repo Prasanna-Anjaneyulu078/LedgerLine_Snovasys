@@ -46,7 +46,7 @@ const Login = () => {
       <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' }}>
         <div style={{ textAlign: 'center', fontFamily: 'var(--font-body)', color: '#64748B' }}>
           <div style={{ width: '32px', height: '32px', border: '3px solid #E2E8F0', borderTopColor: '#2563EB', borderRadius: '50%', margin: '0 auto 12px', animation: 'spin 0.8s linear infinite' }} />
-          <p>Verifying institutional credentials...</p>
+          <p>Verifying session credentials...</p>
           <style>{`@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }`}</style>
         </div>
       </div>
@@ -90,13 +90,13 @@ const Login = () => {
         </div>
 
         {activeError && (
-          <div className="login-error-banner">
+          <div className="login-error-banner" role="alert">
             <AlertCircle size={16} />
             <span>{activeError}</span>
           </div>
         )}
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} noValidate>
           <FormInput
             label="Email Address"
             id="login-email"
@@ -105,6 +105,7 @@ const Login = () => {
             onChange={(e) => setEmail(e.target.value)}
             placeholder="e.g. yourname@institution.com"
             required
+            autoComplete="email"
           />
 
           <FormInput
@@ -116,6 +117,7 @@ const Login = () => {
             placeholder="Enter secure password"
             required
             showPasswordToggle
+            autoComplete="current-password"
           />
 
           <button
@@ -135,7 +137,7 @@ const Login = () => {
         </form>
 
         <div className="login-footer-links">
-          <span style={{ color: 'var(--text-secondary)' }}>Don't have an account?</span>
+          <span className="login-footer-text">Don't have an account?</span>
           <Link to="/register" className="login-register-link">
             Create an Account
           </Link>

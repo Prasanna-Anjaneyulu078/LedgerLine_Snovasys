@@ -132,6 +132,32 @@ export class AccountService {
       })),
     };
   }
+
+  /**
+   * Safe recipient account lookup for transfer validation
+   * Excludes sensitive balance, owner identity, and timestamps
+   */
+  async getRecipientAccount(accountNumber, user) {
+    if (!accountNumber || typeof accountNumber !== 'string' || accountNumber.trim() === '') {
+      throw AppError.badRequest('Recipient account number is required');
+    }
+
+    const cleanNum = accountNumber.trim();
+    const account = await accountRepository.findByIdOrAccountNumber(cleanNum);
+    if (!account) {
+      throw AppError.notFound('Recipient account not found');
+    }
+
+    return {
+      accountNumber: account.account_number,
+      accountType: account.account_type,
+      currency: account.currency,
+      status: account.status,
+      holderName: account.owner_name,
+      isEligible: account.status === 'ACTIVE',
+      isOwnAccount: account.owner_id === user.id,
+    };
+  }
 }
 
 export const accountService = new AccountService();

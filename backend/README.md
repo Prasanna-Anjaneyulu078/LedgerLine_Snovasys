@@ -245,6 +245,7 @@ All API routes are prefixed with `/api/v1`.
 | :--- | :--- | :--- | :--- |
 | `GET` | `/accounts` | Bearer Token | List owned accounts (or all for Admin) |
 | `POST` | `/accounts` | Account Holder / Admin | Create new operational account |
+| `GET` | `/accounts/recipient/:accountNumber` | Authenticated | Safe recipient lookup for inter-user transfer validation |
 | `GET` | `/accounts/:accountNumber` | Owner / Admin / Auditor | Get account details |
 | `GET` | `/accounts/:accountNumber/balance` | Owner / Admin / Auditor | Get real-time account balance |
 

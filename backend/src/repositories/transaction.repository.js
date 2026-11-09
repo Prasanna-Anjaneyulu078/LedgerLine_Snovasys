@@ -82,6 +82,7 @@ export class TransactionRepository {
       offset = null,
       page = null,
       accountId = null,
+      accountIds = null,
       status = null,
       type = null,
       startDate = null,
@@ -111,6 +112,14 @@ export class TransactionRepository {
     if (accountId) {
       params.push(accountId);
       conditions.push(`(t.source_account_id = $${params.length} OR t.destination_account_id = $${params.length})`);
+    } else if (accountIds && Array.isArray(accountIds) && accountIds.length > 0) {
+      const placeholders = [];
+      for (const aid of accountIds) {
+        params.push(aid);
+        placeholders.push(`$${params.length}`);
+      }
+      const inList = placeholders.join(', ');
+      conditions.push(`(t.source_account_id IN (${inList}) OR t.destination_account_id IN (${inList}))`);
     }
 
     if (status && status !== 'ALL' && typeof status === 'string' && status.trim() !== '') {

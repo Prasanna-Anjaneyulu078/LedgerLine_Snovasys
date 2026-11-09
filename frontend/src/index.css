@@ -184,3 +184,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   color: var(--primary-hover);
 }
 
+/* Global Print Baseline */
+@media print {
+  .sidebar,
+  .sidebar-backdrop,
+  .header,
+  .mobile-page-header {
+    display: none !important;
+  }
+}
+

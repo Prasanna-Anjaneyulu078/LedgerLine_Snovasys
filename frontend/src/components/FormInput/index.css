@@ -39,6 +39,13 @@
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius);
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
+}
+
+.form-input:hover:not(:focus):not(:disabled),
+.form-select:hover:not(:focus):not(:disabled),
+.form-textarea:hover:not(:focus):not(:disabled) {
+  border-color: #CBD5E1;
 }
 
 .form-textarea {
@@ -86,14 +93,14 @@
 
 .form-password-toggle {
   position: absolute;
-  right: 0.625rem;
+  right: 0.5rem;
   top: 50%;
   transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   margin: 0;
   background: transparent;
@@ -116,7 +123,7 @@
 }
 
 .form-input-with-toggle {
-  padding-right: 2.5rem !important;
+  padding-right: 2.75rem !important;
 }
 
 .form-helper-text {

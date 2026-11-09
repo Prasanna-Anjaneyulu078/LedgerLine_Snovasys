@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
 import './index.css';
 
@@ -12,12 +12,37 @@ const ConfirmModal = ({
   onClose,
   isDestructive = false,
   isLoading = false,
+  maxWidth,
+  hideCancel = false,
 }) => {
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && !isLoading && onClose) {
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isOpen, isLoading, onClose]);
+
   if (!isOpen) return null;
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="modal-dialog"
+        style={maxWidth ? { maxWidth } : undefined}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-header">
           <h3 className="modal-title">{title}</h3>
           <button
@@ -34,24 +59,28 @@ const ConfirmModal = ({
         <div className="modal-body">{children}</div>
 
         <div className="modal-footer">
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={onClose}
-            disabled={isLoading}
-          >
-            {cancelText}
-          </button>
-          <button
-            type="button"
-            className={`${isDestructive ? 'btn-destructive' : 'btn-primary'} ${
-              isLoading ? 'btn-disabled' : ''
-            }`}
-            onClick={onConfirm}
-            disabled={isLoading}
-          >
-            {isLoading ? 'Processing...' : confirmText}
-          </button>
+          {!hideCancel && (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={onClose}
+              disabled={isLoading}
+            >
+              {cancelText}
+            </button>
+          )}
+          {(onConfirm || hideCancel) && (
+            <button
+              type="button"
+              className={`${isDestructive ? 'btn-destructive' : 'btn-primary'} ${
+                isLoading ? 'btn-disabled' : ''
+              }`}
+              onClick={onConfirm || onClose}
+              disabled={isLoading}
+            >
+              {isLoading ? 'Processing...' : confirmText}
+            </button>
+          )}
         </div>
       </div>
     </div>

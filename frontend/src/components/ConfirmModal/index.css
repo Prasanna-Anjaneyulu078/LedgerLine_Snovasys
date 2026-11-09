@@ -71,6 +71,8 @@
   color: var(--text-color);
   font-size: 0.875rem;
   line-height: 1.5;
+  max-height: calc(85vh - 130px);
+  overflow-y: auto;
 }
 
 .modal-footer {
