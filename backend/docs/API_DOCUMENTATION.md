@@ -30,6 +30,119 @@ LedgerLine strictly enforces separation of concerns across three core system rol
 
 ---
 
+## Endpoint-to-Screen Mapping (Full Architecture)
+
+The following matrix documents every UI screen, user action, underlying backend endpoint, HTTP method, authorization policy, mutation status, money effect, and audit logging behavior:
+
+| Screen Name | User Action | Actual Backend Endpoint | Method | Supported Roles | Data Returned | Modifies Data? | Money Effect | Produces Audit Event? |
+| :--- | :--- | :--- | :---: | :---: | :--- | :---: | :--- | :---: |
+| **Login** | Submit login credentials | `/api/v1/auth/login` | `POST` | Public | User profile + JWT token | Yes (sessions) | None | Yes (`AUTH_LOGIN_SUCCESS` / `AUTH_LOGIN_FAILURE`) |
+| **Register** | Register new identity | `/api/v1/auth/register` | `POST` | Public | Created user + JWT token | Yes (users table) | None | Yes (`AUTH_REGISTER_SUCCESS` / `AUTH_REGISTER_FAILURE`) |
+| **Profile** | View session profile | `/api/v1/auth/me` | `GET` | All authenticated | Current user details & role | No | None | No |
+| **Account Holder Dashboard** | Load accounts & recent txns | `/api/v1/accounts`, `/api/v1/transactions` | `GET` | `ACCOUNT_HOLDER` | User accounts + transaction list | No | None | No |
+| **Account Holder Accounts** | Create new account | `/api/v1/accounts` | `POST` | `ACCOUNT_HOLDER`, `ADMIN` | Created account details | Yes (accounts table) | None (starts ₹0.00) | Yes (`ACCOUNT_CREATED`) |
+| **Transactions** | Deposit money | `/api/v1/transactions/deposit` | `POST` | `ACCOUNT_HOLDER` | Transaction record + balance | Yes (txns, ledger, accounts) | Balance +amount; 1 CREDIT entry; vault assets increase | Yes (`TRANSACTION_DEPOSIT_SUCCESS` / `REFUSED`) |
+| **Transactions** | Withdraw money | `/api/v1/transactions/withdraw` | `POST` | `ACCOUNT_HOLDER` | Transaction record + balance | Yes (txns, ledger, accounts) | Balance -amount; 1 DEBIT entry; vault assets decrease | Yes (`TRANSACTION_WITHDRAW_SUCCESS` / `REFUSED`) |
+| **Transactions** | Transfer money | `/api/v1/transactions/transfer` | `POST` | `ACCOUNT_HOLDER` | Transaction record + balances | Yes (txns, ledger, accounts) | Source -amount (DEBIT), Dest +amount (CREDIT); Net vault change = 0 | Yes (`TRANSACTION_TRANSFER_SUCCESS` / `REFUSED`) |
+| **Transactions** | Validate recipient account | `/api/v1/accounts/recipient/:accNum` | `GET` | All authenticated | Safe recipient info (name, status) | No | None | No |
+| **Transactions** | Inspect transaction details | `/api/v1/transactions/:id` | `GET` | Participant / Admin / Auditor | Txn details + double-entry postings | No | None | No |
+| **Statements** | View official statement | `/api/v1/statements/:accountNumber` | `GET` | Owner / Admin / Auditor | Opening/closing balance, postings, summary, refused | No | None | No |
+| **Admin Dashboard** | Load system telemetry | `/api/v1/admin/dashboard` | `GET` | `ADMIN` | 8 Aggregate metrics, trends, recent txns | No | None | No |
+| **Admin Users** | List & filter users | `/api/v1/admin/users` | `GET` | `ADMIN` | Paginated users list + metadata | No | None | No |
+| **Admin Users** | Activate/suspend user | `/api/v1/admin/users/:userId/status` | `PATCH` | `ADMIN` | Updated user record | Yes (users table) | None | Yes (`ADMIN_USER_STATUS_UPDATED`) |
+| **Admin Accounts** | List & filter accounts | `/api/v1/admin/accounts` | `GET` | `ADMIN` | Paginated accounts + balances | No | None | No |
+| **Admin Accounts** | Freeze/activate account | `/api/v1/admin/accounts/:accountId/status` | `PATCH` | `ADMIN` | Updated account status | Yes (accounts table) | None | Yes (`ADMIN_ACCOUNT_STATUS_UPDATED`) |
+| **Global Ledger** | Inspect double-entry journal | `/api/v1/ledger` | `GET` | `ADMIN`, `AUDITOR` | Paginated journal rows + totals | No | None | No |
+| **Global Ledger** | Verify account consistency | `/api/v1/ledger/:accountNumber` | `GET` | Owner / Admin / Auditor | Balance vs calculated net ledger | No | None | No |
+| **Audit Events** | Inspect compliance logs | `/api/v1/audit-events` | `GET` | `ADMIN`, `AUDITOR` | Paginated audit trail + metadata | No | None | No |
+| **Auditor Dashboard** | Compliance oversight portal | `/api/v1/ledger`, `/api/v1/transactions`, `/api/v1/audit-events` | `GET` | `AUDITOR` | Read-only journal, txns, audit logs, refused attempts | No | None | No |
+
+---
+
+## Financial Money Effects & Invariants
+
+LedgerLine treats balance mutations as strict derivative states of atomic financial operations:
+
+1. **Deposit (`POST /api/v1/transactions/deposit`)**:
+   - **Pre-condition**: Destination account must be in `ACTIVE` status. Initiating user must own the account.
+   - **Post-condition**:
+     - Single row lock on destination account (`SELECT FOR UPDATE`).
+     - Account `balance` is incremented by transacted integer paise (`newBalance = balance + amount`).
+     - Exactly **one** `CREDIT` entry is inserted into `ledger_entries` (`balance_after = newBalance`).
+     - Transaction record created with status `SUCCESS`.
+     - Net system vault assets increase by `amount`.
+2. **Withdrawal (`POST /api/v1/transactions/withdraw`)**:
+   - **Pre-condition**: Source account must be in `ACTIVE` status. Initiating user must own the account. Available balance must be strictly greater than or equal to requested amount (`balance >= amount`).
+   - **Post-condition**:
+     - Single row lock on source account (`SELECT FOR UPDATE`).
+     - Account `balance` is decremented by transacted integer paise (`newBalance = balance - amount`).
+     - Database-enforced constraint `CHECK (balance >= 0)` guarantees non-negative balance.
+     - Exactly **one** `DEBIT` entry is inserted into `ledger_entries` (`balance_after = newBalance`).
+     - Transaction record created with status `SUCCESS`.
+     - Net system vault assets decrease by `amount`.
+3. **Transfer (`POST /api/v1/transactions/transfer`)**:
+   - **Pre-condition**: Source and destination accounts must both be `ACTIVE` status. Source account cannot equal destination account. Initiating user must own source account. Source balance must satisfy `balance >= amount`.
+   - **Post-condition**:
+     - Deterministic row locking on both accounts in ascending UUID order (`ORDER BY id ASC FOR UPDATE`) eliminating deadlocks.
+     - Source balance decremented by `amount`.
+     - Destination balance incremented by exact same `amount`.
+     - Exactly **two** balanced ledger entries are inserted:
+       - `DEBIT` entry on source account (`balance_after = newSourceBalance`).
+       - `CREDIT` entry on destination account (`balance_after = newDestBalance`).
+     - Transaction record created with status `SUCCESS`.
+     - **Conservation of Money**: Net change in system vault assets is identically zero (`+amount - amount = 0`).
+4. **Administrative & Oversight Operations**:
+   - Zero money effects. Read-only queries and administrative status alterations (`ACTIVE`, `FROZEN`, `CLOSED`) never modify balances or insert financial ledger entries.
+
+---
+
+## Audit Event Coverage & Non-Repudiation
+
+All security-critical operations, authentication workflows, and administrative actions emit structured, immutable records to the `audit_events` PostgreSQL table:
+
+| Event Action | Triggering Operation | Actor Role | Resource Type | Target Resource ID | Metadata Captured |
+| :--- | :--- | :---: | :---: | :--- | :--- |
+| `AUTH_REGISTER_SUCCESS` | New user registered | `ACCOUNT_HOLDER` | `USER` | User UUID | `{ email, role }` |
+| `AUTH_REGISTER_FAILURE` | Registration rejected | Anonymous | `USER` | None | `{ email, failureReason }` |
+| `AUTH_LOGIN_SUCCESS` | User authenticated | Any | `USER` | User UUID | `{ email, role }` |
+| `AUTH_LOGIN_FAILURE` | Invalid password/user | Anonymous | `USER` | None | `{ email, failureReason }` |
+| `AUTH_LOGIN_REFUSED` | Suspended user login | Suspended | `USER` | User UUID | `{ email, refusalReason: "User account deactivated" }` |
+| `AUTH_REFRESH_SUCCESS` | Refresh token rotated | Any | `USER` | User UUID | `{ email }` |
+| `AUTH_LOGOUT_SUCCESS` | Explicit session logout | Any | `USER` | User UUID | `{ email }` |
+| `ACCOUNT_CREATED` | New account provisioned | User / Admin | `ACCOUNT` | Account UUID | `{ accountNumber, accountType }` |
+| `ADMIN_USER_STATUS_UPDATED` | User activated/suspended | `ADMIN` | `USER` | Target User UUID | `{ previousStatus, newStatus }` |
+| `ADMIN_ACCOUNT_STATUS_UPDATED` | Account status modified | `ADMIN` | `ACCOUNT` | Target Account UUID | `{ previousStatus, newStatus, accountNumber }` |
+| `TRANSACTION_DEPOSIT_SUCCESS` | Deposit committed | `ACCOUNT_HOLDER` | `TRANSACTION` | Txn UUID | `{ accountNumber, amount, balanceAfter }` |
+| `TRANSACTION_DEPOSIT_REFUSED` | Deposit refused | `ACCOUNT_HOLDER` | `ACCOUNT` | Account UUID | `{ accountNumber, amount, refusalReason }` |
+| `TRANSACTION_WITHDRAW_SUCCESS` | Withdrawal committed | `ACCOUNT_HOLDER` | `TRANSACTION` | Txn UUID | `{ accountNumber, amount, balanceAfter }` |
+| `TRANSACTION_WITHDRAW_REFUSED` | Withdrawal refused (e.g. overdraft) | `ACCOUNT_HOLDER` | `ACCOUNT` | Account UUID | `{ accountNumber, amount, refusalReason }` |
+| `TRANSACTION_TRANSFER_SUCCESS` | Transfer committed | `ACCOUNT_HOLDER` | `TRANSACTION` | Txn UUID | `{ sourceAccountNumber, destinationAccountNumber, amount }` |
+| `TRANSACTION_TRANSFER_REFUSED` | Transfer refused (e.g. held) | `ACCOUNT_HOLDER` | `ACCOUNT` | Account UUID | `{ sourceAccountNumber, destinationAccountNumber, amount, refusalReason }` |
+
+---
+
+## Sensitive Data Minimization & Privacy Protection
+
+LedgerLine strictly adheres to data minimization principles across all user interfaces and public APIs:
+
+1. **Credential Elimination**:
+   - Passwords and password hashes are never returned by any API endpoint and are strictly omitted from `users` repository queries (`SELECT id, full_name, email, role, is_active, created_at FROM users`).
+   - Audit logs never record plain passwords, bearer tokens, or refresh token hashes.
+2. **Token & Secret Sanitization**:
+   - The frontend `SanitizedAuditInspector` component explicitly filters out any key matching `password`, `token`, `secret`, `cookie`, `jwt`, `authorization`, or `refreshtoken`.
+3. **Internal UUID Minimization in UI**:
+   - Public account numbers (`LL-ACC-XXXX`) and meaningful transaction references (`DEP-...`, `WTH-...`, `TRF-...`) are presented as primary identifiers across all normal user and auditor interfaces.
+   - Internal database UUIDs are omitted from primary data tables and statement displays to prevent unnecessary exposure of internal database architecture.
+4. **Safe Recipient Verification**:
+   - The inter-user recipient lookup endpoint (`GET /api/v1/accounts/recipient/:accountNumber`) returns strictly non-sensitive metadata needed for transfer confirmation:
+     - `accountNumber`: Target account number
+     - `holderName`: Account owner's public name
+     - `status`: Operational status (`ACTIVE`, `FROZEN`, `CLOSED`)
+     - `isEligible`: Boolean indicating transfer eligibility
+   - Private depository balances, user UUIDs, creation timestamps, and owner email addresses are completely omitted.
+
+---
+
 ## 1. Authentication Endpoints
 
 ### Register User
@@ -42,10 +155,10 @@ LedgerLine strictly enforces separation of concerns across three core system rol
   {
     "fullName": "Kavi",
     "email": "kavi@example.com",
-    "password": "Kavi@LL26#User01",
-    "role": "ACCOUNT_HOLDER"
+    "password": "Kavi@LL26#User01"
   }
   ```
+  *(Note: The role is strictly assigned server-side as `ACCOUNT_HOLDER`. Client-supplied role fields are rejected with HTTP 400 Bad Request by Zod schema validation).*
 - **Response** (`201 Created`):
   ```json
   {

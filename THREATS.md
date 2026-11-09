@@ -13,7 +13,7 @@ This document provides a systematic threat model, vulnerability analysis, and se
 | **THREAT-003** | Duplicate Financial Execution via Network Retries | **CRITICAL** | PostgreSQL `uq_user_idempotency_key` + SHA-256 canonical hashing | Automated Test (`idempotency.test.js` Tests A, B, C) | **VERIFIED (TEST)** |
 | **THREAT-004** | Inconsistent Ledger State & Atomicity Failure | **CRITICAL** | Atomic `BEGIN...COMMIT` + dual-entry debit/credit ledger creation | Automated Test (`transactions.test.js`, `ledger_immutability.test.js`) | **VERIFIED (TEST)** |
 | **THREAT-005** | Broken Account-Level Access Control (IDOR) | **HIGH** | `authorizeAccountAccess` middleware + source account owner checks | Automated Test (`authorization.test.js` Test F) | **VERIFIED (TEST)** |
-| **THREAT-006** | Auditor Privilege Abuse (Unauthorized Money Movement) | **HIGH** | Strict RBAC (`authorize('ACCOUNT_HOLDER', 'ADMIN')`) | Automated Test (`authorization.test.js` Test G) | **VERIFIED (TEST)** |
+| **THREAT-006** | Auditor Privilege Abuse (Unauthorized Money Movement) | **HIGH** | Strict RBAC (`authorize('ACCOUNT_HOLDER')` exclusively; AUDITOR and ADMIN denied with 403) | Automated Test (`authorization.test.js` Test G, `role_authorization_day5.test.js`) | **VERIFIED (TEST)** |
 | **THREAT-007** | Floating-Point Math Rounding Drift | **HIGH** | Minor units (integer paise) with PostgreSQL `BIGINT` & JS `BigInt` | Automated Test (`money.test.js` 8 tests) | **VERIFIED (TEST)** |
 | **THREAT-008** | Unauthorized Modification of Ledger Records | **CRITICAL** | Dual-layer: `trg_prevent_ledger_modification` + `ledgerline_runtime` role | Automated Test (`ledger_immutability.test.js` 8 tests) | **VERIFIED (TEST)** |
 | **THREAT-009** | Privilege Escalation via Registration Role Injection | **CRITICAL** | Strict Zod schema (`.strict()`) + controller filter + hardcoded role | Automated Test (`auth.test.js` 18 tests) | **VERIFIED (TEST)** |
@@ -22,6 +22,8 @@ This document provides a systematic threat model, vulnerability analysis, and se
 | **THREAT-012** | Token Tampering & Deactivated User Access | **HIGH** | Server-side JWT signature verification + active user DB check | Automated Test (`auth.test.js`) | **VERIFIED (TEST)** |
 | **THREAT-013** | Denial of Service via Request Flooding | **MEDIUM** | Multi-tier `express-rate-limit` + 1MB JSON body payload limit | Code Inspection & Manual Verification | **VERIFIED (INSPECTION)** |
 | **THREAT-014** | Sensitive Credential Exposure via Logs or Errors | **MEDIUM** | Production error masking + `sanitizeUrl` + bcrypt (12 rounds) | Code Inspection & Automated Test (`auth.test.js`) | **VERIFIED (HYBRID)** |
+| **THREAT-015** | Admin Financial Privilege Overreach (Direct Money Operations) | **HIGH** | Least-privilege separation (`/transactions/*` strictly requires `ACCOUNT_HOLDER`; Admin restricted to `/admin/*`) | Automated Test (`role_authorization_day5.test.js` Point 2) | **VERIFIED (TEST)** |
+| **THREAT-016** | Sensitive Data Exposure in Audit Logs & Primary UI | **MEDIUM** | Data minimization: credential & token sanitization in audit logs; UUIDs hidden in favor of public account numbers | Code Inspection & Automated Test (`role_authorization_day5.test.js`) | **VERIFIED (HYBRID)** |
 
 ---
 
@@ -574,6 +576,63 @@ This document provides a systematic threat model, vulnerability analysis, and se
 
 ---
 
+### Threat ID: THREAT-015 – Admin Financial Privilege Overreach (Direct Money Operations)
+
+- **Severity:** **HIGH** – Violation of least-privilege principles and separation of duties in financial systems.
+- **1. Threat Description:**
+  - System administrators possess elevated privileges for infrastructure, user accounts, and system health oversight.
+  - If administrative credentials can also initiate financial transactions (deposits, withdrawals, or transfers), an administrator could unilaterally inject funds, drain customer reserves, or manipulate double-entry books without counter-party authorization.
+- **2. Attack Scenario:**
+  - An internal rogue administrator or an adversary who compromises an `ADMIN` JWT bearer token attempts to execute `POST /api/v1/transactions/deposit`, `POST /api/v1/transactions/withdraw`, or `POST /api/v1/transactions/transfer` against an active customer account.
+- **3. Potential Impact:**
+  - Embezzlement, unbacked monetary injection, or unauthorized extraction of funds by administrative staff.
+  - Failure of regulatory separation of duties (SoD) compliance audits.
+- **4. Existing Security Controls:**
+  - Strict RBAC middleware: `authorize('ACCOUNT_HOLDER')` is enforced on all three money-movement routes (`/deposit`, `/withdraw`, `/transfer`).
+  - Frontend omission: The admin dashboard and navigation contain zero financial mutation controls or action modals.
+- **5. Mitigation Strategy:**
+  - *Implemented:* In `transaction.routes.js`, all money movement operations strictly enforce `authorize('ACCOUNT_HOLDER')`. When an `ADMIN` token is supplied, `authorize()` detects `req.user.role === 'ADMIN'` and returns HTTP 403 Forbidden (`Access forbidden: required role [ACCOUNT_HOLDER], current role is [ADMIN]`). Administrators are strictly restricted to non-financial governance endpoints under `/admin/*`.
+- **6. Verification and Test Evidence:**
+  - *Automated Test:* `tests/integration/role_authorization_day5.test.js` – Section 2 (`Admin Ordinary Money Operation Denial`: deposit, withdrawal, and transfer rejected with HTTP 403 Forbidden).
+  - *Observed Result:* All three operations return HTTP 403, zero transactions are created in PostgreSQL, and account balances are 100% untouched.
+- **7. Related Implementation Files:**
+  - `backend/src/modules/transactions/transaction.routes.js`
+  - `backend/src/middleware/authorize.js`
+  - `backend/tests/integration/role_authorization_day5.test.js`
+- **8. Residual Risk:**
+  - Direct database access by a PostgreSQL superuser could bypass Express middleware. Mitigated by `RUN_TIME_ROLE_SETUP.sql` least-privilege runtime role permissions and database trigger immutability.
+
+---
+
+### Threat ID: THREAT-016 – Sensitive Data Exposure in Audit Logs and Primary UI
+
+- **Severity:** **MEDIUM** – Information disclosure leading to credential harvesting or internal system enumeration.
+- **1. Threat Description:**
+  - Audit logging systems frequently capture complete request and response payloads. If sensitive credentials (passwords, tokens, cookies, secrets) or internal implementation details (database UUIDs) are logged or displayed in UI inspection portals without filtering, compliance auditors or operators can observe private credentials.
+- **2. Attack Scenario:**
+  - An auditor inspecting security logs views raw authentication metadata containing user passwords or bearer tokens, allowing offline credential abuse.
+  - An account holder inspecting UI elements observes raw internal database UUIDs instead of public identifiers, facilitating targeted enumeration attacks.
+- **3. Potential Impact:**
+  - Credential harvesting, session hijacking, or internal system enumeration.
+- **4. Existing Security Controls:**
+  - Sensitive key sanitization in audit formatters (`SENSITIVE_KEYS` blocklist masking `password`, `token`, `cookie`, `secret`, `jwt`).
+  - Public account numbers (`LL-ACC-XXXX`) and transaction references (`TXN-...`) replacing internal UUIDs in normal UI views.
+  - Safe recipient verification endpoint (`GET /accounts/recipient/:accountNumber`) excluding owner UUID, balance, and timestamps.
+- **5. Mitigation Strategy:**
+  - *Implemented:* `SanitizedAuditInspector` in `AuditEvents/index.jsx` and `AuditorDashboard/index.jsx` filters out all sensitive keys before rendering. The public UI exclusively displays human-readable account numbers and transaction references, hiding internal database UUIDs from standard screens.
+- **6. Verification and Test Evidence:**
+  - *Automated Test:* `tests/integration/admin_dashboard.test.js`, `tests/integration/role_authorization_day5.test.js` (verifies passwords and hashes are never exposed).
+  - *Observed Result:* Password hashes and secret tokens are excluded from all user lists and audit payloads.
+- **7. Related Implementation Files:**
+  - `backend/src/repositories/user.repository.js`
+  - `frontend/src/pages/AuditEvents/index.jsx`
+  - `frontend/src/pages/AuditorDashboard/index.jsx`
+  - `frontend/src/pages/AccountManagement/index.jsx`
+- **8. Residual Risk:**
+  - New custom audit metadata keys must adhere to standard naming conventions to match sanitization filters.
+
+---
+
 ## Security Assessment Summary
 
 ### Threat Distribution by Severity
@@ -581,25 +640,27 @@ This document provides a systematic threat model, vulnerability analysis, and se
 | Severity Level | Threat Count | Threat IDs | Implemented & Verified |
 | :--- | :---: | :--- | :---: |
 | **CRITICAL** | **6** | THREAT-001, THREAT-003, THREAT-004, THREAT-008, THREAT-009, THREAT-010 | **6 / 6** |
-| **HIGH** | **5** | THREAT-005, THREAT-006, THREAT-007, THREAT-011, THREAT-012 | **5 / 5** |
-| **MEDIUM** | **3** | THREAT-002, THREAT-013, THREAT-014 | **3 / 3** |
+| **HIGH** | **6** | THREAT-005, THREAT-006, THREAT-007, THREAT-011, THREAT-012, THREAT-015 | **6 / 6** |
+| **MEDIUM** | **4** | THREAT-002, THREAT-013, THREAT-014, THREAT-016 | **4 / 4** |
 | **LOW** | **0** | — | — |
-| **TOTAL** | **14** | **All 14 threats evaluated** | **14 / 14** |
+| **TOTAL** | **16** | **All 16 threats evaluated** | **16 / 16** |
 
 ### Implementation and Verification Breakdown
 
-- **Threats Verified by Automated Tests (11 threats):**
+- **Threats Verified by Automated Tests (13 threats):**
   - THREAT-001 (Concurrency Overdraft): `concurrency.test.js` (Test D)
   - THREAT-002 (Deadlock Ordering): `concurrency.test.js` (Test E)
   - THREAT-003 (Idempotency Retries): `idempotency.test.js` (Tests A, B, C)
   - THREAT-004 (Double-Entry Atomicity): `transactions.test.js`, `ledger_immutability.test.js`
   - THREAT-005 (Account-Level IDOR): `authorization.test.js` (Test F), `account_number_transfer.test.js`
-  - THREAT-006 (Auditor Privilege Denial): `authorization.test.js` (Test G)
+  - THREAT-006 (Auditor Privilege Denial): `authorization.test.js` (Test G), `role_authorization_day5.test.js`
   - THREAT-007 (Floating-Point Precision): `money.test.js` (8 tests)
   - THREAT-008 (Ledger Immutability Trigger & Role): `ledger_immutability.test.js` (8 tests)
   - THREAT-009 (Registration Privilege Escalation): `auth.test.js` (18 tests)
   - THREAT-011 (Negative/Zero Amounts): `transactions.test.js`, `money.test.js`
   - THREAT-012 (Token Tampering & Deactivation): `auth.test.js`
+  - THREAT-015 (Admin Money Operation Denial): `role_authorization_day5.test.js` (Section 2)
+  - THREAT-016 (Data Minimization & UUID Protection): `role_authorization_day5.test.js` (Section 1 & 9)
 - **Threats Verified by Code Inspection & Hybrid Validation (3 threats):**
   - THREAT-010 (SQL Injection): Verified 100% parameterized queries across all repositories; automated fuzzing test suite was not implemented.
   - THREAT-013 (DoS & Rate Limiting): Verified middleware registration and configuration; volumetric connection pool exhaustion was not tested under automated load.

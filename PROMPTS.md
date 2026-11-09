@@ -1475,6 +1475,98 @@ The final accepted decision is:
 
 ---
 
+### Phase 11: Day 5 — Admin, Auditor and Audit Visibility Hardening
+
+**Date:** 2026-11-09
+
+#### 1. Objective
+Implement and verify the Admin and Auditor frontend experiences based strictly on existing backend capabilities and original Snovasys challenge requirements:
+- Least-privilege access enforcement.
+- Admin system oversight without ordinary account-holder money operation controls.
+- Auditor read-only access with zero financial mutation controls or account status modification powers.
+- Accurate, database-backed audit visibility distinguishing committed transactions from refused attempts.
+- Backend-enforced role authorization with no fake, mock, or hardcoded business metrics.
+- Complete API-level verification across all 9 authorization points using only the isolated test database.
+
+#### 2. Original AI Prompt
+*Verbatim prompt from active conversation history (`7bc4c798-8a19-47b8-b226-5a8c028a75db`):*
+```text
+# LedgerLine — Day 5: Admin, Auditor and Audit Visibility
+
+## Objective
+Implement and verify the Admin and Auditor frontend experiences based strictly on existing backend capabilities and the original Snovasys hiring challenge requirements.
+
+The primary goals are:
+- Least-privilege access.
+- Admin system oversight.
+- Auditor read-only access.
+- Accurate audit visibility.
+- Backend-enforced role authorization.
+- No fake or unsupported functionality.
+
+## Phase 1: Existing Implementation Audit
+Inspect Admin & Auditor frontend pages, backend routes, middleware, audit logs, and ledger endpoints. Prepare an endpoint-to-screen mapping.
+
+## Phase 2: Admin Dashboard
+Implement or refine only supported capabilities: system overview, user management, account management, account status management, global transaction monitoring, ledger visibility, audit log visibility. Display real database-backed information, remove mock data, use pagination/filtering, hide unnecessary UUIDs. Admin must not receive ordinary money operation controls.
+
+## Phase 3: Auditor Dashboard
+Implement or refine read-only ledger view, transaction history, audit logs, refused transaction attempts where supported, date and transaction-type filters, pagination. No financial mutation controls, no user or account modification controls, no fabricated records. Clearly distinguish committed transactions from refused attempts.
+
+## Phase 4: Backend Authorization Review
+Verify server-side authorization: Admin cannot perform money operations, Auditor cannot modify accounts or move money, Account holders cannot access other users' private data, client values cannot bypass authorization.
+
+## Phase 5: API-Level Verification
+Use only isolated test database. Verify all 9 authorization and least-privilege requirements.
+
+## Phase 6: Documentation
+Update THREATS.md, API_DOCUMENTATION.md, PROMPTS.md with permission matrix, money effects, audit event coverage, sensitive data minimization, known limitations, and 5 genuine dated prompt entries.
+```
+
+#### 3. AI Suggestion
+- In `AuditorDashboard`: Identified hardcoded static strings ("100.00%" and "0 LEDGER DISCREPANCIES DETECTED"), lack of transaction history, missing date and transaction-type filters, missing pagination, and absence of audit log inspection.
+- In `AccountManagement`: Identified mock fields (`branchName: 'Central Operations Treasury'`, `ifscCode: 'LLIN0001001'`) and raw database UUIDs exposed in the normal UI.
+- In `AdminDashboard` and `AuditEvents`: Identified raw `Event ID (UUID)` boxes in details inspection modals.
+- Suggested replacing all mock data with real database-aggregated metrics (`totalCreditsFormatted`, `totalDebitsFormatted`, `refusedTransactionsCount`), structuring the Auditor Dashboard into three dedicated compliance tabs (General Ledger Journal, Transaction History & Refused Attempts, Security Audit Logs), and adding automated test suites to verify backend RBAC enforcement.
+
+#### 4. Human Review and Engineering Decisions
+- **Strictly Reject Mock Data**: Completely eliminated the hardcoded "100.00%" stat card and "0 LEDGER DISCREPANCIES DETECTED" badge. Replaced with real database aggregates from PostgreSQL queries (`GET /api/v1/ledger`, `GET /api/v1/transactions`, `GET /api/v1/audit-events`).
+- **Comprehensive Auditor Workspace**: Implemented tabbed compliance navigation in `AuditorDashboard/index.jsx` featuring:
+  1. *General Ledger Tab*: Append-only double-entry postings, entry-type filters (CREDIT / DEBIT), live search, server-side pagination, and invariant consistency verification modal (`GET /api/v1/ledger/:accountNumber`).
+  2. *Transaction History Tab*: Highlights committed transactions vs. refused attempts, transaction-type filters (DEPOSIT, WITHDRAWAL, TRANSFER), status filters (SUCCESS, REFUSED, FAILED), date filters (`startDate`, `endDate`), and modal for inspecting double-entry journal postings.
+  3. *Audit Logs Tab*: Action and status filters, date range filters, sanitized metadata viewer (masking passwords, bearer tokens, cookies, secrets).
+- **Strict Read-Only Enforcement**: Verified that Auditor possesses zero financial buttons, zero modal mutation triggers, and zero account/user status modification controls.
+- **Data Minimization in Account Governance**: Replaced mock `Branch & IFSC` in `AccountManagement` with authentic `Created Date` (`createdAt`), removed internal user UUID displays, and ensured statement links route via public account numbers (`LL-ACC-XXXX`).
+- **Backend Least-Privilege Verification**: Confirmed that `transaction.routes.js` strictly restricts `/deposit`, `/withdraw`, and `/transfer` to `ACCOUNT_HOLDER` exclusively. Admin and Auditor tokens calling financial endpoints are rejected by `authorize()` with HTTP 403 Forbidden.
+
+#### 5. Implementation Record
+- `frontend/src/pages/AuditorDashboard/index.jsx`: Completely reimplemented as an authentic, database-backed read-only compliance dashboard with 3 compliance tabs, date filters, transaction-type filters, server-side pagination, refusal alert banner, and sanitized inspection modals.
+- `frontend/src/pages/AuditorDashboard/index.css`: Added responsive CSS for tabs, filter bars, date pickers, refusal alert banners, and modal grids.
+- `frontend/src/pages/AccountManagement/index.jsx`: Replaced mock `Branch & IFSC` with `Created Date`, removed raw UUID displays, and updated statement links to use public account numbers.
+- `frontend/src/services/accountService.js`: Removed default mock values (`branchName`, `ifscCode`) from account normalization.
+- `frontend/src/pages/AdminDashboard/index.jsx`: Removed raw `Event ID (UUID)` box from normal UI.
+- `frontend/src/pages/AuditEvents/index.jsx`: Removed raw `Event ID (UUID)` box from normal UI.
+- `backend/tests/integration/role_authorization_day5.test.js`: Created comprehensive integration test suite covering all 9 required verification scenarios (36 tests total).
+- `THREATS.md`: Added THREAT-015 (Admin Financial Privilege Overreach) and THREAT-016 (Sensitive Data Exposure in Audit Logs & UI), updated verification matrix and threat counts.
+- `backend/docs/API_DOCUMENTATION.md`: Added Endpoint-to-Screen Mapping, Financial Money Effects, Audit Event Coverage, and Sensitive Data Minimization documentation.
+
+#### 6. Verification
+- **Automated Tests**:
+  - `role_authorization_day5.test.js`: 36/36 tests passed on isolated Neon PostgreSQL test database.
+  - `admin_dashboard.test.js`: 12/12 tests passed.
+- **Frontend Production Build**: `npm --prefix frontend run build` built successfully in 309ms with zero errors.
+- **Authorization Verification**:
+  - Verified Admin cannot deposit, withdraw, or transfer (403 Forbidden).
+  - Verified Auditor cannot deposit, withdraw, transfer, or update accounts/users (403 Forbidden).
+  - Verified Account Holders cannot access admin routes, global ledger, or global audit trail (403 Forbidden).
+  - Verified cross-user IDOR queries return 403 Forbidden.
+  - Verified refused attempts are recorded and scoped strictly to target accounts.
+
+#### 7. Related Commit
+- Pending user review and approval (unstaged working tree preserved per strict constraints).
+
+---
+
 ## Documentation Notes
 
 - All original prompts are genuine, verbatim records extracted from active conversation history.
