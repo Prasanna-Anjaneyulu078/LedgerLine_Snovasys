@@ -621,18 +621,18 @@ Following the implementation and regression testing of the React 19 frontend, th
   - Zero dynamic script execution: Codebase contains zero instances of `eval()`, `new Function()`, or untrusted script evaluation.
   - React 19 auto-escapes all string interpolations in JSX by default.
   - All user-supplied inputs (e.g. transaction descriptions, account numbers) are sanitized and rendered as escaped text.
-  - Refresh tokens are transmitted strictly via encrypted, `HttpOnly`, `SameSite=Strict`, `Secure` cookies inaccessible to JavaScript.
+  - Refresh tokens are transmitted strictly via encrypted, `HttpOnly` cookies (named `ledgerline_refresh_token`, with `path: '/'`) inaccessible to client-side JavaScript.
 - **Residual Risk:** An active in-memory XSS exploit while the browser tab is open could attempt to make unauthorized API calls during that tab session. Mitigated by strict JSX escaping and CSP headers.
 
 ### 2. Token Expiration & Refresh Token Rotation with Breach Detection
 - **Implementation:** Dual-token authentication model with rotating refresh tokens:
-  - Short-lived JWT access tokens (15-minute validity) are held in JavaScript memory.
-  - Cryptographically secure 40-byte random refresh tokens are stored hashed (SHA-256) in the database (`refresh_tokens` table via migration `008_create_refresh_tokens.sql`) and transported via an `HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth`, `Secure` cookie (`refreshToken`).
+  - Short-lived JWT access tokens (15-minute validity) are held in JavaScript memory (`inMemoryAccessToken`).
+  - Cryptographically secure 40-byte random refresh tokens are stored hashed (SHA-256) in the database (`refresh_tokens` table via migration `008_create_refresh_tokens.sql`) and transported via an `HttpOnly` cookie named `ledgerline_refresh_token` configured with `path: '/'`, `sameSite: isProd ? 'none' : 'lax'` (allowing secure cross-origin API contexts in production and standard navigation in development), and `secure: isProd` (enforcing HTTPS in production).
   - Refresh rotation endpoint (`POST /api/v1/auth/refresh`) issues a new access token and simultaneously rotates the refresh token, revoking the previous one (`revoked_at = NOW()`, `replaced_by_token_hash`).
 - **Security Assessment & Automated Breach Detection:**
   - **Token Reuse Detection:** If an adversary attempts to present an already revoked refresh token that has been replaced by a successor, the system detects a token reuse breach. It immediately revokes **all** active refresh tokens and sessions for that user (`refreshTokenRepository.revokeAllForUser`), terminates the adversary's connection, and writes a high-priority audit security event (`AUTH_REFRESH_TOKEN_REUSE_DETECTED`).
   - **Single Flight Refresh Concurrency:** The Axios response interceptor queues concurrent requests during an in-flight token refresh (`isRefreshing`, `refreshSubscribers`), ensuring only a single `/auth/refresh` round-trip occurs without race conditions or token collision.
-  - **Session Invalidation:** On explicit user logout (`POST /api/v1/auth/logout`), the refresh token is immediately revoked in the database, the `refreshToken` cookie is cleared with `Max-Age=0`, and the in-memory access token is set to `null`.
+  - **Session Invalidation:** On explicit user logout (`POST /api/v1/auth/logout`), the refresh token is immediately revoked in the database, the `ledgerline_refresh_token` cookie is cleared using matching options, and the in-memory access token is set to `null`.
 - **Residual Risk:** Low. Protected by rotation, server-side revocation tracking, single-flight mutexing, and breach detection.
 
 ### 3. Password Policy & Registration Role Escalation

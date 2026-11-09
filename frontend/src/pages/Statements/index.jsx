@@ -37,6 +37,11 @@ const Statements = () => {
   const [pageSize, setPageSize] = useState(getStoredPageSize);
   const [totalEntries, setTotalEntries] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+  const [retryNonce, setRetryNonce] = useState(0);
+
+  const handleRetry = () => {
+    setRetryNonce((n) => n + 1);
+  };
 
   // Load available accounts first
   useEffect(() => {
@@ -56,7 +61,7 @@ const Statements = () => {
     fetchAccounts();
   }, [urlAccountId]);
 
-  // Load statement whenever selectedAccountId, currentPage, or pageSize changes
+  // Load statement whenever selectedAccountId, currentPage, pageSize, or retryNonce changes
   useEffect(() => {
     if (!selectedAccountId) return;
 
@@ -81,7 +86,7 @@ const Statements = () => {
     };
 
     fetchStatement();
-  }, [selectedAccountId, currentPage, pageSize]);
+  }, [selectedAccountId, currentPage, pageSize, retryNonce]);
 
   const handleAccountChange = (e) => {
     const newId = e.target.value;
@@ -357,7 +362,7 @@ const Statements = () => {
         {isLoading ? (
           <LoadingState message="Compiling verified double-entry ledger postings..." />
         ) : error ? (
-          <ErrorState message={error} onRetry={() => setSelectedAccountId(selectedAccountId)} />
+          <ErrorState message={error} onRetry={handleRetry} />
         ) : (
           <>
             {/* Committed Ledger Postings Table */}
@@ -517,8 +522,13 @@ const Statements = () => {
             {/* Transaction Ledger Entries Table */}
             <section className="print-table-section">
               <h4 className="print-section-heading">
-                Committed Ledger Postings ({entriesList.length} entries)
+                Committed Ledger Postings ({totalEntries > 0 ? `Page ${currentPage} of ${totalPages} — ${entriesList.length} of ${totalEntries} entries printed` : '0 entries'})
               </h4>
+              {totalPages > 1 && (
+                <div style={{ fontSize: '0.75rem', color: '#666', marginBottom: '8px', fontStyle: 'italic' }}>
+                  * This printed statement reflects page {currentPage} of {totalPages} ({entriesList.length} of {totalEntries} total ledger records).
+                </div>
+              )}
               <table className="print-table">
                 <thead>
                   <tr>

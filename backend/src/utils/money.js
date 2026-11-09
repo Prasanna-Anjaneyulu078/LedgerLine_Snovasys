@@ -4,6 +4,8 @@
  * Prevents IEEE 754 floating point arithmetic errors by utilizing BigInt exclusively.
  */
 
+import { AppError } from './appError.js';
+
 export const PAISE_PER_RUPEE = 100n;
 
 /**
@@ -18,18 +20,18 @@ export function toPaise(val) {
 
   if (typeof val === 'number') {
     if (!Number.isFinite(val)) {
-      throw new TypeError('Amount must be a finite number');
+      throw AppError.badRequest('Amount must be a finite number');
     }
     val = val.toFixed(2);
   }
 
   if (typeof val !== 'string') {
-    throw new TypeError('Amount must be a string, number, or BigInt');
+    throw AppError.badRequest('Amount must be a string, number, or BigInt');
   }
 
   const clean = val.trim();
   if (!/^-?\d+(\.\d{1,2})?$/.test(clean)) {
-    throw new Error(`Invalid monetary format: "${val}". Expected integer or decimal with up to 2 decimal places.`);
+    throw AppError.badRequest(`Invalid monetary format: "${val}". Expected integer or decimal with up to 2 decimal places.`);
   }
 
   const isNegative = clean.startsWith('-');

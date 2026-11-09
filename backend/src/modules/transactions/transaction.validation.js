@@ -1,4 +1,43 @@
 import { z } from 'zod';
+import { AppError } from '../../utils/appError.js';
+import { toPaise } from '../../utils/money.js';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+export function validateIdempotencyHeader(req, res, next) {
+  const rawKey = req.headers['idempotency-key'];
+  if (rawKey !== undefined && rawKey !== null && String(rawKey).trim() !== '') {
+    const cleanKey = String(rawKey).trim();
+    if (!UUID_REGEX.test(cleanKey)) {
+      return next(AppError.badRequest('Idempotency-Key header must be a valid RFC 4122 UUID'));
+    }
+  }
+  next();
+}
+
+export const amountSchema = z
+  .union(
+    [
+      z.string().trim().regex(/^\d+(\.\d{1,2})?$/, 'Amount must be a valid positive decimal or integer with up to 2 decimal places'),
+      z.number().positive('Amount must be positive'),
+      z.bigint().positive('Amount must be positive'),
+    ],
+    {
+      required_error: 'Amount is required',
+      invalid_type_error: 'Amount must be a string, number, or integer',
+    }
+  )
+  .refine(
+    (val) => {
+      try {
+        const paise = toPaise(val);
+        return paise > 0n;
+      } catch {
+        return false;
+      }
+    },
+    { message: 'Amount must be strictly greater than zero' }
+  );
 
 export const depositSchema = z
   .object({
@@ -8,9 +47,7 @@ export const depositSchema = z
       .min(1, 'Account number is required')
       .optional(),
     accountId: z.string().uuid('Invalid account ID format').optional(),
-    amount: z.union([z.string(), z.number(), z.bigint()], {
-      required_error: 'Amount is required',
-    }),
+    amount: amountSchema,
     description: z.string().max(255).optional(),
   })
   .superRefine((data, ctx) => {
@@ -31,9 +68,7 @@ export const withdrawSchema = z
       .min(1, 'Account number is required')
       .optional(),
     accountId: z.string().uuid('Invalid account ID format').optional(),
-    amount: z.union([z.string(), z.number(), z.bigint()], {
-      required_error: 'Amount is required',
-    }),
+    amount: amountSchema,
     description: z.string().max(255).optional(),
   })
   .superRefine((data, ctx) => {
@@ -60,9 +95,7 @@ export const transferSchema = z
       .optional(),
     sourceAccountId: z.string().uuid('Invalid source account ID format').optional(),
     destinationAccountId: z.string().uuid('Invalid destination account ID format').optional(),
-    amount: z.union([z.string(), z.number(), z.bigint()], {
-      required_error: 'Amount is required',
-    }),
+    amount: amountSchema,
     description: z.string().max(255).optional(),
   })
   .superRefine((data, ctx) => {

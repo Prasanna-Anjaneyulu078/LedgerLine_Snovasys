@@ -61,6 +61,17 @@ export class IdempotencyRepository {
     `;
     await client.query(sql, [userId, idempotencyKey]);
   }
+
+  /**
+   * Delete an expired idempotency reservation past its 24-hour expiration window
+   */
+  async deleteExpiredByKey(userId, idempotencyKey, client = pool) {
+    const sql = `
+      DELETE FROM idempotency_keys
+      WHERE user_id = $1 AND idempotency_key = $2 AND expires_at <= NOW();
+    `;
+    await client.query(sql, [userId, idempotencyKey]);
+  }
 }
 
 export const idempotencyRepository = new IdempotencyRepository();

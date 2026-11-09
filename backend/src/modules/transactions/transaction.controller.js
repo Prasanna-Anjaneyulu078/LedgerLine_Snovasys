@@ -8,6 +8,9 @@ export class TransactionController {
     const context = { ipAddress: req.ip || req.connection?.remoteAddress };
 
     const result = await transactionService.deposit(req.body, req.user, idempotencyKey, context);
+    if (result && result._isCached) {
+      res.setHeader('X-Cache', 'HIT');
+    }
     res.status(200).json(ApiResponse.success(result, 'Deposit processed successfully'));
   });
 
@@ -16,6 +19,9 @@ export class TransactionController {
     const context = { ipAddress: req.ip || req.connection?.remoteAddress };
 
     const result = await transactionService.withdraw(req.body, req.user, idempotencyKey, context);
+    if (result && result._isCached) {
+      res.setHeader('X-Cache', 'HIT');
+    }
     res.status(200).json(ApiResponse.success(result, 'Withdrawal processed successfully'));
   });
 
@@ -24,6 +30,9 @@ export class TransactionController {
     const context = { ipAddress: req.ip || req.connection?.remoteAddress };
 
     const result = await transactionService.transfer(req.body, req.user, idempotencyKey, context);
+    if (result && result._isCached) {
+      res.setHeader('X-Cache', 'HIT');
+    }
     res.status(200).json(ApiResponse.success(result, 'Transfer completed successfully'));
   });
 

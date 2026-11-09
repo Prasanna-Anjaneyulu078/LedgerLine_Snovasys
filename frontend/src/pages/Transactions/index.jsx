@@ -1372,14 +1372,14 @@ const Transactions = () => {
                               : (le.balanceAfterFormatted === '—'
                                   ? '—'
                                   : (le.balanceAfterPaise || le.balance_after
-                                      ? `₹${(Number(le.balanceAfterPaise || le.balance_after || 0) / 100).toFixed(2)}`
+                                      ? formatPaise(le.balanceAfterPaise || le.balance_after, true)
                                       : '—'));
                             return (
                               <tr key={le.id || idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
                                 <td style={{ padding: '6px 8px', fontWeight: 600 }}>{le.account_number || le.accountNumber}</td>
                                 <td style={{ padding: '6px 8px' }}><StatusBadge status={le.entry_type || le.entryType} /></td>
                                 <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: isLeCredit ? 'var(--success-color)' : 'var(--text-color)' }}>
-                                  {isLeCredit ? '+' : '-'}₹{le.amountFormatted || (Number(le.amountPaise || le.amount || 0) / 100).toFixed(2)}
+                                  {isLeCredit ? '+' : '-'}₹{le.amountFormatted || formatPaise(le.amountPaise || le.amount || 0, false)}
                                 </td>
                                 <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace' }}>
                                   {displayBal}
@@ -1524,13 +1524,13 @@ const Transactions = () => {
                     <tbody>
                       {selectedTxForDetails.ledgerEntries.map((le, idx) => {
                         const isCredit = (le.entry_type || le.entryType || '').toUpperCase() === 'CREDIT';
-                        const formattedAmount = le.amountFormatted || (Number(le.amountPaise || le.amount || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        const formattedAmount = le.amountFormatted || formatPaise(le.amountPaise || le.amount || 0, false);
                         const displayBal = le.balanceAfterFormatted && le.balanceAfterFormatted !== '—'
                           ? `₹${le.balanceAfterFormatted}`
                           : (le.balanceAfterFormatted === '—'
                               ? '—'
                               : (le.balanceAfterPaise || le.balance_after
-                                  ? `₹${(Number(le.balanceAfterPaise || le.balance_after || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                  ? formatPaise(le.balanceAfterPaise || le.balance_after, true)
                                   : '—'));
                         return (
                           <tr key={le.id || idx}>

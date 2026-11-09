@@ -10,6 +10,7 @@ import {
   transferSchema,
   transactionIdParamSchema,
   transactionQuerySchema,
+  validateIdempotencyHeader,
 } from './transaction.validation.js';
 
 const transactionRouter = Router();
@@ -21,6 +22,7 @@ transactionRouter.post(
   '/deposit',
   authorize('ACCOUNT_HOLDER'),
   transactionLimiter,
+  validateIdempotencyHeader,
   validate(depositSchema),
   transactionController.deposit
 );
@@ -29,6 +31,7 @@ transactionRouter.post(
   '/withdraw',
   authorize('ACCOUNT_HOLDER'),
   transactionLimiter,
+  validateIdempotencyHeader,
   validate(withdrawSchema),
   transactionController.withdraw
 );
@@ -37,6 +40,7 @@ transactionRouter.post(
   '/transfer',
   authorize('ACCOUNT_HOLDER'),
   transactionLimiter,
+  validateIdempotencyHeader,
   validate(transferSchema),
   transactionController.transfer
 );

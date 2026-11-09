@@ -34,8 +34,19 @@ export class TransactionService {
   async checkIdempotency(userId, idempotencyKey, requestHash) {
     if (!idempotencyKey) return null;
 
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!UUID_REGEX.test(String(idempotencyKey).trim())) {
+      throw AppError.badRequest('Idempotency-Key must be a valid RFC 4122 UUID');
+    }
+
     const existing = await idempotencyRepository.findByKey(userId, idempotencyKey);
     if (!existing) return null;
+
+    // Evaluate 24-hour expiration window during lookup
+    if (existing.expires_at && new Date(existing.expires_at) <= new Date()) {
+      await idempotencyRepository.deleteExpiredByKey(userId, idempotencyKey).catch(() => {});
+      return null;
+    }
 
     if (existing.request_hash !== requestHash) {
       throw AppError.conflict(
@@ -102,7 +113,13 @@ export class TransactionService {
     // Check Idempotency
     const idempotencyRecord = await this.checkIdempotency(user.id, idempotencyKey, requestHash);
     if (idempotencyRecord && idempotencyRecord.cached) {
-      return idempotencyRecord.body;
+      const cachedResult = typeof idempotencyRecord.body === 'object' && idempotencyRecord.body !== null
+        ? { ...idempotencyRecord.body }
+        : idempotencyRecord.body;
+      if (typeof cachedResult === 'object' && cachedResult !== null) {
+        Object.defineProperty(cachedResult, '_isCached', { value: true, enumerable: false });
+      }
+      return cachedResult;
     }
 
     const client = await getClient();
@@ -290,7 +307,13 @@ export class TransactionService {
     // Check Idempotency
     const idempotencyRecord = await this.checkIdempotency(user.id, idempotencyKey, requestHash);
     if (idempotencyRecord && idempotencyRecord.cached) {
-      return idempotencyRecord.body;
+      const cachedResult = typeof idempotencyRecord.body === 'object' && idempotencyRecord.body !== null
+        ? { ...idempotencyRecord.body }
+        : idempotencyRecord.body;
+      if (typeof cachedResult === 'object' && cachedResult !== null) {
+        Object.defineProperty(cachedResult, '_isCached', { value: true, enumerable: false });
+      }
+      return cachedResult;
     }
 
     const client = await getClient();
@@ -589,7 +612,13 @@ export class TransactionService {
     // Check Idempotency
     const idempotencyRecord = await this.checkIdempotency(user.id, idempotencyKey, requestHash);
     if (idempotencyRecord && idempotencyRecord.cached) {
-      return idempotencyRecord.body;
+      const cachedResult = typeof idempotencyRecord.body === 'object' && idempotencyRecord.body !== null
+        ? { ...idempotencyRecord.body }
+        : idempotencyRecord.body;
+      if (typeof cachedResult === 'object' && cachedResult !== null) {
+        Object.defineProperty(cachedResult, '_isCached', { value: true, enumerable: false });
+      }
+      return cachedResult;
     }
 
     const client = await getClient();

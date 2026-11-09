@@ -39,22 +39,23 @@ export class StatementService {
       periodDescription = `${new Date(ledgerData.firstEntryDate).toISOString().slice(0, 10)} to ${new Date(ledgerData.lastEntryDate).toISOString().slice(0, 10)}`;
     }
 
-    // 2. Fetch refused attempts from audit events for this account
-    const auditData = await auditRepository.findAll({
-      resourceType: 'ACCOUNT',
-      limit: 20,
+    // 2. Fetch refused attempts from audit events scoped strictly to this account in SQL
+    const refusedRows = await auditRepository.findRefusedByAccount({
+      accountId: account.id,
+      accountNumber: account.account_number,
+      limit: 50,
+      startDate: query.startDate || null,
+      endDate: query.endDate || null,
     });
 
-    const refusedAttempts = auditData.events
-      .filter((ev) => (ev.resource_id === account.id || ev.metadata?.accountNumber === account.account_number) && ev.action.includes('REFUSED'))
-      .map((ev) => ({
-        id: ev.id,
-        action: ev.action,
-        attemptedAt: ev.created_at,
-        refusalReason: ev.metadata?.refusalReason || 'Operation refused by policy',
-        attemptedAmount: ev.metadata?.amount || null,
-        status: 'REFUSED',
-      }));
+    const refusedAttempts = refusedRows.map((ev) => ({
+      id: ev.id,
+      action: ev.action,
+      attemptedAt: ev.created_at,
+      refusalReason: ev.metadata?.refusalReason || 'Operation refused by policy',
+      attemptedAmount: ev.metadata?.amount || null,
+      status: 'REFUSED',
+    }));
 
     const committedPostings = ledgerData.entries.map((entry) => {
       const isCredit = entry.entry_type === 'CREDIT';

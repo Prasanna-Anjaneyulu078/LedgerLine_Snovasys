@@ -133,6 +133,48 @@ export class AuditRepository {
       },
     };
   }
+
+  /**
+   * Find refused transaction attempts specifically for an account at the database query level
+   * Scopes strictly to the specified account to preserve isolation and privacy
+   */
+  async findRefusedByAccount(
+    { accountId, accountNumber, limit = 50, startDate = null, endDate = null },
+    client = pool
+  ) {
+    const conditions = [
+      `ae.action ILIKE '%REFUSED%'`,
+      `(ae.resource_id = $1 OR ae.metadata->>'accountNumber' = $2 OR ae.metadata->>'sourceAccountId' = $1 OR ae.metadata->>'sourceAccountNumber' = $2)`,
+    ];
+    const params = [accountId, accountNumber];
+
+    if (startDate) {
+      params.push(startDate);
+      conditions.push(`ae.created_at >= $${params.length}`);
+    }
+
+    if (endDate) {
+      params.push(endDate);
+      conditions.push(`ae.created_at <= $${params.length}`);
+    }
+
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 50));
+    params.push(limitNum);
+
+    const sql = `
+      SELECT ae.id, ae.actor_id, ae.action, ae.resource_type, ae.resource_id,
+             ae.metadata, ae.ip_address, ae.created_at,
+             u.full_name as actor_name
+      FROM audit_events ae
+      LEFT JOIN users u ON ae.actor_id = u.id
+      WHERE ${conditions.join(' AND ')}
+      ORDER BY ae.created_at DESC, ae.id DESC
+      LIMIT $${params.length};
+    `;
+
+    const res = await client.query(sql, params);
+    return res.rows;
+  }
 }
 
 export const auditRepository = new AuditRepository();
