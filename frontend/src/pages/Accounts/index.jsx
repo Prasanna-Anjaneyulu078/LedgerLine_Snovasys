@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import accountService from '../../services/accountService.js';
-import { formatCurrency } from '../../utils/formatCurrency.js';
+import { formatCurrency, formatPaise } from '../../utils/formatCurrency.js';
 import { formatDate } from '../../utils/formatDate.js';
 import { getErrorMessage } from '../../services/api.js';
 import DashboardLayout from '../../layouts/DashboardLayout/index.jsx';
@@ -106,8 +106,6 @@ const Accounts = () => {
       setIsInspecting(false);
     }
   };
-
-  const totalBalance = accounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
 
   return (
     <DashboardLayout
@@ -359,10 +357,10 @@ const Accounts = () => {
                             <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>{ent.transactionReference || ent.transaction_reference}</td>
                             <td style={{ padding: '6px 8px' }}>{ent.entryType || ent.entry_type}</td>
                             <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: (ent.entryType || ent.entry_type) === 'CREDIT' ? 'var(--success-color)' : 'var(--text-color)' }}>
-                              {(ent.entryType || ent.entry_type) === 'CREDIT' ? '+' : '-'}₹{ent.amountFormatted || (Number(ent.amountPaise || ent.amount || 0) / 100).toFixed(2)}
+                              {(ent.entryType || ent.entry_type) === 'CREDIT' ? '+' : '-'}₹{ent.amountFormatted || (ent.amountPaise ? formatPaise(ent.amountPaise, false) : formatCurrency(ent.amount, false))}
                             </td>
                             <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace' }}>
-                              ₹{ent.balanceAfterFormatted || (Number(ent.balanceAfterPaise || ent.balance_after || 0) / 100).toFixed(2)}
+                              ₹{ent.balanceAfterFormatted || (ent.balanceAfterPaise ? formatPaise(ent.balanceAfterPaise, false) : formatCurrency(ent.balanceAfter || ent.balance_after, false))}
                             </td>
                           </tr>
                         ))}

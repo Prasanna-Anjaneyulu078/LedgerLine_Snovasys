@@ -15,8 +15,9 @@ export const accountIdParamSchema = z
   });
 
 export const statementQuerySchema = z.object({
+  page: z.coerce.number().min(1).optional(),
   limit: z.coerce.number().min(1).max(100).default(50).optional(),
-  offset: z.coerce.number().min(0).default(0).optional(),
+  offset: z.coerce.number().min(0).optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
 });

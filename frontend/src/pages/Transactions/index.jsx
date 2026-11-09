@@ -19,7 +19,7 @@ import {
 import { useAuth } from '../../context/AuthContext.jsx';
 import transactionService from '../../services/transactionService.js';
 import accountService from '../../services/accountService.js';
-import { formatCurrency } from '../../utils/formatCurrency.js';
+import { formatCurrency, formatPaise, parseToPaise } from '../../utils/formatCurrency.js';
 import { formatDate } from '../../utils/formatDate.js';
 import { getErrorMessage, generateIdempotencyKey } from '../../services/api.js';
 import DashboardLayout from '../../layouts/DashboardLayout/index.jsx';
@@ -302,7 +302,11 @@ const Transactions = () => {
       return;
     }
 
-    if (!formAccountId || !formAmount || parseFloat(formAmount) <= 0) {
+    const cleanAmount = String(formAmount || '').trim();
+    const amountPaise = parseToPaise(cleanAmount);
+    const isValidAmount = /^\d+(\.\d{1,2})?$/.test(cleanAmount) && amountPaise > 0n;
+
+    if (!formAccountId || !isValidAmount) {
       setFormError('Please enter a valid target account and positive amount.');
       return;
     }
@@ -321,7 +325,7 @@ const Transactions = () => {
       await transactionService.deposit(
         {
           accountNumber: formAccountId,
-          amount: parseFloat(formAmount),
+          amount: cleanAmount,
           description: formDescription || 'Account deposit',
         },
         activeKey
@@ -370,9 +374,25 @@ const Transactions = () => {
       return;
     }
 
-    if (!formAccountId || !formAmount || parseFloat(formAmount) <= 0) {
+    const cleanAmount = String(formAmount || '').trim();
+    const amountPaise = parseToPaise(cleanAmount);
+    const isValidAmount = /^\d+(\.\d{1,2})?$/.test(cleanAmount) && amountPaise > 0n;
+
+    if (!formAccountId || !isValidAmount) {
       setFormError('Please enter a valid source account and positive amount.');
       return;
+    }
+
+    // Client-side balance pre-check
+    const selectedSourceAcc = accounts.find((a) => (a.accountNumber || a.id) === formAccountId);
+    if (selectedSourceAcc) {
+      const sourceBalancePaise = selectedSourceAcc.balancePaise !== undefined
+        ? BigInt(selectedSourceAcc.balancePaise)
+        : parseToPaise(selectedSourceAcc.balance);
+      if (sourceBalancePaise < amountPaise) {
+        setFormError(`Insufficient funds in source account (Balance: ${formatPaise(sourceBalancePaise)}, required ${formatPaise(amountPaise)}).`);
+        return;
+      }
     }
 
     // Reuse existing key if retrying the same operation; otherwise generate a fresh UUID key
@@ -389,7 +409,7 @@ const Transactions = () => {
       await transactionService.withdraw(
         {
           accountNumber: formAccountId,
-          amount: parseFloat(formAmount),
+          amount: cleanAmount,
           description: formDescription || 'Account withdrawal',
         },
         activeKey
@@ -439,8 +459,11 @@ const Transactions = () => {
     }
 
     const targetDest = transferMode === 'EXTERNAL' ? recipientAccountNumber.trim() : formDestAccountId;
+    const cleanAmount = String(formAmount || '').trim();
+    const amountPaise = parseToPaise(cleanAmount);
+    const isValidAmount = /^\d+(\.\d{1,2})?$/.test(cleanAmount) && amountPaise > 0n;
 
-    if (!formAccountId || !targetDest || !formAmount || parseFloat(formAmount) <= 0) {
+    if (!formAccountId || !targetDest || !isValidAmount) {
       setFormError('Please specify source, valid recipient account, and a positive amount.');
       return;
     }
@@ -461,9 +484,14 @@ const Transactions = () => {
 
     // Client-side balance pre-check
     const selectedSourceAcc = accounts.find((a) => (a.accountNumber || a.id) === formAccountId);
-    if (selectedSourceAcc && selectedSourceAcc.balance !== undefined && parseFloat(formAmount) > selectedSourceAcc.balance) {
-      setFormError(`Insufficient funds in source account (Balance: ₹${selectedSourceAcc.balance.toFixed(2)}, required ₹${parseFloat(formAmount).toFixed(2)}).`);
-      return;
+    if (selectedSourceAcc) {
+      const sourceBalancePaise = selectedSourceAcc.balancePaise !== undefined
+        ? BigInt(selectedSourceAcc.balancePaise)
+        : parseToPaise(selectedSourceAcc.balance);
+      if (sourceBalancePaise < amountPaise) {
+        setFormError(`Insufficient funds in source account (Balance: ${formatPaise(sourceBalancePaise)}, required ${formatPaise(amountPaise)}).`);
+        return;
+      }
     }
 
     // Reuse existing key if retrying the same operation; otherwise generate a fresh UUID key
@@ -481,7 +509,7 @@ const Transactions = () => {
         {
           sourceAccountNumber: formAccountId,
           destinationAccountNumber: targetDest,
-          amount: parseFloat(formAmount),
+          amount: cleanAmount,
           description: formDescription || 'Inter-account transfer',
         },
         activeKey

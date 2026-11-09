@@ -1,10 +1,10 @@
 import api from './api.js';
+import { formatPaise } from '../utils/formatCurrency.js';
 
 export function normalizeAccount(acc) {
   if (!acc) return null;
   const balancePaise = acc.balancePaise || (acc.balance !== undefined && acc.balance !== null ? acc.balance.toString() : '0');
-  const balanceFormatted = acc.balanceFormatted || (Number(balancePaise) / 100).toFixed(2);
-  const balanceRupees = parseFloat(balanceFormatted);
+  const balanceFormatted = acc.balanceFormatted || formatPaise(balancePaise, false);
 
   return {
     ...acc,
@@ -13,9 +13,9 @@ export function normalizeAccount(acc) {
     accountType: acc.account_type || acc.accountType || 'SAVINGS',
     currency: acc.currency || 'INR',
     status: acc.status || 'ACTIVE',
-    balancePaise: balancePaise,
-    balanceFormatted: balanceFormatted,
-    balance: balanceRupees, // numeric rupees for frontend aggregation
+    balancePaise,
+    balanceFormatted,
+    balance: balanceFormatted, // Canonical pre-formatted string, zero float precision loss
     holderName: acc.owner_name || acc.holderName || 'Account Holder',
     ownerEmail: acc.owner_email || acc.ownerEmail || acc.email || null,
     ownerId: acc.owner_id || acc.ownerId || null,
@@ -52,7 +52,7 @@ export const accountService = {
     const response = await api.get(`/accounts/${identifier}/balance`);
     const payload = response.data?.data || response.data;
     const balancePaise = payload.balancePaise || (payload.balance ? payload.balance.toString() : '0');
-    const balanceFormatted = payload.balanceFormatted || (Number(balancePaise) / 100).toFixed(2);
+    const balanceFormatted = payload.balanceFormatted || formatPaise(balancePaise, false);
 
     return {
       ...payload,
@@ -62,7 +62,7 @@ export const accountService = {
       status: payload.status || 'ACTIVE',
       balancePaise,
       balanceFormatted,
-      balance: parseFloat(balanceFormatted),
+      balance: balanceFormatted,
     };
   },
 

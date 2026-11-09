@@ -34,13 +34,23 @@ export class LedgerRepository {
   }
 
   /**
-   * Find ledger statement for an account
+   * Find ledger statement for an account with exact integer paise calculations
+   * Computes opening balance, closing balance, total debits, and total credits
+   * accurately across the requested statement period and across all pages.
    */
   async findByAccountId(
     accountId,
-    { limit = 50, offset = 0, startDate = null, endDate = null } = {},
+    { limit = 50, offset = 0, page = null, startDate = null, endDate = null } = {},
     client = pool
   ) {
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 50));
+    const pageNum = page ? Math.max(1, parseInt(page, 10) || 1) : null;
+    const offsetNum = offset !== null && offset !== undefined && page === null
+      ? Math.max(0, parseInt(offset, 10) || 0)
+      : pageNum
+      ? (pageNum - 1) * limitNum
+      : Math.max(0, parseInt(offset, 10) || 0);
+
     const conditions = ['le.account_id = $1'];
     const params = [accountId];
 
@@ -56,7 +66,38 @@ export class LedgerRepository {
 
     const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
-    params.push(limit, offset);
+    // 1. Period Summary Query (total entries, debits, credits, and date boundaries)
+    const summarySql = `
+      SELECT
+        count(*)::int as total_entries,
+        COALESCE(SUM(le.amount) FILTER (WHERE le.entry_type = 'DEBIT'), 0)::text as total_debits_paise,
+        COALESCE(SUM(le.amount) FILTER (WHERE le.entry_type = 'CREDIT'), 0)::text as total_credits_paise,
+        COUNT(*) FILTER (WHERE le.entry_type = 'DEBIT')::int as debit_count,
+        COUNT(*) FILTER (WHERE le.entry_type = 'CREDIT')::int as credit_count,
+        MIN(le.created_at) as first_entry_date,
+        MAX(le.created_at) as last_entry_date
+      FROM ledger_entries le
+      ${whereClause};
+    `;
+
+    // 2. Opening Balance Query: Balance immediately before startDate (or 0n if no prior entries/inception)
+    let openingBalancePaise = 0n;
+    if (startDate) {
+      const priorSql = `
+        SELECT balance_after
+        FROM ledger_entries
+        WHERE account_id = $1 AND created_at < $2
+        ORDER BY created_at DESC, id DESC
+        LIMIT 1;
+      `;
+      const priorRes = await client.query(priorSql, [accountId, startDate]);
+      if (priorRes.rows.length > 0) {
+        openingBalancePaise = BigInt(priorRes.rows[0].balance_after);
+      }
+    }
+
+    // 3. Paginated Entries Query
+    const queryParams = [...params, limitNum, offsetNum];
     const sql = `
       SELECT le.id, le.transaction_id, le.account_id, le.entry_type, le.amount, le.balance_after, le.created_at,
              t.transaction_reference, t.transaction_type, t.description, t.status as transaction_status,
@@ -65,20 +106,55 @@ export class LedgerRepository {
       JOIN transactions t ON le.transaction_id = t.id
       JOIN users u ON t.initiated_by = u.id
       ${whereClause}
-      ORDER BY le.created_at DESC
-      LIMIT $${params.length - 1} OFFSET $${params.length};
+      ORDER BY le.created_at DESC, le.id DESC
+      LIMIT $${queryParams.length - 1} OFFSET $${queryParams.length};
     `;
 
-    const countSql = `SELECT count(*) as total FROM ledger_entries le ${whereClause};`;
-
-    const [rowsRes, countRes] = await Promise.all([
-      client.query(sql, params),
-      client.query(countSql, params.slice(0, -2)),
+    const [summaryRes, rowsRes] = await Promise.all([
+      client.query(summarySql, params),
+      client.query(sql, queryParams),
     ]);
+
+    const summaryRow = summaryRes.rows[0] || {};
+    const totalEntries = Number(summaryRow.total_entries || 0);
+    const totalDebitsPaise = BigInt(summaryRow.total_debits_paise || '0');
+    const totalCreditsPaise = BigInt(summaryRow.total_credits_paise || '0');
+
+    // 4. Closing Balance Calculation:
+    // By double-entry mathematical identity:
+    // Closing Balance = Opening Balance + Total Credits - Total Debits
+    let closingBalancePaise = openingBalancePaise + totalCreditsPaise - totalDebitsPaise;
+
+    // In case no date filter was supplied and account has 0 entries, query account balance as fallback
+    if (totalEntries === 0 && !startDate && !endDate) {
+      const accRes = await client.query('SELECT balance FROM accounts WHERE id = $1;', [accountId]);
+      if (accRes.rows.length > 0) {
+        closingBalancePaise = BigInt(accRes.rows[0].balance);
+        openingBalancePaise = closingBalancePaise;
+      }
+    }
+
+    const totalPages = totalEntries > 0 ? Math.ceil(totalEntries / limitNum) : 1;
+    const resolvedPage = pageNum || Math.floor(offsetNum / limitNum) + 1;
 
     return {
       entries: rowsRes.rows,
-      total: Number(countRes.rows[0].total),
+      total: totalEntries,
+      totalDebitsPaise: totalDebitsPaise.toString(),
+      totalCreditsPaise: totalCreditsPaise.toString(),
+      openingBalancePaise: openingBalancePaise.toString(),
+      closingBalancePaise: closingBalancePaise.toString(),
+      debitCount: Number(summaryRow.debit_count || 0),
+      creditCount: Number(summaryRow.credit_count || 0),
+      firstEntryDate: summaryRow.first_entry_date || null,
+      lastEntryDate: summaryRow.last_entry_date || null,
+      pagination: {
+        page: resolvedPage,
+        limit: limitNum,
+        offset: offsetNum,
+        totalEntries,
+        totalPages,
+      },
     };
   }
 

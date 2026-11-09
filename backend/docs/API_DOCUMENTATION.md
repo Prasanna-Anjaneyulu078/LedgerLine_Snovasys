@@ -19,7 +19,7 @@ LedgerLine strictly enforces separation of concerns across three core system rol
 | **Verify Recipient Account** (`GET /accounts/recipient/:accNum`) | **Allowed** | **Allowed** | **Allowed** | Safe verification returning non-sensitive recipient details |
 | **List Accounts** (`GET /accounts`) | **Own Accounts** | **All Accounts** | **All Accounts** | Scoped by ownership for Account Holders; system-wide for Admin/Auditor |
 | **Get Account Balance** (`GET /accounts/:id/balance`) | **Own Account** | **All Accounts** | **All Accounts** | Real-time balance computed with audit verification |
-| **Account Statements** (`GET /accounts/:id/statement`) | **Own Account** | **All Accounts** | **All Accounts** | Complete running balance with posted and refused records |
+| **Account Statements** (`GET /statements/:accountNumber` or `GET /accounts/:id/statement`) | **Own Account** | **All Accounts** | **All Accounts** | Complete running balance with posted and refused records, pagination, and period summary |
 | **List Transactions** (`GET /transactions`) | **Own Transactions** | **All Transactions** | **All Transactions** | Scoped by participant accounts for Account Holders |
 | **Transaction Details** (`GET /transactions/:id`) | **Participant Only** | **All Transactions** | **All Transactions** | Includes associated double-entry ledger entries |
 | **Global Ledger Journal** (`GET /ledger`) | **Forbidden (403)** | **Allowed** | **Allowed** | Immutable double-entry journal inspection |
@@ -149,20 +149,141 @@ LedgerLine strictly enforces separation of concerns across three core system rol
 
 ### Get Account Statement
 - **Method**: `GET`
-- **Path**: `/api/v1/accounts/:accountId/statement`
-- **Query Parameters**: `limit`, `offset`, `startDate`, `endDate`
-- **Response** (`200 OK`): Complete running balance ledger with debits, credits, timestamps, and audited refused attempts.
+- **Paths**:
+  - Primary Dedicated: `/api/v1/statements/:accountNumber` (supports public account number like `LL-ACC-1001` or UUID)
+  - Alias: `/api/v1/accounts/:accountId/statement`
+- **Headers**: `Authorization: Bearer <TOKEN>`
+- **Authorization**:
+  - `ACCOUNT_HOLDER`: Scoped strictly to owned accounts (enforces HTTP 403 / 404 boundary).
+  - `ADMIN` & `AUDITOR`: Allowed for any system account.
+- **Query Parameters**:
+  - `page` (integer, optional, default: `1`): 1-indexed page number.
+  - `limit` (integer, optional, default: `50`, max: `100`): Page size limit.
+  - `startDate` (ISO 8601 string, optional): Inclusive start date filter.
+  - `endDate` (ISO 8601 string, optional): Inclusive end date filter.
+- **Precision Guarantees**:
+  - Opening balance represents the verified account balance immediately prior to `startDate` (or inception).
+  - Closing balance satisfies double-entry conservation: `Closing Balance = Opening Balance + Total Credits - Total Debits`.
+  - All summary totals and balances are calculated using integer paise (`BIGINT` / `BigInt`) over the entire filtered statement period and remain invariant across pagination pages.
+- **Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "statusCode": 200,
+    "data": {
+      "account": {
+        "id": "07be6ea0-6a47-47da-b514-1da78683bee5",
+        "accountNumber": "LL-ACC-1001",
+        "accountType": "SAVINGS",
+        "currency": "INR",
+        "status": "ACTIVE",
+        "currentBalancePaise": "500000",
+        "currentBalanceFormatted": "5000.00",
+        "holderName": "Ravi Kumar",
+        "branchName": "Central Operations Treasury",
+        "ifscCode": "LLIN0001001"
+      },
+      "statementPeriod": {
+        "startDate": "2026-11-01T00:00:00.000Z",
+        "endDate": "2026-11-09T23:59:59.999Z",
+        "periodDescription": "01 Nov 2026 to 09 Nov 2026",
+        "formatted": "01 Nov 2026 to 09 Nov 2026"
+      },
+      "summary": {
+        "openingBalancePaise": "450000",
+        "openingBalanceFormatted": "4500.00",
+        "closingBalancePaise": "500000",
+        "closingBalanceFormatted": "5000.00",
+        "totalDebitsPaise": "5000",
+        "totalDebitsFormatted": "50.00",
+        "totalCreditsPaise": "55000",
+        "totalCreditsFormatted": "550.00",
+        "debitCount": 1,
+        "creditCount": 2,
+        "netChangePaise": "50000",
+        "netChangeFormatted": "500.00"
+      },
+      "pagination": {
+        "page": 1,
+        "limit": 50,
+        "offset": 0,
+        "totalEntries": 3,
+        "totalCommittedEntries": 3,
+        "totalPages": 1,
+        "hasNextPage": false,
+        "hasPrevPage": false
+      },
+      "committedPostings": [
+        {
+          "ledgerEntryId": "1a2b3c4d-...",
+          "transactionId": "5bc7d5ff-...",
+          "transactionReference": "DEP-1793893066772-AA11BB22",
+          "transactionType": "DEPOSIT",
+          "displayType": "DEPOSIT",
+          "entryType": "CREDIT",
+          "direction": "INCOMING",
+          "isCredit": true,
+          "amountPaise": "50000",
+          "amountFormatted": "500.00",
+          "resultingRunningBalancePaise": "500000",
+          "resultingRunningBalanceFormatted": "5000.00",
+          "date": "2026-11-09T14:30:00.000Z",
+          "description": "Salary credit",
+          "initiator": "Ravi Kumar"
+        }
+      ],
+      "refusedAttempts": []
+    }
+  }
+  ```
 
 ---
 
-## 3. Transaction Endpoints
+## 3. Financial Safety & Idempotency Contract
+
+All financial state-mutating endpoints (`/transactions/deposit`, `/transactions/withdraw`, `/transactions/transfer`) strictly implement the **LedgerLine Idempotency Engine** backed by PostgreSQL atomic transactions:
+
+### Header Requirements & Semantics
+- **Header**: `Idempotency-Key: <UUID-v4>`
+- **Format**: Must be a valid, standard RFC 4122 UUID v4 string (e.g. `c73a791b-64c9-4d23-b169-ae94d5e7498c`).
+- **User Scoping**: Every key is strictly scoped to the authenticated caller (`user_id, idempotency_key`). An idempotency key generated by User A cannot be accessed, hijacked, or replayed by User B.
+- **Retention & TTL**: Idempotency records remain active in the database for **24 hours**. Expired keys are pruned automatically.
+
+### Execution & Conflict Behaviors
+1. **First-Time Execution (`201 Created` / `200 OK`)**:
+   - The key is recorded in state `IN_FLIGHT` with a SHA-256 hash of the request parameters and HTTP method/path.
+   - The financial transaction executes inside a dedicated database transaction (`BEGIN...COMMIT`) with row-level locks (`SELECT FOR UPDATE`).
+   - Upon successful commit, the idempotency record transitions to `COMPLETED`, storing the exact HTTP response body and status code.
+2. **Safe Replay / Network Retry (`200 OK`)**:
+   - If a client experiences a network timeout or connection reset and retries with the **same** `Idempotency-Key` and **identical** payload, the server returns the previously stored response with header `X-Cache: HIT`.
+   - **No duplicate ledger entries, no duplicate balance movements, and no secondary debits/credits occur.**
+3. **Concurrent In-Flight Collision (`409 Conflict`)**:
+   - If a duplicate request arrives while the original transaction is still processing (`IN_FLIGHT`), the server immediately rejects the second request with `HTTP 409 Conflict` (Code: `IDEMPOTENCY_IN_FLIGHT`, Message: *"A request with this idempotency key is currently processing. Please wait."*).
+4. **Payload Mismatch / Key Tampering Rejection (`409 Conflict`)**:
+   - If a request is received with an existing active `Idempotency-Key` but differing payload parameters (e.g. altered amount, different recipient account, or different operation), the server computes the SHA-256 payload hash, detects the tampering attempt, and rejects the request with `HTTP 409 Conflict` (Code: `IDEMPOTENCY_KEY_REUSE_MISMATCH`, Message: *"Idempotency key has already been used for a different request payload."*).
+
+### Monetary Amount Format Requirements
+- **Rule**: Amounts must be transmitted as **decimal strings** with up to 2 decimal places (e.g. `"500.00"`, `"150.5"`, or `"25"`).
+- **Zero Floating-Point Tolerance**: Frontend and backend code avoid IEEE 754 floating-point arithmetic. The backend parser parses the string directly into integer minor units (**Paise**; 1 INR = 100 Paise) using JavaScript `BigInt` and PostgreSQL `BIGINT`.
+
+---
+
+## 4. Transaction Endpoints
 
 ### Deposit Funds
 - **Method**: `POST`
 - **Path**: `/api/v1/transactions/deposit`
 - **Headers**: `Authorization: Bearer <TOKEN>`, `Idempotency-Key: <UUID>`
 - **Authorization**: `ACCOUNT_HOLDER` role exclusively. Caller must own the target account. `ADMIN` and `AUDITOR` receive `403 Forbidden`.
-- **Request Body**:
+- **Request Body (Preferred - Account Number)**:
+  ```json
+  {
+    "accountNumber": "LL-ACC-1001",
+    "amount": "500.00",
+    "description": "Salary deposit"
+  }
+  ```
+- **Request Body (Backward Compatible - Account UUID)**:
   ```json
   {
     "accountId": "07be6ea0-6a47-47da-b514-1da78683bee5",
@@ -170,13 +291,22 @@ LedgerLine strictly enforces separation of concerns across three core system rol
     "description": "Salary deposit"
   }
   ```
+- **Response** (`201 Created`): Returns transaction reference, updated `balanceFormatted`, and double-entry ledger entry ID.
 
 ### Withdraw Funds
 - **Method**: `POST`
 - **Path**: `/api/v1/transactions/withdraw`
 - **Headers**: `Authorization: Bearer <TOKEN>`, `Idempotency-Key: <UUID>`
 - **Authorization**: `ACCOUNT_HOLDER` role exclusively. Caller must own the target account. `ADMIN` and `AUDITOR` receive `403 Forbidden`.
-- **Request Body**:
+- **Request Body (Preferred - Account Number)**:
+  ```json
+  {
+    "accountNumber": "LL-ACC-1001",
+    "amount": "150.00",
+    "description": "ATM Cash Withdrawal"
+  }
+  ```
+- **Request Body (Backward Compatible - Account UUID)**:
   ```json
   {
     "accountId": "07be6ea0-6a47-47da-b514-1da78683bee5",
@@ -184,13 +314,14 @@ LedgerLine strictly enforces separation of concerns across three core system rol
     "description": "ATM Cash Withdrawal"
   }
   ```
+- **Response** (`200 OK`): Returns transaction reference, updated `balanceFormatted`, and double-entry debit entry ID.
 
 ### Transfer Funds (Double-Entry Internal Transfer)
 - **Method**: `POST`
 - **Path**: `/api/v1/transactions/transfer`
 - **Headers**: `Authorization: Bearer <TOKEN>`, `Idempotency-Key: <UUID>`
 - **Authorization**: `ACCOUNT_HOLDER` role exclusively. Caller must own the source account; destination account must be active. `ADMIN` and `AUDITOR` receive `403 Forbidden`.
-- **Request Body (Account Number-Based - Preferred)**:
+- **Request Body (Preferred - Account Numbers)**:
   ```json
   {
     "sourceAccountNumber": "LL-ACC-1001",
@@ -199,7 +330,7 @@ LedgerLine strictly enforces separation of concerns across three core system rol
     "description": "Funds transfer"
   }
   ```
-- **Request Body (UUID-Based - Backward Compatible)**:
+- **Request Body (Backward Compatible - Account UUIDs)**:
   ```json
   {
     "sourceAccountId": "07be6ea0-6a47-47da-b514-1da78683bee5",
@@ -234,7 +365,7 @@ LedgerLine strictly enforces separation of concerns across three core system rol
 
 ---
 
-## 4. Ledger & Audit Endpoints
+## 5. Ledger & Audit Endpoints
 
 ### Global Double-Entry Ledger
 - **Method**: `GET`
@@ -253,7 +384,7 @@ LedgerLine strictly enforces separation of concerns across three core system rol
 
 ---
 
-## 5. Administration Endpoints
+## 6. Administration Endpoints
 
 ### List Users
 - **Method**: `GET`

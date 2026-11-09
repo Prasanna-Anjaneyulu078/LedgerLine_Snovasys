@@ -612,25 +612,28 @@ This document provides a systematic threat model, vulnerability analysis, and se
 Following the implementation and regression testing of the React 19 frontend, the client-side security architecture and threat posture were evaluated across 8 critical dimensions:
 
 ### 1. Token Storage & XSS Considerations
-- **Implementation:** Authentication tokens are persisted in browser `localStorage` under `ledgerline_token`. Requests automatically attach the token via the `Authorization: Bearer <token>` header in Axios request interceptors.
+- **Implementation:** Short-lived JWT access tokens are held exclusively in-memory (`inMemoryAccessToken` closure variable in `frontend/src/services/api.js`). Access tokens are never written to `localStorage`, `sessionStorage`, or client-accessible cookies. Outgoing requests automatically inject the token via the `Authorization: Bearer <token>` header in Axios request interceptors.
 - **Security Assessment:**
-  - `localStorage` is completely immune to Cross-Site Request Forgery (CSRF) because browsers do not automatically attach `localStorage` values to cross-origin requests.
-  - However, `localStorage` is accessible to any JavaScript running within the application's origin. Therefore, any unmitigated Cross-Site Scripting (XSS) vulnerability would allow an attacker to read the active JWT token.
+  - In-memory token storage prevents persistent token extraction via local browser storage attacks. Any full page reload or tab closure instantly destroys the access token in memory.
+  - XSS attacks cannot exfiltrate persistent credentials from browser storage because neither `localStorage` nor `sessionStorage` hold session tokens.
 - **Controls & Mitigations:**
   - Complete elimination of raw DOM injection: The codebase contains zero instances of `dangerouslySetInnerHTML`.
   - Zero dynamic script execution: Codebase contains zero instances of `eval()`, `new Function()`, or untrusted script evaluation.
   - React 19 auto-escapes all string interpolations in JSX by default.
   - All user-supplied inputs (e.g. transaction descriptions, account numbers) are sanitized and rendered as escaped text.
-- **Residual Risk:** Third-party npm dependencies or browser extensions could theoretically access `localStorage`. Long-term recommendation is migrating to `HttpOnly`, `SameSite=Strict` cookies.
+  - Refresh tokens are transmitted strictly via encrypted, `HttpOnly`, `SameSite=Strict`, `Secure` cookies inaccessible to JavaScript.
+- **Residual Risk:** An active in-memory XSS exploit while the browser tab is open could attempt to make unauthorized API calls during that tab session. Mitigated by strict JSX escaping and CSP headers.
 
-### 2. Token Expiration & Refresh Token Support
-- **Implementation:** The backend issues JWT tokens with a fixed expiration window (`JWT_EXPIRES_IN`, default 15 minutes in high-security mode or 1 day in development).
-- **Security Assessment:**
-  - The application currently operates without a rotating refresh-token endpoint (`/auth/refresh`).
-  - When the access token expires, Axios interceptors detect the HTTP 401 response, clean up `localStorage`, and dispatch the `ledgerline:session_expired` event, prompting the user to re-authenticate.
-- **Controls & Stale Request Defense:**
-  - Axios response interceptor verifies that the failed request actually used the current active token (`requestToken === currentToken`) before clearing storage. This prevents stale in-flight requests from invalidating a newly established user session.
-- **Residual Risk:** Users experience session termination upon token expiration without transparent background renewal.
+### 2. Token Expiration & Refresh Token Rotation with Breach Detection
+- **Implementation:** Dual-token authentication model with rotating refresh tokens:
+  - Short-lived JWT access tokens (15-minute validity) are held in JavaScript memory.
+  - Cryptographically secure 40-byte random refresh tokens are stored hashed (SHA-256) in the database (`refresh_tokens` table via migration `008_create_refresh_tokens.sql`) and transported via an `HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth`, `Secure` cookie (`refreshToken`).
+  - Refresh rotation endpoint (`POST /api/v1/auth/refresh`) issues a new access token and simultaneously rotates the refresh token, revoking the previous one (`revoked_at = NOW()`, `replaced_by_token_hash`).
+- **Security Assessment & Automated Breach Detection:**
+  - **Token Reuse Detection:** If an adversary attempts to present an already revoked refresh token that has been replaced by a successor, the system detects a token reuse breach. It immediately revokes **all** active refresh tokens and sessions for that user (`refreshTokenRepository.revokeAllForUser`), terminates the adversary's connection, and writes a high-priority audit security event (`AUTH_REFRESH_TOKEN_REUSE_DETECTED`).
+  - **Single Flight Refresh Concurrency:** The Axios response interceptor queues concurrent requests during an in-flight token refresh (`isRefreshing`, `refreshSubscribers`), ensuring only a single `/auth/refresh` round-trip occurs without race conditions or token collision.
+  - **Session Invalidation:** On explicit user logout (`POST /api/v1/auth/logout`), the refresh token is immediately revoked in the database, the `refreshToken` cookie is cleared with `Max-Age=0`, and the in-memory access token is set to `null`.
+- **Residual Risk:** Low. Protected by rotation, server-side revocation tracking, single-flight mutexing, and breach detection.
 
 ### 3. Password Policy & Registration Role Escalation
 - **Implementation:**

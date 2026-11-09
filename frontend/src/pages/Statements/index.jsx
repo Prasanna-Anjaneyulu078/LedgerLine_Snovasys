@@ -13,9 +13,11 @@ import { formatCurrency } from '../../utils/formatCurrency.js';
 import { formatDate } from '../../utils/formatDate.js';
 import DashboardLayout from '../../layouts/DashboardLayout/index.jsx';
 import DataTable from '../../components/DataTable/index.jsx';
+import Pagination from '../../components/Pagination/index.jsx';
 import StatusBadge from '../../components/StatusBadge/index.jsx';
 import LoadingState from '../../components/LoadingState/index.jsx';
 import ErrorState from '../../components/ErrorState/index.jsx';
+import { getStoredPageSize, setStoredPageSize, PAGE_SIZE_OPTIONS } from '../../utils/pagination.js';
 import './index.css';
 
 const Statements = () => {
@@ -29,6 +31,12 @@ const Statements = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isPrinting, setIsPrinting] = useState(false);
+
+  // Server-side pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(getStoredPageSize);
+  const [totalEntries, setTotalEntries] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
 
   // Load available accounts first
   useEffect(() => {
@@ -48,7 +56,7 @@ const Statements = () => {
     fetchAccounts();
   }, [urlAccountId]);
 
-  // Load statement whenever selectedAccountId changes
+  // Load statement whenever selectedAccountId, currentPage, or pageSize changes
   useEffect(() => {
     if (!selectedAccountId) return;
 
@@ -56,8 +64,15 @@ const Statements = () => {
       setIsLoading(true);
       setError(null);
       try {
-        const data = await statementService.getStatement(selectedAccountId);
+        const data = await statementService.getStatement(selectedAccountId, {
+          page: currentPage,
+          limit: pageSize,
+        });
         setStatementData(data);
+        if (data?.pagination) {
+          setTotalEntries(data.pagination.totalCommittedEntries ?? data.pagination.totalEntries ?? 0);
+          setTotalPages(Math.max(1, data.pagination.totalPages || 1));
+        }
       } catch (err) {
         setError('Unable to retrieve official statement for this account.');
       } finally {
@@ -66,11 +81,12 @@ const Statements = () => {
     };
 
     fetchStatement();
-  }, [selectedAccountId]);
+  }, [selectedAccountId, currentPage, pageSize]);
 
   const handleAccountChange = (e) => {
     const newId = e.target.value;
     setSelectedAccountId(newId);
+    setCurrentPage(1);
     const basePath = role === 'ADMIN' ? '/admin/statements' : role === 'AUDITOR' ? '/auditor/statements' : '/statements';
     navigate(`${basePath}/${newId}`);
   };
@@ -113,39 +129,32 @@ const Statements = () => {
   const oldestEntry = entriesList.length > 0 ? entriesList[entriesList.length - 1] : null;
   const newestEntry = entriesList.length > 0 ? entriesList[0] : null;
 
-  let openingBalance = 0;
-  if (oldestEntry) {
-    if (oldestEntry.entryType === 'CREDIT') {
-      openingBalance = oldestEntry.balanceAfter - oldestEntry.amount;
-    } else if (oldestEntry.entryType === 'DEBIT') {
-      openingBalance = oldestEntry.balanceAfter + oldestEntry.amount;
-    } else {
-      openingBalance = oldestEntry.balanceAfter;
-    }
-  } else if (statementData?.account?.balance !== undefined) {
-    openingBalance = statementData.account.balance;
-  }
+  const summary = statementData?.summary;
+  const openingBalanceDisplay = summary?.openingBalanceFormatted
+    ? `₹${summary.openingBalanceFormatted}`
+    : formatCurrency(statementData?.account?.balance || 0);
 
-  const closingBalance =
-    statementData?.account?.balance !== undefined
-      ? statementData.account.balance
-      : newestEntry
-      ? newestEntry.balanceAfter
-      : 0;
+  const closingBalanceDisplay = summary?.closingBalanceFormatted
+    ? `₹${summary.closingBalanceFormatted}`
+    : formatCurrency(statementData?.account?.balance || 0);
 
-  const totalDebits = entriesList
-    .filter((e) => e.entryType === 'DEBIT')
-    .reduce((sum, e) => sum + (e.amount || 0), 0);
-  const debitCount = entriesList.filter((e) => e.entryType === 'DEBIT').length;
+  const totalDebitsDisplay = summary?.totalDebitsFormatted
+    ? `₹${summary.totalDebitsFormatted}`
+    : '₹0.00';
 
-  const totalCredits = entriesList
-    .filter((e) => e.entryType === 'CREDIT')
-    .reduce((sum, e) => sum + (e.amount || 0), 0);
-  const creditCount = entriesList.filter((e) => e.entryType === 'CREDIT').length;
+  const totalCreditsDisplay = summary?.totalCreditsFormatted
+    ? `₹${summary.totalCreditsFormatted}`
+    : '₹0.00';
 
-  const statementPeriod = oldestEntry
-    ? `${formatDate(oldestEntry.timestamp, false)} to ${formatDate(newestEntry.timestamp, false)}`
-    : `As of ${formatDate(new Date(), false)}`;
+  const debitCount = summary?.debitCount ?? entriesList.filter((e) => e.entryType === 'DEBIT').length;
+  const creditCount = summary?.creditCount ?? entriesList.filter((e) => e.entryType === 'CREDIT').length;
+
+  const statementPeriod =
+    statementData?.statementPeriod?.formatted ||
+    statementData?.statementPeriod?.periodDescription ||
+    (oldestEntry
+      ? `${formatDate(oldestEntry.timestamp, false)} to ${formatDate(newestEntry.timestamp, false)}`
+      : `As of ${formatDate(new Date(), false)}`);
 
   const generationDate = formatDate(new Date(), true);
 
@@ -356,10 +365,27 @@ const Statements = () => {
               columns={entriesColumns}
               data={entriesList}
               title="Committed Ledger Postings"
-              subtitle="All debit and credit rows are reconciled against the global double-entry ledger"
+              subtitle={`All debit and credit rows are reconciled against the global double-entry ledger (${totalEntries} total postings)`}
               searchPlaceholder="Filter statement entries..."
               searchField="transactionReference"
               emptyMessage="No transaction entries recorded for this statement period."
+              pagination={
+                <Pagination
+                  currentPage={currentPage}
+                  pageSize={pageSize}
+                  totalRecords={totalEntries}
+                  totalPages={totalPages}
+                  onPageChange={(page) => {
+                    setCurrentPage(page);
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  onPageSizeChange={(size) => {
+                    setPageSize(size);
+                    setStoredPageSize(size);
+                    setCurrentPage(1);
+                  }}
+                />
+              }
             />
 
             {/* Refused Attempts Section */}
@@ -470,21 +496,21 @@ const Statements = () => {
             <section className="print-balances-summary">
               <div className="print-balance-box">
                 <span className="print-balance-label">Opening Balance</span>
-                <span className="print-balance-val print-mono">{formatCurrency(openingBalance)}</span>
+                <span className="print-balance-val print-mono">{openingBalanceDisplay}</span>
               </div>
               <div className="print-balance-box">
                 <span className="print-balance-label">Total Debits (Dr)</span>
-                <span className="print-balance-val print-mono debit">{formatCurrency(totalDebits)}</span>
+                <span className="print-balance-val print-mono debit">{totalDebitsDisplay}</span>
                 <span className="print-balance-count">{debitCount} debits</span>
               </div>
               <div className="print-balance-box">
                 <span className="print-balance-label">Total Credits (Cr)</span>
-                <span className="print-balance-val print-mono credit">{formatCurrency(totalCredits)}</span>
+                <span className="print-balance-val print-mono credit">{totalCreditsDisplay}</span>
                 <span className="print-balance-count">{creditCount} credits</span>
               </div>
               <div className="print-balance-box highlight">
                 <span className="print-balance-label">Closing / Current Balance</span>
-                <span className="print-balance-val print-mono closing">{formatCurrency(closingBalance)}</span>
+                <span className="print-balance-val print-mono closing">{closingBalanceDisplay}</span>
               </div>
             </section>
 

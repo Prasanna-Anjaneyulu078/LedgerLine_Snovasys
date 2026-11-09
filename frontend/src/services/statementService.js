@@ -1,11 +1,12 @@
 import api from './api.js';
+import { formatPaise } from '../utils/formatCurrency.js';
 
 export function normalizeStatement(data) {
   if (!data) return null;
 
   const rawAccount = data.account;
-  const balancePaise = rawAccount?.currentBalancePaise || (rawAccount?.balance ? rawAccount.balance.toString() : '0');
-  const balanceFormatted = rawAccount?.currentBalanceFormatted || (Number(balancePaise) / 100).toFixed(2);
+  const balancePaise = rawAccount?.currentBalancePaise || (rawAccount?.balance !== undefined && rawAccount?.balance !== null ? rawAccount.balance.toString() : '0');
+  const balanceFormatted = rawAccount?.currentBalanceFormatted || rawAccount?.balanceFormatted || formatPaise(balancePaise, false);
 
   const account = rawAccount
     ? {
@@ -17,7 +18,7 @@ export function normalizeStatement(data) {
         status: rawAccount.status || 'ACTIVE',
         balancePaise,
         balanceFormatted,
-        balance: parseFloat(balanceFormatted),
+        balance: balanceFormatted, // Canonical string, zero float precision loss
         holderName: rawAccount.holderName || rawAccount.owner_name || 'Account Holder',
         branchName: rawAccount.branchName || 'Central Operations Treasury',
         ifscCode: rawAccount.ifscCode || 'LLIN0001001',
@@ -26,10 +27,10 @@ export function normalizeStatement(data) {
 
   const rawEntries = data.committedPostings || data.entries || [];
   const entries = rawEntries.map((e) => {
-    const amountPaise = e.amountPaise || (e.amount ? e.amount.toString() : '0');
-    const amountFormatted = e.amountFormatted || (Number(amountPaise) / 100).toFixed(2);
-    const balanceAfterPaise = e.resultingRunningBalancePaise || e.balanceAfterPaise || (e.balance_after ? e.balance_after.toString() : '0');
-    const balanceAfterFormatted = e.resultingRunningBalanceFormatted || e.balanceAfterFormatted || (Number(balanceAfterPaise) / 100).toFixed(2);
+    const amountPaise = e.amountPaise || (e.amount !== undefined && e.amount !== null ? e.amount.toString() : '0');
+    const amountFormatted = e.amountFormatted || formatPaise(amountPaise, false);
+    const balanceAfterPaise = e.resultingRunningBalancePaise || e.balanceAfterPaise || (e.balance_after !== undefined && e.balance_after !== null ? e.balance_after.toString() : '0');
+    const balanceAfterFormatted = e.resultingRunningBalanceFormatted || e.balanceAfterFormatted || formatPaise(balanceAfterPaise, false);
 
     return {
       ...e,
@@ -44,10 +45,10 @@ export function normalizeStatement(data) {
       isCredit: e.isCredit ?? e.is_credit ?? ((e.entryType || e.entry_type) === 'CREDIT'),
       amountPaise,
       amountFormatted,
-      amount: parseFloat(amountFormatted),
+      amount: amountFormatted, // Canonical pre-formatted string
       balanceAfterPaise,
       balanceAfterFormatted,
-      balanceAfter: parseFloat(balanceAfterFormatted),
+      balanceAfter: balanceAfterFormatted, // Canonical pre-formatted string
       timestamp: e.date || e.created_at || e.createdAt,
       createdAt: e.date || e.created_at || e.createdAt,
       initiator: e.initiator || e.initiatorName || e.initiator_name,
@@ -64,12 +65,21 @@ export function normalizeStatement(data) {
     status: 'REFUSED',
   }));
 
+  const pagination = data.pagination || {
+    page: 1,
+    limit: entries.length,
+    totalEntries: entries.length,
+    totalPages: 1,
+  };
+
   return {
     account,
     entries,
     committedPostings: entries,
     refusedAttempts,
-    pagination: data.pagination || { total: entries.length },
+    pagination,
+    summary: data.summary || null,
+    statementPeriod: data.statementPeriod || null,
   };
 }
 
@@ -77,6 +87,7 @@ export const statementService = {
   /**
    * Generates or retrieves verified statement for an account
    * Supports public account numbers (LL-ACC-1001) or UUIDs
+   * Accepts query parameters: page, limit, startDate, endDate
    */
   async getStatement(identifier, query = {}) {
     // Call the dedicated statement endpoint

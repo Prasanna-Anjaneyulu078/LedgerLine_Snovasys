@@ -4,6 +4,7 @@ import { ledgerRepository } from '../../repositories/ledger.repository.js';
 import { auditRepository } from '../../repositories/audit.repository.js';
 import { AppError } from '../../utils/appError.js';
 import { formatRupees } from '../../utils/money.js';
+import { statementService } from '../statements/statement.service.js';
 
 export class AccountService {
   generateAccountNumber() {
@@ -104,46 +105,11 @@ export class AccountService {
   }
 
   /**
-   * Get account statement (ledger history with running balances)
+   * Get account statement (comprehensive ledger history with running balances, summary, and refused attempts)
    */
   async getAccountStatement(accountId, user, query = {}) {
     const account = await this.getAccountById(accountId, user);
-
-    const statement = await ledgerRepository.findByAccountId(account.id, query);
-
-    return {
-      accountId: account.id,
-      accountNumber: account.account_number,
-      totalEntries: statement.total,
-      entries: statement.entries.map((entry) => {
-        const isCredit = entry.entry_type === 'CREDIT';
-        const displayType = entry.transaction_type === 'TRANSFER'
-          ? (isCredit ? 'TRANSFER IN' : 'TRANSFER OUT')
-          : entry.transaction_type;
-
-        return {
-          id: entry.id,
-          transactionId: entry.transaction_id,
-          transactionReference: entry.transaction_reference,
-          transactionType: entry.transaction_type,
-          displayType,
-          display_type: displayType,
-          transactionStatus: entry.transaction_status,
-          entryType: entry.entry_type,
-          entry_type: entry.entry_type,
-          direction: isCredit ? 'INCOMING' : 'OUTGOING',
-          isCredit,
-          is_credit: isCredit,
-          amountPaise: entry.amount.toString(),
-          amountFormatted: formatRupees(entry.amount),
-          balanceAfterPaise: entry.balance_after.toString(),
-          balanceAfterFormatted: formatRupees(entry.balance_after),
-          description: entry.description,
-          initiatorName: entry.initiator_name,
-          createdAt: entry.created_at,
-        };
-      }),
-    };
+    return statementService.getStatement(account.id, user, query);
   }
 
   /**

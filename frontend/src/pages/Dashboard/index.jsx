@@ -13,7 +13,7 @@ import {
 import { useAuth } from '../../context/AuthContext.jsx';
 import accountService from '../../services/accountService.js';
 import transactionService from '../../services/transactionService.js';
-import { formatCurrency } from '../../utils/formatCurrency.js';
+import { formatCurrency, formatPaise } from '../../utils/formatCurrency.js';
 import { formatDate } from '../../utils/formatDate.js';
 import DashboardLayout from '../../layouts/DashboardLayout/index.jsx';
 import StatCard from '../../components/StatCard/index.jsx';
@@ -53,7 +53,13 @@ const Dashboard = () => {
     loadData();
   }, []);
 
-  const totalBalance = accounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
+  const totalBalancePaise = accounts.reduce((sum, acc) => {
+    try {
+      return sum + BigInt(acc.balancePaise || '0');
+    } catch {
+      return sum;
+    }
+  }, 0n);
 
   const columns = [
     {
@@ -173,7 +179,7 @@ const Dashboard = () => {
           <div className="dashboard-stats-grid">
             <StatCard
               title="Total Available Balance"
-              value={formatCurrency(totalBalance)}
+              value={formatPaise(totalBalancePaise)}
               icon={Wallet}
               subtitle="Aggregated across active accounts"
               trend="AUDIT-VERIFIED"

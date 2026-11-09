@@ -1,4 +1,5 @@
 import api, { generateIdempotencyKey } from './api.js';
+import { formatPaise } from '../utils/formatCurrency.js';
 
 const isUuid = (val) =>
   typeof val === 'string' &&
@@ -7,7 +8,7 @@ const isUuid = (val) =>
 export function normalizeTransaction(t) {
   if (!t) return null;
   const amountPaise = t.amountPaise || (t.amount !== undefined && t.amount !== null ? t.amount.toString() : '0');
-  const amountFormatted = t.amountFormatted || (Number(amountPaise) / 100).toFixed(2);
+  const amountFormatted = t.amountFormatted || formatPaise(amountPaise, false);
 
   const rawType = t.transaction_type || t.transactionType || t.type;
   const displayType = t.display_type || t.displayType || (rawType === 'DEPOSIT' ? 'DEPOSIT' : rawType === 'WITHDRAWAL' ? 'WITHDRAWAL' : rawType);
@@ -31,7 +32,7 @@ export function normalizeTransaction(t) {
     description: t.description || 'Financial Transaction',
     amountPaise,
     amountFormatted,
-    amount: parseFloat(amountFormatted), // numeric rupees for display
+    amount: amountFormatted, // Canonical string without float precision loss
     status: t.status,
     sourceAccountId: t.source_account_id || t.sourceAccountId,
     sourceAccountNumber: t.source_account_number || t.sourceAccountNumber,
@@ -51,7 +52,7 @@ export const transactionService = {
     const rawTarget = data.accountNumber || data.accountId;
 
     const payload = {
-      amount: typeof data.amount === 'number' ? data.amount.toFixed(2) : String(data.amount).trim(),
+      amount: typeof data.amount === 'string' ? data.amount.trim() : typeof data.amount === 'bigint' ? formatPaise(data.amount, false) : typeof data.amount === 'number' ? data.amount.toFixed(2) : String(data.amount || '').trim(),
       description: data.description || 'Account deposit',
     };
 
@@ -80,7 +81,7 @@ export const transactionService = {
     const rawTarget = data.accountNumber || data.accountId;
 
     const payload = {
-      amount: typeof data.amount === 'number' ? data.amount.toFixed(2) : String(data.amount).trim(),
+      amount: typeof data.amount === 'string' ? data.amount.trim() : typeof data.amount === 'bigint' ? formatPaise(data.amount, false) : typeof data.amount === 'number' ? data.amount.toFixed(2) : String(data.amount || '').trim(),
       description: data.description || 'Account withdrawal',
     };
 
@@ -112,7 +113,7 @@ export const transactionService = {
     const rawDest = data.destinationAccountNumber || data.destinationAccountId;
 
     const payload = {
-      amount: typeof data.amount === 'number' ? data.amount.toFixed(2) : String(data.amount).trim(),
+      amount: typeof data.amount === 'string' ? data.amount.trim() : typeof data.amount === 'bigint' ? formatPaise(data.amount, false) : typeof data.amount === 'number' ? data.amount.toFixed(2) : String(data.amount || '').trim(),
       description: data.description || 'Inter-account transfer',
     };
 

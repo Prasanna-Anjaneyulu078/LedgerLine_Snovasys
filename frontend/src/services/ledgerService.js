@@ -1,11 +1,12 @@
 import api from './api.js';
+import { formatPaise } from '../utils/formatCurrency.js';
 
 export function normalizeLedgerEntry(e) {
   if (!e) return null;
   const amountPaise = e.amountPaise || (e.amount !== undefined && e.amount !== null ? e.amount.toString() : '0');
-  const amountFormatted = e.amountFormatted || (Number(amountPaise) / 100).toFixed(2);
+  const amountFormatted = e.amountFormatted || formatPaise(amountPaise, false);
   const balanceAfterPaise = e.balanceAfterPaise || (e.balance_after !== undefined && e.balance_after !== null ? e.balance_after.toString() : '0');
-  const balanceAfterFormatted = e.balanceAfterFormatted || (Number(balanceAfterPaise) / 100).toFixed(2);
+  const balanceAfterFormatted = e.balanceAfterFormatted || formatPaise(balanceAfterPaise, false);
 
   return {
     ...e,
@@ -16,10 +17,10 @@ export function normalizeLedgerEntry(e) {
     entryType: e.entry_type || e.entryType,
     amountPaise,
     amountFormatted,
-    amount: parseFloat(amountFormatted), // numeric rupees for display
+    amount: amountFormatted, // canonical monetary string for display
     balanceAfterPaise,
     balanceAfterFormatted,
-    balanceAfter: parseFloat(balanceAfterFormatted),
+    balanceAfter: balanceAfterFormatted,
     timestamp: e.created_at || e.timestamp || e.createdAt,
     createdAt: e.created_at || e.timestamp || e.createdAt,
   };
