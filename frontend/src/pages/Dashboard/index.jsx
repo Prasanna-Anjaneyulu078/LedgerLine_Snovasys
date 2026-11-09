@@ -68,7 +68,7 @@ const Dashboard = () => {
     {
       header: 'Type',
       accessor: 'type',
-      render: (row) => <StatusBadge status={row.type} />,
+      render: (row) => <StatusBadge status={row.displayType || row.type} />,
     },
     {
       header: 'Description',
@@ -84,14 +84,18 @@ const Dashboard = () => {
       accessor: 'amount',
       align: 'right',
       render: (row) => {
-        const isCredit = row.type === 'DEPOSIT';
-        const color =
-          row.status === 'REFUSED'
-            ? 'var(--text-secondary)'
-            : isCredit
-            ? 'var(--success-color)'
-            : 'var(--text-color)';
-        const prefix = row.status === 'REFUSED' ? '' : isCredit ? '+' : '-';
+        const isCredit = row.isCredit ?? (
+          row.displayType === 'TRANSFER IN' ||
+          row.type === 'TRANSFER IN' ||
+          row.type === 'DEPOSIT'
+        );
+        const isRefused = row.status === 'REFUSED';
+        const color = isRefused
+          ? 'var(--text-secondary)'
+          : isCredit
+          ? 'var(--success-color)'
+          : 'var(--danger-color)';
+        const prefix = isRefused ? '' : isCredit ? '+' : '-';
         return (
           <span style={{ fontWeight: 700, color }}>
             {prefix}

@@ -7,13 +7,13 @@ const StatusBadge = ({ status, label, withDot = true }) => {
   let variant = 'neutral';
   let displayLabel = label || status;
 
-  if (['ACTIVE', 'SUCCESS', 'CREDIT', 'RESOLVED', 'BALANCED'].includes(normalized)) {
+  if (['ACTIVE', 'SUCCESS', 'CREDIT', 'RESOLVED', 'BALANCED', 'TRANSFER IN', 'DEPOSIT'].includes(normalized)) {
     variant = 'success';
-  } else if (['REFUSED', 'FAILED', 'CLOSED', 'SUSPENDED', 'DEBIT', 'DISCREPANCY'].includes(normalized)) {
+  } else if (['REFUSED', 'FAILED', 'CLOSED', 'SUSPENDED', 'DEBIT', 'DISCREPANCY', 'TRANSFER OUT', 'WITHDRAWAL'].includes(normalized)) {
     variant = 'danger';
   } else if (['FROZEN', 'PENDING', 'WARNING', 'ESCROW'].includes(normalized)) {
     variant = 'warning';
-  } else if (['SAVINGS', 'CURRENT', 'BUSINESS', 'TRANSFER', 'DEPOSIT'].includes(normalized)) {
+  } else if (['SAVINGS', 'CURRENT', 'BUSINESS', 'TRANSFER', 'OPERATIONAL', 'CHECKING'].includes(normalized)) {
     variant = 'info';
   } else if (['ADMIN', 'AUDITOR'].includes(normalized)) {
     variant = 'purple';

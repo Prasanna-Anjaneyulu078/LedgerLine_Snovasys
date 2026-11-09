@@ -9,13 +9,25 @@ export function normalizeTransaction(t) {
   const amountPaise = t.amountPaise || (t.amount !== undefined && t.amount !== null ? t.amount.toString() : '0');
   const amountFormatted = t.amountFormatted || (Number(amountPaise) / 100).toFixed(2);
 
+  const rawType = t.transaction_type || t.transactionType || t.type;
+  const displayType = t.display_type || t.displayType || (rawType === 'DEPOSIT' ? 'DEPOSIT' : rawType === 'WITHDRAWAL' ? 'WITHDRAWAL' : rawType);
+  const isCredit = t.is_credit ?? t.isCredit ?? (displayType === 'TRANSFER IN' || displayType === 'DEPOSIT' || rawType === 'DEPOSIT');
+  const amountSign = t.amount_sign || t.amountSign || (isCredit ? '+' : '-');
+  const direction = t.direction || (isCredit ? 'INCOMING' : 'OUTGOING');
+  const entryType = t.entry_type || t.entryType || (isCredit ? 'CREDIT' : 'DEBIT');
+
   return {
     ...t,
     id: t.id,
     reference: t.transaction_reference || t.transactionReference || t.reference,
     transactionReference: t.transaction_reference || t.transactionReference || t.reference,
-    type: t.transaction_type || t.transactionType || t.type,
-    transactionType: t.transaction_type || t.transactionType || t.type,
+    type: displayType,
+    displayType,
+    transactionType: rawType,
+    direction,
+    entryType,
+    isCredit,
+    amountSign,
     description: t.description || 'Financial Transaction',
     amountPaise,
     amountFormatted,

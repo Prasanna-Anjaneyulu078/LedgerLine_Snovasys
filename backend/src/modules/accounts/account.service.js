@@ -115,21 +115,34 @@ export class AccountService {
       accountId: account.id,
       accountNumber: account.account_number,
       totalEntries: statement.total,
-      entries: statement.entries.map((entry) => ({
-        id: entry.id,
-        transactionId: entry.transaction_id,
-        transactionReference: entry.transaction_reference,
-        transactionType: entry.transaction_type,
-        transactionStatus: entry.transaction_status,
-        entryType: entry.entry_type,
-        amountPaise: entry.amount.toString(),
-        amountFormatted: formatRupees(entry.amount),
-        balanceAfterPaise: entry.balance_after.toString(),
-        balanceAfterFormatted: formatRupees(entry.balance_after),
-        description: entry.description,
-        initiatorName: entry.initiator_name,
-        createdAt: entry.created_at,
-      })),
+      entries: statement.entries.map((entry) => {
+        const isCredit = entry.entry_type === 'CREDIT';
+        const displayType = entry.transaction_type === 'TRANSFER'
+          ? (isCredit ? 'TRANSFER IN' : 'TRANSFER OUT')
+          : entry.transaction_type;
+
+        return {
+          id: entry.id,
+          transactionId: entry.transaction_id,
+          transactionReference: entry.transaction_reference,
+          transactionType: entry.transaction_type,
+          displayType,
+          display_type: displayType,
+          transactionStatus: entry.transaction_status,
+          entryType: entry.entry_type,
+          entry_type: entry.entry_type,
+          direction: isCredit ? 'INCOMING' : 'OUTGOING',
+          isCredit,
+          is_credit: isCredit,
+          amountPaise: entry.amount.toString(),
+          amountFormatted: formatRupees(entry.amount),
+          balanceAfterPaise: entry.balance_after.toString(),
+          balanceAfterFormatted: formatRupees(entry.balance_after),
+          description: entry.description,
+          initiatorName: entry.initiator_name,
+          createdAt: entry.created_at,
+        };
+      }),
     };
   }
 

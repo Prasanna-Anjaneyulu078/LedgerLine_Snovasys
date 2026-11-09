@@ -516,7 +516,7 @@ const Statements = () => {
                           <td className="print-mono print-ref">{entry.transactionReference}</td>
                           <td>
                             <span className={`print-type-tag ${entry.entryType?.toLowerCase()}`}>
-                              {entry.transactionType || entry.entryType}
+                              {entry.displayType || entry.transactionType || entry.entryType}
                             </span>
                           </td>
                           <td className="print-desc">{entry.description || 'Ledger Posting'}</td>

@@ -53,21 +53,34 @@ export class StatementService {
         limit: query.limit || 50,
         offset: query.offset || 0,
       },
-      committedPostings: ledgerData.entries.map((entry) => ({
-        ledgerEntryId: entry.id,
-        transactionReference: entry.transaction_reference,
-        transactionType: entry.transaction_type,
-        transactionStatus: entry.transaction_status,
-        date: entry.created_at,
-        debitAmountFormatted: entry.entry_type === 'DEBIT' ? formatRupees(entry.amount) : null,
-        creditAmountFormatted: entry.entry_type === 'CREDIT' ? formatRupees(entry.amount) : null,
-        amountPaise: entry.amount.toString(),
-        entryType: entry.entry_type,
-        resultingRunningBalanceFormatted: formatRupees(entry.balance_after),
-        resultingRunningBalancePaise: entry.balance_after.toString(),
-        description: entry.description,
-        initiator: entry.initiator_name,
-      })),
+      committedPostings: ledgerData.entries.map((entry) => {
+        const isCredit = entry.entry_type === 'CREDIT';
+        const displayType = entry.transaction_type === 'TRANSFER'
+          ? (isCredit ? 'TRANSFER IN' : 'TRANSFER OUT')
+          : entry.transaction_type;
+
+        return {
+          ledgerEntryId: entry.id,
+          transactionReference: entry.transaction_reference,
+          transactionType: entry.transaction_type,
+          displayType,
+          display_type: displayType,
+          transactionStatus: entry.transaction_status,
+          date: entry.created_at,
+          debitAmountFormatted: entry.entry_type === 'DEBIT' ? formatRupees(entry.amount) : null,
+          creditAmountFormatted: entry.entry_type === 'CREDIT' ? formatRupees(entry.amount) : null,
+          amountPaise: entry.amount.toString(),
+          entryType: entry.entry_type,
+          entry_type: entry.entry_type,
+          direction: isCredit ? 'INCOMING' : 'OUTGOING',
+          isCredit,
+          is_credit: isCredit,
+          resultingRunningBalanceFormatted: formatRupees(entry.balance_after),
+          resultingRunningBalancePaise: entry.balance_after.toString(),
+          description: entry.description,
+          initiator: entry.initiator_name,
+        };
+      }),
       refusedAttempts,
     };
   }

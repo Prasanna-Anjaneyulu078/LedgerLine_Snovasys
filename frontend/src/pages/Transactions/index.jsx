@@ -558,35 +558,40 @@ const Transactions = () => {
     {
       header: 'Type',
       accessor: 'type',
-      render: (row) => <StatusBadge status={row.type || row.transactionType} />,
+      render: (row) => <StatusBadge status={row.displayType || row.type || row.transactionType} />,
     },
     {
       header: 'Amount',
       accessor: 'amount',
       align: 'right',
       render: (row) => {
-        const rowType = row.type || row.transactionType;
+        const rowType = row.displayType || row.type || row.transactionType;
         const userAccountIdentifiers = new Set(accounts.map((a) => a.accountNumber || a.id));
         const isIncoming =
-          rowType === 'TRANSFER' &&
-          userAccountIdentifiers.has(row.destinationAccountNumber || row.destinationAccountId) &&
-          !userAccountIdentifiers.has(row.sourceAccountNumber || row.sourceAccountId);
+          row.isCredit === true ||
+          rowType === 'TRANSFER IN' ||
+          rowType === 'DEPOSIT' ||
+          (rowType === 'TRANSFER' &&
+            userAccountIdentifiers.has(row.destinationAccountNumber || row.destinationAccountId) &&
+            !userAccountIdentifiers.has(row.sourceAccountNumber || row.sourceAccountId));
 
-        const isCredit = rowType === 'DEPOSIT' || isIncoming;
+        const isCredit = isIncoming;
         const isOutgoing =
+          row.isCredit === false ||
+          rowType === 'TRANSFER OUT' ||
           rowType === 'WITHDRAWAL' ||
           (rowType === 'TRANSFER' &&
             userAccountIdentifiers.has(row.sourceAccountNumber || row.sourceAccountId) &&
             !userAccountIdentifiers.has(row.destinationAccountNumber || row.destinationAccountId));
 
-        const color =
-          row.status === 'REFUSED'
-            ? 'var(--text-secondary)'
-            : isCredit
-            ? 'var(--success-color)'
-            : 'var(--text-color)';
+        const isRefused = row.status === 'REFUSED';
+        const color = isRefused
+          ? 'var(--text-secondary)'
+          : isCredit
+          ? 'var(--success-color)'
+          : 'var(--danger-color)';
 
-        const prefix = row.status === 'REFUSED' ? '' : isCredit ? '+' : isOutgoing ? '-' : '';
+        const prefix = isRefused ? '' : isCredit ? '+' : isOutgoing ? '-' : '';
         return (
           <span style={{ fontWeight: 700, fontFamily: 'monospace', color }}>
             {prefix}
@@ -1236,14 +1241,21 @@ const Transactions = () => {
                 <div className="tx-detail-box">
                   <div className="tx-detail-label">Transaction Type</div>
                   <div className="tx-detail-value">
-                    <StatusBadge status={selectedTxForDetails.type} />
+                    <StatusBadge status={selectedTxForDetails.displayType || selectedTxForDetails.type} />
                   </div>
                 </div>
 
                 <div className="tx-detail-box">
                   <div className="tx-detail-label">Transacted Amount</div>
-                  <div className="tx-detail-value tabular-nums" style={{ color: selectedTxForDetails.type === 'DEPOSIT' ? 'var(--success-color)' : 'var(--text-color)' }}>
-                    {formatCurrency(selectedTxForDetails.amount)}
+                  <div
+                    className="tx-detail-value tabular-nums"
+                    style={{
+                      color: selectedTxForDetails.isCredit || selectedTxForDetails.displayType === 'TRANSFER IN' || selectedTxForDetails.type === 'DEPOSIT'
+                        ? 'var(--success-color)'
+                        : 'var(--danger-color)'
+                    }}
+                  >
+                    {(selectedTxForDetails.isCredit || selectedTxForDetails.displayType === 'TRANSFER IN' || selectedTxForDetails.type === 'DEPOSIT' ? '+' : '-')}{formatCurrency(selectedTxForDetails.amount)}
                   </div>
                 </div>
 

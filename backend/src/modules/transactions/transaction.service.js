@@ -800,10 +800,12 @@ export class TransactionService {
     }
 
     let userAccountIds = null;
+    let userAccountIdsList = null;
     if (user.role !== 'ADMIN' && user.role !== 'AUDITOR') {
       // Check if user is owner of either source or destination account
       const userAccounts = await accountRepository.findByOwnerId(user.id);
-      userAccountIds = new Set(userAccounts.map((a) => a.id));
+      userAccountIdsList = userAccounts.map((a) => a.id);
+      userAccountIds = new Set(userAccountIdsList);
 
       const isParticipant =
         (txn.source_account_id && userAccountIds.has(txn.source_account_id)) ||
@@ -815,11 +817,13 @@ export class TransactionService {
     }
 
     const ledgerEntries = await ledgerRepository.findByTransactionId(txn.id);
+    const directionMeta = this.resolveTransactionDirection(txn, null, userAccountIdsList);
 
     return {
       ...txn,
       amountPaise: txn.amount.toString(),
       amountFormatted: formatRupees(txn.amount),
+      ...directionMeta,
       ledgerEntries: ledgerEntries.map((le) => {
         const canViewBalanceAfter =
           user.role === 'ADMIN' ||
@@ -834,6 +838,167 @@ export class TransactionService {
           balanceAfterFormatted: canViewBalanceAfter ? formatRupees(le.balance_after) : '—',
         };
       }),
+    };
+  }
+
+  /**
+   * Helper to derive account-specific direction and display attributes for a transaction
+   * @param {Object} txn - Transaction object from DB
+   * @param {string|null} targetAccountId - Specific account ID being viewed (if filtered)
+   * @param {Array<string>|null} userAccountIds - Array of account IDs owned by authenticated user
+   */
+  resolveTransactionDirection(txn, targetAccountId = null, userAccountIds = null) {
+    const rawType = txn.transaction_type;
+
+    if (rawType === 'DEPOSIT') {
+      return {
+        direction: 'INCOMING',
+        entryType: 'CREDIT',
+        entry_type: 'CREDIT',
+        displayType: 'DEPOSIT',
+        display_type: 'DEPOSIT',
+        amountSign: '+',
+        amount_sign: '+',
+        isCredit: true,
+        is_credit: true,
+        displayAmountFormatted: `+${formatRupees(txn.amount)}`,
+        display_amount_formatted: `+${formatRupees(txn.amount)}`,
+      };
+    }
+
+    if (rawType === 'WITHDRAWAL') {
+      return {
+        direction: 'OUTGOING',
+        entryType: 'DEBIT',
+        entry_type: 'DEBIT',
+        displayType: 'WITHDRAWAL',
+        display_type: 'WITHDRAWAL',
+        amountSign: '-',
+        amount_sign: '-',
+        isCredit: false,
+        is_credit: false,
+        displayAmountFormatted: `-${formatRupees(txn.amount)}`,
+        display_amount_formatted: `-${formatRupees(txn.amount)}`,
+      };
+    }
+
+    if (rawType === 'TRANSFER') {
+      // 1. If viewing from the perspective of a specific account (e.g. filtered by accountId)
+      if (targetAccountId) {
+        if (txn.destination_account_id === targetAccountId) {
+          return {
+            direction: 'INCOMING',
+            entryType: 'CREDIT',
+            entry_type: 'CREDIT',
+            displayType: 'TRANSFER IN',
+            display_type: 'TRANSFER IN',
+            amountSign: '+',
+            amount_sign: '+',
+            isCredit: true,
+            is_credit: true,
+            displayAmountFormatted: `+${formatRupees(txn.amount)}`,
+            display_amount_formatted: `+${formatRupees(txn.amount)}`,
+          };
+        }
+
+        return {
+          direction: 'OUTGOING',
+          entryType: 'DEBIT',
+          entry_type: 'DEBIT',
+          displayType: 'TRANSFER OUT',
+          display_type: 'TRANSFER OUT',
+          amountSign: '-',
+          amount_sign: '-',
+          isCredit: false,
+          is_credit: false,
+          displayAmountFormatted: `-${formatRupees(txn.amount)}`,
+          display_amount_formatted: `-${formatRupees(txn.amount)}`,
+        };
+      }
+
+      // 2. If authenticated user account IDs are provided (Account Holder viewing all their accounts)
+      if (userAccountIds && userAccountIds.length > 0) {
+        const isUserSource = userAccountIds.includes(txn.source_account_id);
+        const isUserDest = userAccountIds.includes(txn.destination_account_id);
+
+        if (isUserDest && !isUserSource) {
+          // Recipient only (e.g. Kavi receiving an incoming transfer from Ravi)
+          return {
+            direction: 'INCOMING',
+            entryType: 'CREDIT',
+            entry_type: 'CREDIT',
+            displayType: 'TRANSFER IN',
+            display_type: 'TRANSFER IN',
+            amountSign: '+',
+            amount_sign: '+',
+            isCredit: true,
+            is_credit: true,
+            displayAmountFormatted: `+${formatRupees(txn.amount)}`,
+            display_amount_formatted: `+${formatRupees(txn.amount)}`,
+          };
+        }
+
+        if (isUserSource && !isUserDest) {
+          // Sender only (e.g. Ravi sending an outgoing transfer to Kavi)
+          return {
+            direction: 'OUTGOING',
+            entryType: 'DEBIT',
+            entry_type: 'DEBIT',
+            displayType: 'TRANSFER OUT',
+            display_type: 'TRANSFER OUT',
+            amountSign: '-',
+            amount_sign: '-',
+            isCredit: false,
+            is_credit: false,
+            displayAmountFormatted: `-${formatRupees(txn.amount)}`,
+            display_amount_formatted: `-${formatRupees(txn.amount)}`,
+          };
+        }
+
+        // Self-transfer between own accounts (unfiltered across all user accounts)
+        return {
+          direction: 'OUTGOING',
+          entryType: 'DEBIT',
+          entry_type: 'DEBIT',
+          displayType: 'TRANSFER OUT',
+          display_type: 'TRANSFER OUT',
+          amountSign: '-',
+          amount_sign: '-',
+          isCredit: false,
+          is_credit: false,
+          displayAmountFormatted: `-${formatRupees(txn.amount)}`,
+          display_amount_formatted: `-${formatRupees(txn.amount)}`,
+        };
+      }
+
+      // 3. System-wide Admin / Auditor unfiltered view
+      return {
+        direction: 'OUTGOING',
+        entryType: 'DEBIT',
+        entry_type: 'DEBIT',
+        displayType: 'TRANSFER',
+        display_type: 'TRANSFER',
+        amountSign: '',
+        amount_sign: '',
+        isCredit: false,
+        is_credit: false,
+        displayAmountFormatted: formatRupees(txn.amount),
+        display_amount_formatted: formatRupees(txn.amount),
+      };
+    }
+
+    return {
+      direction: 'OUTGOING',
+      entryType: 'DEBIT',
+      entry_type: 'DEBIT',
+      displayType: rawType,
+      display_type: rawType,
+      amountSign: '',
+      amount_sign: '',
+      isCredit: false,
+      is_credit: false,
+      displayAmountFormatted: formatRupees(txn.amount),
+      display_amount_formatted: formatRupees(txn.amount),
     };
   }
 
@@ -857,11 +1022,15 @@ export class TransactionService {
       });
       return {
         ...result,
-        transactions: result.transactions.map((t) => ({
-          ...t,
-          amountPaise: t.amount.toString(),
-          amountFormatted: formatRupees(t.amount),
-        })),
+        transactions: result.transactions.map((t) => {
+          const directionMeta = this.resolveTransactionDirection(t, filterAccountId, null);
+          return {
+            ...t,
+            amountPaise: t.amount.toString(),
+            amountFormatted: formatRupees(t.amount),
+            ...directionMeta,
+          };
+        }),
       };
     }
 
@@ -887,11 +1056,15 @@ export class TransactionService {
 
     return {
       ...result,
-      transactions: result.transactions.map((t) => ({
-        ...t,
-        amountPaise: t.amount.toString(),
-        amountFormatted: formatRupees(t.amount),
-      })),
+      transactions: result.transactions.map((t) => {
+        const directionMeta = this.resolveTransactionDirection(t, filterAccountId, userAccountIds);
+        return {
+          ...t,
+          amountPaise: t.amount.toString(),
+          amountFormatted: formatRupees(t.amount),
+          ...directionMeta,
+        };
+      }),
     };
   }
 }
