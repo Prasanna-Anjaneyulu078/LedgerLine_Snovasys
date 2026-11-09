@@ -447,3 +447,461 @@
 .spin-icon {
   animation: spin 0.8s linear infinite;
 }
+
+/* ==========================================================================
+   OFFICIAL TRANSACTION PRINT DOCUMENT
+   Hidden on screen, revealed exclusively during window.print() execution
+   ========================================================================== */
+
+.print-transaction-document {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm;
+  }
+
+  /* Hide interactive layout chrome, header, sidebar, buttons, controls, and screen modal */
+  .sidebar,
+  .sidebar-backdrop,
+  .header,
+  .mobile-page-header,
+  .transactions-header-bar,
+  .filters-container,
+  .data-table-container,
+  .data-table-toolbar,
+  .data-table-wrapper,
+  .data-table-pagination,
+  .modal-backdrop,
+  .modal-dialog,
+  button,
+  select,
+  input {
+    display: none !important;
+  }
+
+  /* Reset document flow and colors for pure paper rendering */
+  html,
+  body {
+    background: #FFFFFF !important;
+    background-color: #FFFFFF !important;
+    color: #0F172A !important;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    font-size: 9.5pt !important;
+    line-height: 1.4 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .dashboard-layout,
+  .dashboard-main,
+  .dashboard-content,
+  .transactions-page {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    background: #FFFFFF !important;
+    background-color: #FFFFFF !important;
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+
+  /* Reveal dedicated print transaction document */
+  .print-transaction-document {
+    display: block !important;
+    background: #FFFFFF !important;
+    color: #0F172A !important;
+    width: 100% !important;
+    padding: 0 !important;
+  }
+
+  /* Institutional Header / Letterhead */
+  .print-tx-header {
+    margin-bottom: 1.25rem;
+  }
+
+  .print-tx-brand-row {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    padding-bottom: 0.75rem !important;
+  }
+
+  .print-tx-brand {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+  }
+
+  .print-tx-logo-icon {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 6px !important;
+    background: #0F172A !important;
+    color: #FFFFFF !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-tx-brand-text {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .print-tx-brand-name {
+    font-size: 15pt !important;
+    font-weight: 800 !important;
+    color: #0F172A !important;
+    letter-spacing: -0.02em !important;
+    line-height: 1.1 !important;
+  }
+
+  .print-tx-brand-tagline {
+    font-size: 7.5pt !important;
+    color: #475569 !important;
+    letter-spacing: 0.05em !important;
+    text-transform: uppercase !important;
+    font-weight: 600 !important;
+  }
+
+  .print-tx-doc-meta {
+    text-align: right !important;
+  }
+
+  .print-tx-doc-badge {
+    font-size: 9.5pt !important;
+    font-weight: 800 !important;
+    color: #0F172A !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+  }
+
+  .print-tx-doc-audit-note {
+    font-size: 7.5pt !important;
+    color: #16A34A !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: uppercase !important;
+  }
+
+  .print-tx-header-divider {
+    height: 2px !important;
+    background: #0F172A !important;
+    margin-top: 0.5rem !important;
+    margin-bottom: 1.25rem !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Two-column Info Grid */
+  .print-tx-info-grid {
+    display: flex !important;
+    gap: 1.5rem !important;
+    margin-bottom: 1.25rem !important;
+  }
+
+  .print-tx-info-column {
+    flex: 1 !important;
+    background: #F8FAFC !important;
+    border: 1px solid #E2E8F0 !important;
+    border-radius: 4px !important;
+    padding: 0.875rem 1rem !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-tx-section-heading {
+    font-size: 8pt !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    color: #475569 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0.625rem !important;
+    padding-bottom: 0.375rem !important;
+    border-bottom: 1px solid #CBD5E1 !important;
+  }
+
+  .print-tx-meta-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 8.5pt !important;
+  }
+
+  .print-tx-meta-table th {
+    text-align: left !important;
+    color: #64748B !important;
+    font-weight: 600 !important;
+    width: 42% !important;
+    padding: 3px 0 !important;
+    vertical-align: top !important;
+  }
+
+  .print-tx-meta-table td {
+    text-align: left !important;
+    color: #0F172A !important;
+    padding: 3px 0 !important;
+    vertical-align: top !important;
+  }
+
+  /* Remarks Section */
+  .print-tx-remarks-section {
+    margin-bottom: 1.25rem !important;
+  }
+
+  .print-tx-remarks-box {
+    background: #F8FAFC !important;
+    border: 1px solid #E2E8F0 !important;
+    border-radius: 4px !important;
+    padding: 0.625rem 0.875rem !important;
+    font-size: 8.5pt !important;
+    display: flex !important;
+    gap: 0.5rem !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-tx-remarks-label {
+    font-weight: 700 !important;
+    color: #475569 !important;
+    white-space: nowrap !important;
+  }
+
+  .print-tx-remarks-text {
+    color: #0F172A !important;
+  }
+
+  .print-tx-refusal-box {
+    margin-top: 0.5rem !important;
+    background: #FEF2F2 !important;
+    border: 1px solid #FEE2E2 !important;
+    border-radius: 4px !important;
+    padding: 0.625rem 0.875rem !important;
+    font-size: 8.5pt !important;
+    color: #991B1B !important;
+    display: flex !important;
+    gap: 0.5rem !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Ledger Postings Table Section */
+  .print-tx-ledger-section {
+    margin-bottom: 1.5rem !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .print-tx-ledger-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 8.5pt !important;
+    border: 1px solid #E2E8F0 !important;
+  }
+
+  .print-tx-ledger-table thead {
+    display: table-header-group !important;
+  }
+
+  .print-tx-ledger-table th {
+    background: #F1F5F9 !important;
+    color: #334155 !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+    font-size: 7.5pt !important;
+    padding: 7px 10px !important;
+    border-bottom: 1.5px solid #CBD5E1 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-tx-ledger-table td {
+    padding: 7px 10px !important;
+    border-bottom: 1px solid #E2E8F0 !important;
+    color: #0F172A !important;
+    vertical-align: middle !important;
+  }
+
+  .print-tx-ledger-table tr {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .print-tx-mono {
+    font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace !important;
+    font-size: 8.5pt !important;
+  }
+
+  .print-tx-bold {
+    font-weight: 700 !important;
+  }
+
+  .print-tx-num {
+    text-align: right !important;
+  }
+
+  .print-tx-num.credit {
+    color: #16A34A !important;
+    font-weight: 700 !important;
+  }
+
+  .print-tx-num.debit {
+    color: #DC2626 !important;
+    font-weight: 700 !important;
+  }
+
+  .print-tx-entry-tag {
+    display: inline-block !important;
+    font-size: 7pt !important;
+    font-weight: 700 !important;
+    padding: 2px 6px !important;
+    border-radius: 3px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-tx-entry-tag.credit {
+    background: #DCFCE7 !important;
+    color: #15803D !important;
+    border: 1px solid #86EFAC !important;
+  }
+
+  .print-tx-entry-tag.debit {
+    background: #FEE2E2 !important;
+    color: #B91C1C !important;
+    border: 1px solid #FCA5A5 !important;
+  }
+
+  .print-tx-type-badge {
+    display: inline-block !important;
+    font-size: 7pt !important;
+    font-weight: 700 !important;
+    padding: 2px 6px !important;
+    border-radius: 3px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+    background: #EFF6FF !important;
+    color: #1D4ED8 !important;
+    border: 1px solid #BFDBFE !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-tx-type-badge.transfer-in,
+  .print-tx-type-badge.deposit {
+    background: #DCFCE7 !important;
+    color: #15803D !important;
+    border-color: #86EFAC !important;
+  }
+
+  .print-tx-type-badge.transfer-out,
+  .print-tx-type-badge.withdrawal {
+    background: #FEE2E2 !important;
+    color: #B91C1C !important;
+    border-color: #FCA5A5 !important;
+  }
+
+  .print-tx-status-badge {
+    display: inline-block !important;
+    font-size: 7pt !important;
+    font-weight: 700 !important;
+    padding: 2px 6px !important;
+    border-radius: 3px !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+    background: #F0FDF4 !important;
+    color: #166534 !important;
+    border: 1px solid #BBF7D0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-tx-status-badge.refused,
+  .print-tx-status-badge.failed {
+    background: #FEF2F2 !important;
+    color: #991B1B !important;
+    border-color: #FECACA !important;
+  }
+
+  /* Attestation & Footer */
+  .print-tx-footer {
+    margin-top: 1.5rem !important;
+    padding-top: 0.875rem !important;
+    border-top: 1px solid #CBD5E1 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .print-tx-footer-grid {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: flex-end !important;
+    gap: 1.5rem !important;
+    margin-bottom: 0.75rem !important;
+  }
+
+  .print-tx-attestation {
+    flex: 1 !important;
+    font-size: 7pt !important;
+    color: #64748B !important;
+    line-height: 1.35 !important;
+  }
+
+  .print-tx-attestation strong {
+    color: #334155 !important;
+    display: block !important;
+    margin-bottom: 2px !important;
+    font-size: 7.5pt !important;
+  }
+
+  .print-tx-attestation p {
+    margin: 0 !important;
+  }
+
+  .print-tx-stamp-box {
+    text-align: right !important;
+  }
+
+  .print-tx-stamp-badge {
+    display: inline-block !important;
+    border: 2px solid #0F172A !important;
+    padding: 4px 10px !important;
+    font-size: 7.5pt !important;
+    font-weight: 800 !important;
+    color: #0F172A !important;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase !important;
+    margin-bottom: 3px !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-tx-stamp-date {
+    display: block !important;
+    font-size: 7pt !important;
+    color: #64748B !important;
+  }
+
+  .print-tx-footer-fineprint {
+    text-align: center !important;
+    font-size: 6.5pt !important;
+    color: #94A3B8 !important;
+    border-top: 1px solid #E2E8F0 !important;
+    padding-top: 0.5rem !important;
+    letter-spacing: 0.03em !important;
+  }
+}

@@ -10,8 +10,11 @@ const ConfirmModal = ({
   cancelText = 'Cancel',
   onConfirm,
   onClose,
+  onCancel,
+  cancelIcon,
   isDestructive = false,
   isLoading = false,
+  isCancelLoading = false,
   maxWidth,
   hideCancel = false,
 }) => {
@@ -63,10 +66,12 @@ const ConfirmModal = ({
             <button
               type="button"
               className="btn-secondary"
-              onClick={onClose}
-              disabled={isLoading}
+              onClick={onCancel || onClose}
+              disabled={isLoading || isCancelLoading}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
-              {cancelText}
+              {cancelIcon}
+              <span>{isCancelLoading ? 'Preparing...' : cancelText}</span>
             </button>
           )}
           {(onConfirm || hideCancel) && (

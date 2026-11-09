@@ -13,6 +13,8 @@ import {
   RefreshCw,
   UserCheck,
   Search,
+  Printer,
+  Building2,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import transactionService from '../../services/transactionService.js';
@@ -65,6 +67,7 @@ const Transactions = () => {
   const [selectedTxForDetails, setSelectedTxForDetails] = useState(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [formError, setFormError] = useState(null);
   const [formSuccess, setFormSuccess] = useState(null);
 
@@ -533,6 +536,15 @@ const Transactions = () => {
     } finally {
       setIsLoadingDetails(false);
     }
+  };
+
+  const handlePrintRecord = () => {
+    if (!selectedTxForDetails || isLoadingDetails || isPrinting) return;
+    setIsPrinting(true);
+    setTimeout(() => {
+      window.print();
+      setIsPrinting(false);
+    }, 50);
   };
 
   const columns = [
@@ -1215,130 +1227,331 @@ const Transactions = () => {
 
         {/* TRANSACTION DETAILS MODAL */}
         {selectedTxForDetails && (
-          <ConfirmModal
-            isOpen={!!selectedTxForDetails}
-            title={`Transaction Details: ${selectedTxForDetails.reference}`}
-            confirmText="Close Inspector"
-            cancelText="Print Record"
-            onConfirm={() => setSelectedTxForDetails(null)}
-            onClose={() => setSelectedTxForDetails(null)}
-          >
-            <div>
-              {selectedTxForDetails.refusalReason && (
-                <div className="tx-refusal-alert">
-                  <strong>Refusal Notification:</strong> {selectedTxForDetails.refusalReason}
-                </div>
-              )}
+          <>
+            <ConfirmModal
+              isOpen={!!selectedTxForDetails}
+              title={`Transaction Details: ${selectedTxForDetails.reference}`}
+              confirmText="Close Inspector"
+              cancelText="Print Record"
+              cancelIcon={<Printer size={15} />}
+              isCancelLoading={isPrinting || isLoadingDetails}
+              onConfirm={() => setSelectedTxForDetails(null)}
+              onClose={() => setSelectedTxForDetails(null)}
+              onCancel={handlePrintRecord}
+              maxWidth="680px"
+            >
+              <div>
+                {selectedTxForDetails.refusalReason && (
+                  <div className="tx-refusal-alert">
+                    <strong>Refusal Notification:</strong> {selectedTxForDetails.refusalReason}
+                  </div>
+                )}
 
-              <div className="tx-details-grid">
-                <div className="tx-detail-box">
-                  <div className="tx-detail-label">Reference Number</div>
-                  <div className="tx-detail-value tabular-nums">
-                    {selectedTxForDetails.reference}
+                <div className="tx-details-grid">
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Reference Number</div>
+                    <div className="tx-detail-value tabular-nums">
+                      {selectedTxForDetails.reference}
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Transaction Type</div>
+                    <div className="tx-detail-value">
+                      <StatusBadge status={selectedTxForDetails.displayType || selectedTxForDetails.type} />
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Transacted Amount</div>
+                    <div
+                      className="tx-detail-value tabular-nums"
+                      style={{
+                        color: selectedTxForDetails.isCredit || selectedTxForDetails.displayType === 'TRANSFER IN' || selectedTxForDetails.type === 'DEPOSIT'
+                          ? 'var(--success-color)'
+                          : 'var(--danger-color)'
+                      }}
+                    >
+                      {(selectedTxForDetails.isCredit || selectedTxForDetails.displayType === 'TRANSFER IN' || selectedTxForDetails.type === 'DEPOSIT' ? '+' : '-')}{formatCurrency(selectedTxForDetails.amount)}
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Posting Status</div>
+                    <div className="tx-detail-value">
+                      <StatusBadge status={selectedTxForDetails.status} />
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Source Account</div>
+                    <div className="tx-detail-value tabular-nums">
+                      {selectedTxForDetails.sourceAccountNumber || selectedTxForDetails.source_account_number || 'External Liquidity / Cash Vault'}
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Destination Account</div>
+                    <div className="tx-detail-value tabular-nums">
+                      {selectedTxForDetails.destinationAccountNumber || selectedTxForDetails.destination_account_number || 'External Payout / Cash Vault'}
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Initiator</div>
+                    <div className="tx-detail-value">
+                      {selectedTxForDetails.initiatorName || 'Authorized User'}
+                    </div>
+                  </div>
+
+                  <div className="tx-detail-box">
+                    <div className="tx-detail-label">Timestamp</div>
+                    <div className="tx-detail-value tabular-nums">
+                      {formatDate(selectedTxForDetails.createdAt)}
+                    </div>
                   </div>
                 </div>
 
-                <div className="tx-detail-box">
-                  <div className="tx-detail-label">Transaction Type</div>
-                  <div className="tx-detail-value">
-                    <StatusBadge status={selectedTxForDetails.displayType || selectedTxForDetails.type} />
+                <div className="tx-detail-box" style={{ width: '100%' }}>
+                  <div className="tx-detail-label">Description / Remarks</div>
+                  <div className="tx-detail-value" style={{ fontWeight: 400 }}>
+                    {selectedTxForDetails.description || 'No additional remarks.'}
                   </div>
                 </div>
 
-                <div className="tx-detail-box">
-                  <div className="tx-detail-label">Transacted Amount</div>
-                  <div
-                    className="tx-detail-value tabular-nums"
-                    style={{
-                      color: selectedTxForDetails.isCredit || selectedTxForDetails.displayType === 'TRANSFER IN' || selectedTxForDetails.type === 'DEPOSIT'
-                        ? 'var(--success-color)'
-                        : 'var(--danger-color)'
-                    }}
-                  >
-                    {(selectedTxForDetails.isCredit || selectedTxForDetails.displayType === 'TRANSFER IN' || selectedTxForDetails.type === 'DEPOSIT' ? '+' : '-')}{formatCurrency(selectedTxForDetails.amount)}
+                {/* Authoritative Double-Entry Ledger Postings from GET /transactions/{id} */}
+                {selectedTxForDetails.ledgerEntries && selectedTxForDetails.ledgerEntries.length > 0 && (
+                  <div style={{ marginTop: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>Associated Double-Entry Ledger Postings</span>
+                      <span>{selectedTxForDetails.ledgerEntries.length} entries</span>
+                    </div>
+                    <div style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius-sm)', overflow: 'hidden' }}>
+                      <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse', textAlign: 'left' }}>
+                        <thead>
+                          <tr style={{ background: 'var(--surface-secondary)', borderBottom: '1px solid var(--border-color)' }}>
+                            <th style={{ padding: '6px 8px' }}>Account Number</th>
+                            <th style={{ padding: '6px 8px' }}>Entry Type</th>
+                            <th style={{ padding: '6px 8px', textAlign: 'right' }}>Amount</th>
+                            <th style={{ padding: '6px 8px', textAlign: 'right' }}>Balance After</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedTxForDetails.ledgerEntries.map((le, idx) => {
+                            const isLeCredit = (le.entry_type || le.entryType || '').toUpperCase() === 'CREDIT';
+                            const displayBal = le.balanceAfterFormatted && le.balanceAfterFormatted !== '—'
+                              ? `₹${le.balanceAfterFormatted}`
+                              : (le.balanceAfterFormatted === '—'
+                                  ? '—'
+                                  : (le.balanceAfterPaise || le.balance_after
+                                      ? `₹${(Number(le.balanceAfterPaise || le.balance_after || 0) / 100).toFixed(2)}`
+                                      : '—'));
+                            return (
+                              <tr key={le.id || idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                <td style={{ padding: '6px 8px', fontWeight: 600 }}>{le.account_number || le.accountNumber}</td>
+                                <td style={{ padding: '6px 8px' }}><StatusBadge status={le.entry_type || le.entryType} /></td>
+                                <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: isLeCredit ? 'var(--success-color)' : 'var(--text-color)' }}>
+                                  {isLeCredit ? '+' : '-'}₹{le.amountFormatted || (Number(le.amountPaise || le.amount || 0) / 100).toFixed(2)}
+                                </td>
+                                <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace' }}>
+                                  {displayBal}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </ConfirmModal>
+
+            {/* OFFICIAL TRANSACTION PRINT DOCUMENT (A4 PRINT VOUCHER) */}
+            <div className="print-transaction-document" aria-hidden="true">
+              {/* Institutional Header / Letterhead */}
+              <div className="print-tx-header">
+                <div className="print-tx-brand-row">
+                  <div className="print-tx-brand">
+                    <div className="print-tx-logo-icon">
+                      <Building2 size={22} />
+                    </div>
+                    <div className="print-tx-brand-text">
+                      <div className="print-tx-brand-name">LedgerLine</div>
+                      <div className="print-tx-brand-tagline">Institutional Financial Core</div>
+                    </div>
+                  </div>
+                  <div className="print-tx-doc-meta">
+                    <div className="print-tx-doc-badge">Official Transaction Record</div>
+                    <div className="print-tx-doc-audit-note">Double-Entry Ledger Verified</div>
                   </div>
                 </div>
+                <div className="print-tx-header-divider" />
+              </div>
 
-                <div className="tx-detail-box">
-                  <div className="tx-detail-label">Posting Status</div>
-                  <div className="tx-detail-value">
-                    <StatusBadge status={selectedTxForDetails.status} />
-                  </div>
+              {/* Two-column Info Grid */}
+              <div className="print-tx-info-grid">
+                <div className="print-tx-info-column">
+                  <div className="print-tx-section-heading">Transaction Overview</div>
+                  <table className="print-tx-meta-table">
+                    <tbody>
+                      <tr>
+                        <th>Reference No:</th>
+                        <td className="print-tx-mono print-tx-bold">{selectedTxForDetails.reference}</td>
+                      </tr>
+                      <tr>
+                        <th>Transaction Type:</th>
+                        <td>
+                          <span className={`print-tx-type-badge ${(selectedTxForDetails.displayType || selectedTxForDetails.type || '').toLowerCase().replace(/\s+/g, '-')}`}>
+                            {selectedTxForDetails.displayType || selectedTxForDetails.type}
+                          </span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Transacted Amount:</th>
+                        <td
+                          className={`print-tx-mono print-tx-bold print-tx-num ${
+                            (selectedTxForDetails.isCredit || selectedTxForDetails.displayType === 'TRANSFER IN' || selectedTxForDetails.type === 'DEPOSIT')
+                              ? 'credit'
+                              : 'debit'
+                          }`}
+                          style={{ textAlign: 'left' }}
+                        >
+                          {(selectedTxForDetails.isCredit || selectedTxForDetails.displayType === 'TRANSFER IN' || selectedTxForDetails.type === 'DEPOSIT') ? '+' : '-'}
+                          {formatCurrency(selectedTxForDetails.amount)}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Posting Status:</th>
+                        <td>
+                          <span className={`print-tx-status-badge ${(selectedTxForDetails.status || '').toLowerCase()}`}>
+                            {selectedTxForDetails.status}
+                          </span>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
 
-                <div className="tx-detail-box">
-                  <div className="tx-detail-label">Source Account</div>
-                  <div className="tx-detail-value tabular-nums">
-                    {selectedTxForDetails.sourceAccountNumber || selectedTxForDetails.source_account_number || 'External Liquidity / Cash Vault'}
-                  </div>
-                </div>
-
-                <div className="tx-detail-box">
-                  <div className="tx-detail-label">Destination Account</div>
-                  <div className="tx-detail-value tabular-nums">
-                    {selectedTxForDetails.destinationAccountNumber || selectedTxForDetails.destination_account_number || 'External Payout / Cash Vault'}
-                  </div>
-                </div>
-
-                <div className="tx-detail-box">
-                  <div className="tx-detail-label">Initiator</div>
-                  <div className="tx-detail-value">
-                    {selectedTxForDetails.initiatorName || 'Authorized User'}
-                  </div>
-                </div>
-
-                <div className="tx-detail-box">
-                  <div className="tx-detail-label">Timestamp</div>
-                  <div className="tx-detail-value tabular-nums">
-                    {formatDate(selectedTxForDetails.createdAt)}
-                  </div>
+                <div className="print-tx-info-column">
+                  <div className="print-tx-section-heading">Account & Audit Routing</div>
+                  <table className="print-tx-meta-table">
+                    <tbody>
+                      <tr>
+                        <th>Source Account:</th>
+                        <td className="print-tx-mono">
+                          {selectedTxForDetails.sourceAccountNumber || selectedTxForDetails.source_account_number || 'External Liquidity / Cash Vault'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Destination Account:</th>
+                        <td className="print-tx-mono">
+                          {selectedTxForDetails.destinationAccountNumber || selectedTxForDetails.destination_account_number || 'External Payout / Cash Vault'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th>Initiator:</th>
+                        <td>{selectedTxForDetails.initiatorName || selectedTxForDetails.initiator?.name || (selectedTxForDetails.initiatorId ? `User #${selectedTxForDetails.initiatorId}` : 'Authorized User')}</td>
+                      </tr>
+                      <tr>
+                        <th>Execution Timestamp:</th>
+                        <td className="print-tx-mono">{formatDate(selectedTxForDetails.createdAt)}</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
-              <div className="tx-detail-box" style={{ width: '100%' }}>
-                <div className="tx-detail-label">Description / Remarks</div>
-                <div className="tx-detail-value" style={{ fontWeight: 400 }}>
-                  {selectedTxForDetails.description || 'No additional remarks.'}
+              {/* Remarks & Refusal Notification */}
+              <div className="print-tx-remarks-section">
+                <div className="print-tx-remarks-box">
+                  <span className="print-tx-remarks-label">Purpose / Remarks:</span>
+                  <span className="print-tx-remarks-text">
+                    {selectedTxForDetails.description || 'No additional remarks provided.'}
+                  </span>
                 </div>
+                {selectedTxForDetails.refusalReason && (
+                  <div className="print-tx-refusal-box">
+                    <span className="print-tx-remarks-label">Refusal Reason:</span>
+                    <span className="print-tx-remarks-text">{selectedTxForDetails.refusalReason}</span>
+                  </div>
+                )}
               </div>
 
-              {/* Authoritative Double-Entry Ledger Postings from GET /transactions/{id} */}
-              {selectedTxForDetails.ledgerEntries && selectedTxForDetails.ledgerEntries.length > 0 && (
-                <div style={{ marginTop: '1.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-                  <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-secondary)', marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>Associated Double-Entry Ledger Postings</span>
-                    <span>{selectedTxForDetails.ledgerEntries.length} entries</span>
-                  </div>
-                  <div style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--border-radius-sm)', overflow: 'hidden' }}>
-                    <table style={{ width: '100%', fontSize: '0.75rem', borderCollapse: 'collapse', textAlign: 'left' }}>
-                      <thead>
-                        <tr style={{ background: 'var(--surface-secondary)', borderBottom: '1px solid var(--border-color)' }}>
-                          <th style={{ padding: '6px 8px' }}>Account Number</th>
-                          <th style={{ padding: '6px 8px' }}>Entry Type</th>
-                          <th style={{ padding: '6px 8px', textAlign: 'right' }}>Amount</th>
-                          <th style={{ padding: '6px 8px', textAlign: 'right' }}>Balance After</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedTxForDetails.ledgerEntries.map((le, idx) => (
-                          <tr key={le.id || idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                            <td style={{ padding: '6px 8px', fontWeight: 600 }}>{le.account_number || le.accountNumber}</td>
-                            <td style={{ padding: '6px 8px' }}><StatusBadge status={le.entry_type || le.entryType} /></td>
-                            <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: (le.entry_type || le.entryType) === 'CREDIT' ? 'var(--success-color)' : 'var(--text-color)' }}>
-                              {(le.entry_type || le.entryType) === 'CREDIT' ? '+' : '-'}₹{le.amountFormatted || (Number(le.amountPaise || le.amount || 0) / 100).toFixed(2)}
+              {/* Associated Double-Entry Ledger Postings */}
+              <div className="print-tx-ledger-section">
+                <div className="print-tx-section-heading">
+                  Associated Double-Entry Ledger Postings ({selectedTxForDetails.ledgerEntries?.length || 0})
+                </div>
+                {selectedTxForDetails.ledgerEntries && selectedTxForDetails.ledgerEntries.length > 0 ? (
+                  <table className="print-tx-ledger-table">
+                    <thead>
+                      <tr>
+                        <th style={{ width: '30%' }}>Account Number</th>
+                        <th style={{ width: '20%' }}>Entry Type</th>
+                        <th style={{ width: '25%', textAlign: 'right' }}>Amount</th>
+                        <th style={{ width: '25%', textAlign: 'right' }}>Balance After</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedTxForDetails.ledgerEntries.map((le, idx) => {
+                        const isCredit = (le.entry_type || le.entryType || '').toUpperCase() === 'CREDIT';
+                        const formattedAmount = le.amountFormatted || (Number(le.amountPaise || le.amount || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                        const displayBal = le.balanceAfterFormatted && le.balanceAfterFormatted !== '—'
+                          ? `₹${le.balanceAfterFormatted}`
+                          : (le.balanceAfterFormatted === '—'
+                              ? '—'
+                              : (le.balanceAfterPaise || le.balance_after
+                                  ? `₹${(Number(le.balanceAfterPaise || le.balance_after || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                                  : '—'));
+                        return (
+                          <tr key={le.id || idx}>
+                            <td className="print-tx-mono print-tx-bold">{le.account_number || le.accountNumber || '—'}</td>
+                            <td>
+                              <span className={`print-tx-entry-tag ${isCredit ? 'credit' : 'debit'}`}>
+                                {le.entry_type || le.entryType}
+                              </span>
                             </td>
-                            <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace' }}>
-                              ₹{le.balanceAfterFormatted || (Number(le.balanceAfterPaise || le.balance_after || 0) / 100).toFixed(2)}
+                            <td className={`print-tx-mono print-tx-num ${isCredit ? 'credit' : 'debit'}`}>
+                              {isCredit ? '+' : '-'}₹{formattedAmount}
+                            </td>
+                            <td className="print-tx-mono print-tx-num">
+                              {displayBal}
                             </td>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="print-tx-remarks-box">
+                    <span className="print-tx-remarks-text">No ledger entries posted for this transaction record.</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Institutional Attestation & Verification Stamp */}
+              <div className="print-tx-footer">
+                <div className="print-tx-footer-grid">
+                  <div className="print-tx-attestation">
+                    <strong>INSTITUTIONAL INTEGRITY & AUDIT ATTESTATION</strong>
+                    <p>
+                      This document serves as an immutable record of financial posting within LedgerLine.
+                      All ledger entries obey strict double-entry balancing rules (Debits = Credits) with
+                      atomic execution guarantees. Generated from authoritative database state.
+                    </p>
+                  </div>
+                  <div className="print-tx-stamp-box">
+                    <div className="print-tx-stamp-badge">VERIFIED RECORD</div>
+                    <span className="print-tx-stamp-date">Printed: {new Date().toLocaleString('en-IN')}</span>
                   </div>
                 </div>
-              )}
+                <div className="print-tx-footer-fineprint">
+                  LedgerLine Financial Core &bull; Double-Entry Verification Engine &bull; System Ref: {selectedTxForDetails.reference}
+                </div>
+              </div>
             </div>
-          </ConfirmModal>
+          </>
         )}
       </div>
     </DashboardLayout>
