@@ -1,9 +1,14 @@
+import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import pg from 'pg';
 import { env } from '../../src/config/env.js';
 import { pool, closePool } from '../../src/config/database.js';
 import { runMigrations } from '../../src/database/migrate.js';
+
+export const TEST_USER_PASSWORD =
+  process.env.TEST_USER_PASSWORD || `TestPass!${crypto.randomBytes(8).toString('hex')}a1`;
+export const TEST_WRONG_PASSWORD = `WrongPass!${crypto.randomBytes(8).toString('hex')}b2`;
 
 const { Pool } = pg;
 
@@ -122,11 +127,14 @@ export async function teardownTestDb() {
  */
 export async function seedTestFixtures() {
   const client = await testPool.connect();
+  let inTransaction = false;
+  let hasError = false;
   try {
     await client.query('BEGIN;');
+    inTransaction = true;
 
     if (!cachedHash) {
-      cachedHash = await bcrypt.hash('Test@123456', 10);
+      cachedHash = await bcrypt.hash(TEST_USER_PASSWORD, 10);
     }
     const hash = cachedHash;
 
@@ -202,6 +210,7 @@ export async function seedTestFixtures() {
     `, [txnBob.rows[0].id, bobAccount.id]);
 
     await client.query('COMMIT;');
+    inTransaction = false;
 
     return {
       admin,
@@ -218,11 +227,19 @@ export async function seedTestFixtures() {
       },
     };
   } catch (err) {
-    await client.query('ROLLBACK;').catch(() => {});
-    client.release(true);
+    hasError = true;
+    if (inTransaction) {
+      await client.query('ROLLBACK;').catch(() => {});
+    }
     throw err;
   } finally {
-    client.release();
+    try {
+      client.release();
+    } catch (cleanupErr) {
+      if (!hasError) {
+        throw cleanupErr;
+      }
+    }
   }
 }
 

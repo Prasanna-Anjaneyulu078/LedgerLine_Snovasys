@@ -89,7 +89,8 @@ Modern financial ledgers must guarantee zero financial discrepancies, resist con
 1. **User Authentication & Session Restoration:**
    - Public registration strictly assigns the `ACCOUNT_HOLDER` role.
    - Successful login issues an in-memory access token and sets a secure `HttpOnly` refresh token cookie.
-   - Browser reloads and reopenings automatically restore active sessions via transparent single-flight token rotation.
+   - Browser reloads and reopenings automatically restore active sessions via centralized single-flight token rotation (`requestTokenRefresh`), fully compatible with React 19 `StrictMode` duplicate effect mounts and protected by Web Locks API cross-tab synchronization.
+   - Automatic background 401 token refresh queues concurrent API queries into the active in-flight rotation, preventing race conditions and inadvertent token reuse detection triggers.
 2. **Account Provisioning:**
    - Account holders and administrators can open new savings or checking accounts with unique system account numbers (`LL-ACC-XXXX`).
 3. **Financial Money Movement:**
@@ -111,23 +112,23 @@ Modern financial ledgers must guarantee zero financial discrepancies, resist con
 - **Deadlock Free:** Competing multi-row locks in transfers are sorted lexicographically (`ORDER BY id ASC FOR UPDATE`), preventing cyclic waits.
 - **Canonical Idempotency:** Financial mutations generate a client UUIDv4 and are validated against a SHA-256 payload hash in PostgreSQL.
 - **IDOR Protection:** Account ownership verification middleware ensures users can only access accounts they legitimately own.
-- **Token Security:** Refresh tokens are hashed in PostgreSQL and transmitted via `HttpOnly` cookies, preventing XSS extraction. Token reuse immediately revokes all user sessions.
+- **Token Security & Coordinated Rotation:** Refresh tokens are hashed in PostgreSQL (SHA-256) and transmitted via `HttpOnly` cookies, preventing XSS extraction. Token reuse immediately triggers automated breach mitigation, revoking all active user sessions. Frontend session restoration uses a single coordinated in-flight promise (`requestTokenRefresh`) with auth-epoch tracking and Web Locks multi-tab coordination, guaranteeing zero duplicate rotations under React StrictMode or concurrent API requests.
 
 ---
 
 ## 6. Demonstration Accounts & Local Credentials
 
-The database seeder pre-populates four verified demonstration identities for local evaluation:
+The database seeder pre-populates four verified demonstration identities for local evaluation (with passwords read from `SEED_*_PASSWORD` environment variables in `backend/.env` when running `npm run seed`):
 
-| Role | Display Name | Email Address | Evaluation Password | Associated Accounts |
+| Role | Display Name | Email Address | Password Env Variable | Associated Accounts |
 | :--- | :--- | :--- | :--- | :--- |
-| **ADMIN** | Prasanna Anjaneyulu | `prasanna.admin@example.com` | `Prasanna@LL26#Admin` | Full administrative oversight |
-| **AUDITOR** | Sasank | `sasank.auditor@example.com` | `Sasank@LL26#Audit` | System-wide read-only inspection |
-| **ACCOUNT_HOLDER** | Kavi | `kavi@example.com` | `Kavi@LL26#User01` | `LL-ACC-1001` (Savings: ₹5,000.00)<br/>`LL-ACC-1002` (Checking: ₹2,500.00) |
-| **ACCOUNT_HOLDER** | Ravi | `ravi@example.com` | `Ravi@LL26#User02` | `LL-ACC-2001` (Savings: ₹10,000.00) |
+| **ADMIN** | Prasanna Anjaneyulu | `prasanna.admin@example.com` | `SEED_ADMIN_PASSWORD` | Full administrative oversight |
+| **AUDITOR** | Sasank | `sasank.auditor@example.com` | `SEED_AUDITOR_PASSWORD` | System-wide read-only inspection |
+| **ACCOUNT_HOLDER** | Kavi | `kavi@example.com` | `SEED_KAVI_PASSWORD` | `LL-ACC-1001` (Savings: ₹5,000.00)<br/>`LL-ACC-1002` (Checking: ₹2,500.00) |
+| **ACCOUNT_HOLDER** | Ravi | `ravi@example.com` | `SEED_RAVI_PASSWORD` | `LL-ACC-2001` (Savings: ₹10,000.00) |
 
 > [!NOTE]
-> **Local Evaluation Only:** These demonstration credentials are provided solely for reviewer evaluation and automated testing in non-production environments. In PostgreSQL, all passwords are salted and hashed using bcrypt (12 rounds). They are never logged to console or exposed via API.
+> **Local Evaluation Only:** Configure `ALLOW_DEMO_SEED=true` (or pass `--confirm`) and set `SEED_ADMIN_PASSWORD`, `SEED_AUDITOR_PASSWORD`, `SEED_KAVI_PASSWORD`, and `SEED_RAVI_PASSWORD` in your local `backend/.env` before executing `npm run seed`. Seeding is disabled in production and preserves existing users' passwords, roles, and account ownership on repeat runs. In PostgreSQL, all passwords are salted and hashed using bcrypt (12 rounds). They are never committed, logged to console, or exposed via API.
 
 ---
 

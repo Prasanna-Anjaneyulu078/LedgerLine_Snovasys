@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Wallet, ShieldAlert, RefreshCw, Search, Eye, User, CreditCard, Activity, AlertCircle } from 'lucide-react';
 import adminService from '../../services/adminService.js';
 import accountService from '../../services/accountService.js';
-import { formatCurrency } from '../../utils/formatCurrency.js';
+import { formatCurrency, formatPaise } from '../../utils/formatCurrency.js';
 import { formatDate } from '../../utils/formatDate.js';
 import { getErrorMessage } from '../../services/api.js';
 import DashboardLayout from '../../layouts/DashboardLayout/index.jsx';
@@ -286,7 +286,7 @@ const AccountManagement = () => {
           <button
             type="button"
             className="btn-secondary"
-            onClick={() => fetchAccounts(currentPage, searchTerm, statusFilter, typeFilter)}
+            onClick={() => fetchAccounts(currentPage, pageSize, searchTerm, statusFilter, typeFilter)}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
           >
             <RefreshCw size={14} />
@@ -337,7 +337,7 @@ const AccountManagement = () => {
         {isLoading ? (
           <LoadingState message="Retrieving institutional accounts from PostgreSQL..." />
         ) : error ? (
-          <ErrorState message={error} onRetry={() => fetchAccounts(currentPage, pageSize, statusFilter, typeFilter)} />
+          <ErrorState message={error} onRetry={() => fetchAccounts(currentPage, pageSize, searchTerm, statusFilter, typeFilter)} />
         ) : (
           <DataTable
             columns={columns}
@@ -537,8 +537,8 @@ const AccountManagement = () => {
                             const isDebit = (entry.entryType || entry.entry_type) === 'DEBIT';
                             const isCredit = (entry.entryType || entry.entry_type) === 'CREDIT';
                             const formattedAmt = entry.amountFormatted
-                              ? `₹${entry.amountFormatted}`
-                              : formatCurrency(Number(entry.amountPaise || entry.amount || 0) / 100);
+                              ? (entry.amountFormatted.startsWith('₹') ? entry.amountFormatted : `₹${entry.amountFormatted}`)
+                              : formatPaise(entry.amountPaise ?? entry.amount ?? 0);
 
                             return (
                               <tr key={entry.id || idx}>

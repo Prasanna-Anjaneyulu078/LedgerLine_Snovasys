@@ -1,7 +1,7 @@
 import { jest } from '@jest/globals';
 import request from 'supertest';
 import app from '../../src/app.js';
-import { cleanDatabase, seedTestFixtures, testPool, teardownTestDb } from '../helpers/testDb.js';
+import { cleanDatabase, seedTestFixtures, testPool, teardownTestDb, TEST_USER_PASSWORD, TEST_WRONG_PASSWORD } from '../helpers/testDb.js';
 import crypto from 'crypto';
 
 jest.setTimeout(120000);
@@ -36,7 +36,7 @@ describe('Complete Backend API Verification & Security Audit Test Suite', () => 
         .send({
           fullName: 'Audit Candidate',
           email: 'audit.candidate@example.com',
-          password: 'Password@123',
+          password: TEST_USER_PASSWORD,
         });
 
       expect(res.status).toBe(201);
@@ -51,7 +51,7 @@ describe('Complete Backend API Verification & Security Audit Test Suite', () => 
         .post('/api/v1/auth/login')
         .send({
           email: 'alice@test.com',
-          password: 'Test@123456',
+          password: TEST_USER_PASSWORD,
         });
 
       expect(res.status).toBe(200);
@@ -65,7 +65,7 @@ describe('Complete Backend API Verification & Security Audit Test Suite', () => 
         .post('/api/v1/auth/login')
         .send({
           email: 'alice@test.com',
-          password: 'WrongPassword@123',
+          password: TEST_WRONG_PASSWORD,
         });
 
       expect(res.status).toBe(401);
@@ -136,7 +136,7 @@ describe('Complete Backend API Verification & Security Audit Test Suite', () => 
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      expect(res.body.data.accountNumber).toBe('TEST-ACC-ALICE-1');
+      expect(res.body.data.account.accountNumber).toBe('TEST-ACC-ALICE-1');
       expect(Array.isArray(res.body.data.entries)).toBe(true);
     });
 

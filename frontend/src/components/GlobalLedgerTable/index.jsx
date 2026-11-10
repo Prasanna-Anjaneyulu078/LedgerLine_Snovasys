@@ -1,7 +1,7 @@
 import React from 'react';
 import DataTable from '../DataTable/index.jsx';
 import StatusBadge from '../StatusBadge/index.jsx';
-import { formatCurrency } from '../../utils/formatCurrency.js';
+import { formatCurrency, formatPaise } from '../../utils/formatCurrency.js';
 import './index.css';
 
 /**
@@ -64,7 +64,10 @@ export const getGlobalLedgerColumns = () => [
       const isCredit = (row.entryType || '').toUpperCase() === 'CREDIT';
       const color = isCredit ? 'var(--success-color)' : 'var(--danger-color)';
       const prefix = isCredit ? '+' : '-';
-      const formatted = formatCurrency(Math.abs(Number(row.amount) || 0));
+      const formatted =
+        row.amountPaise !== undefined && row.amountPaise !== null
+          ? formatPaise(String(row.amountPaise).replace(/^-/, ''))
+          : formatCurrency(row.amountFormatted ?? row.amount);
       return (
         <span
           className={`ledger-cell-amount tabular-nums ${isCredit ? 'credit' : 'debit'}`}

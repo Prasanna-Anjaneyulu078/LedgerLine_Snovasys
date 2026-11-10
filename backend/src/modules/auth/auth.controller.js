@@ -44,20 +44,74 @@ export class AuthController {
   });
 
   refreshToken = asyncHandler(async (req, res) => {
+    let clientAborted = false;
+    const markAborted = () => {
+      if (!res.writableFinished) {
+        clientAborted = true;
+      }
+    };
+    req.on('aborted', markAborted);
+    res.on('close', markAborted);
+
     const context = {
       ipAddress: req.ip || req.connection?.remoteAddress,
       userAgent: req.headers['user-agent'] || null,
+      isClientAborted: () => clientAborted || Boolean(req.destroyed || res.destroyed),
     };
     const rawToken = req.cookies?.[REFRESH_COOKIE_NAME] || req.body?.refreshToken;
 
     const result = await authService.rotateRefreshToken(rawToken, context);
+
+    if (result?.aborted) {
+      if (!res.headersSent) {
+        res.status(499);
+      }
+      if (!res.writableEnded) {
+        res.end();
+      }
+      return;
+    }
+
+    // Track post-commit premature socket closure before HTTP response finishes writing
+    let lostMarked = false;
+    const onPostCommitClose = () => {
+      if (!res.writableFinished && !lostMarked && result?.rotatedFromTokenId && result?.rotatedFromTokenHash) {
+        lostMarked = true;
+        authService.markRefreshResponseLost({
+          tokenId: result.rotatedFromTokenId,
+          userId: result.user?.id,
+          replacedTokenHash: result.rotatedFromTokenHash,
+          ipAddress: context.ipAddress,
+        });
+      }
+    };
+    res.on('close', onPostCommitClose);
+
+    if (clientAborted || res.destroyed) {
+      onPostCommitClose();
+      if (!res.headersSent) {
+        res.status(499);
+      }
+      if (!res.writableEnded) {
+        res.end();
+      }
+      return;
+    }
 
     // Set new rotated HttpOnly refresh token cookie
     if (result.refreshToken) {
       res.cookie(REFRESH_COOKIE_NAME, result.refreshToken, getRefreshCookieOptions());
     }
 
-    const { refreshToken, ...data } = result;
+    const {
+      refreshToken,
+      rotatedFromTokenId,
+      rotatedFromTokenHash,
+      newTokenHash,
+      recovered,
+      aborted,
+      ...data
+    } = result;
     res.status(200).json(ApiResponse.success(data, 'Token refreshed successfully'));
   });
 

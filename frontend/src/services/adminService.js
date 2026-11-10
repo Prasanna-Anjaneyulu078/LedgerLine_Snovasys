@@ -1,6 +1,6 @@
 import api from './api.js';
 import { normalizeAccount, accountService } from './accountService.js';
-import { formatCurrency } from '../utils/formatCurrency.js';
+import { formatCurrency, formatPaise } from '../utils/formatCurrency.js';
 
 export function normalizeUser(u) {
   if (!u) return null;
@@ -64,13 +64,21 @@ export function normalizeDashboardOverview(data) {
       failedTransactions,
       unsuccessfulTransactions,
       totalVaultBalancePaise: rawOverview.totalVaultBalancePaise ?? rawOverview.total_vault_balance_paise ?? '0',
-      totalVaultBalanceFormatted: formatCurrency(rawOverview.totalVaultBalanceFormatted ?? (Number(rawOverview.totalVaultBalancePaise ?? rawOverview.total_vault_balance_paise ?? 0) / 100)),
+      totalVaultBalanceFormatted: rawOverview.totalVaultBalanceFormatted
+        ? formatCurrency(rawOverview.totalVaultBalanceFormatted)
+        : formatPaise(rawOverview.totalVaultBalancePaise ?? rawOverview.total_vault_balance_paise ?? 0),
       totalDepositsPaise: rawOverview.totalDepositsPaise ?? rawOverview.total_deposits_paise ?? '0',
-      totalDepositsFormatted: formatCurrency(rawOverview.totalDepositsFormatted ?? (Number(rawOverview.totalDepositsPaise ?? rawOverview.total_deposits_paise ?? 0) / 100)),
+      totalDepositsFormatted: rawOverview.totalDepositsFormatted
+        ? formatCurrency(rawOverview.totalDepositsFormatted)
+        : formatPaise(rawOverview.totalDepositsPaise ?? rawOverview.total_deposits_paise ?? 0),
       totalWithdrawalsPaise: rawOverview.totalWithdrawalsPaise ?? rawOverview.total_withdrawals_paise ?? '0',
-      totalWithdrawalsFormatted: formatCurrency(rawOverview.totalWithdrawalsFormatted ?? (Number(rawOverview.totalWithdrawalsPaise ?? rawOverview.total_withdrawals_paise ?? 0) / 100)),
+      totalWithdrawalsFormatted: rawOverview.totalWithdrawalsFormatted
+        ? formatCurrency(rawOverview.totalWithdrawalsFormatted)
+        : formatPaise(rawOverview.totalWithdrawalsPaise ?? rawOverview.total_withdrawals_paise ?? 0),
       totalTransferVolumePaise: rawOverview.totalTransferVolumePaise ?? rawOverview.total_transfer_volume_paise ?? '0',
-      totalTransferVolumeFormatted: formatCurrency(rawOverview.totalTransferVolumeFormatted ?? (Number(rawOverview.totalTransferVolumePaise ?? rawOverview.total_transfer_volume_paise ?? 0) / 100)),
+      totalTransferVolumeFormatted: rawOverview.totalTransferVolumeFormatted
+        ? formatCurrency(rawOverview.totalTransferVolumeFormatted)
+        : formatPaise(rawOverview.totalTransferVolumePaise ?? rawOverview.total_transfer_volume_paise ?? 0),
       totalAuditLogs: Number(rawOverview.totalAuditLogs ?? rawOverview.total_audit_logs ?? 0),
     },
     transactionTrends: (data.transactionTrends || data.trends || []).map((t) => ({
@@ -81,11 +89,17 @@ export function normalizeDashboardOverview(data) {
       withdrawalCount: Number(t.withdrawalCount ?? t.withdrawal_count ?? 0),
       transferCount: Number(t.transferCount ?? t.transfer_count ?? 0),
       depositVolumePaise: t.depositVolumePaise ?? t.deposit_volume_paise ?? '0',
-      depositVolumeFormatted: formatCurrency(t.depositVolumeFormatted ?? (Number(t.depositVolumePaise ?? t.deposit_volume_paise ?? 0) / 100)),
+      depositVolumeFormatted: t.depositVolumeFormatted
+        ? formatCurrency(t.depositVolumeFormatted)
+        : formatPaise(t.depositVolumePaise ?? t.deposit_volume_paise ?? 0),
       withdrawalVolumePaise: t.withdrawalVolumePaise ?? t.withdrawal_volume_paise ?? '0',
-      withdrawalVolumeFormatted: formatCurrency(t.withdrawalVolumeFormatted ?? (Number(t.withdrawalVolumePaise ?? t.withdrawal_volume_paise ?? 0) / 100)),
+      withdrawalVolumeFormatted: t.withdrawalVolumeFormatted
+        ? formatCurrency(t.withdrawalVolumeFormatted)
+        : formatPaise(t.withdrawalVolumePaise ?? t.withdrawal_volume_paise ?? 0),
       transferVolumePaise: t.transferVolumePaise ?? t.transfer_volume_paise ?? '0',
-      transferVolumeFormatted: formatCurrency(t.transferVolumeFormatted ?? (Number(t.transferVolumePaise ?? t.transfer_volume_paise ?? 0) / 100)),
+      transferVolumeFormatted: t.transferVolumeFormatted
+        ? formatCurrency(t.transferVolumeFormatted)
+        : formatPaise(t.transferVolumePaise ?? t.transfer_volume_paise ?? 0),
     })),
     transactionTypeDistribution: (data.transactionTypeDistribution || data.typeDistribution || []).map((td) => ({
       ...td,
@@ -95,7 +109,9 @@ export function normalizeDashboardOverview(data) {
       refusedCount: Number(td.refusedCount ?? td.refused_count ?? 0),
       failedCount: Number(td.failedCount ?? td.failed_count ?? 0),
       volumePaise: td.volumePaise ?? td.volume_paise ?? '0',
-      volumeFormatted: formatCurrency(td.volumeFormatted ?? (Number(td.volumePaise ?? td.volume_paise ?? 0) / 100)),
+      volumeFormatted: td.volumeFormatted
+        ? formatCurrency(td.volumeFormatted)
+        : formatPaise(td.volumePaise ?? td.volume_paise ?? 0),
     })),
     recentTransactions: (data.recentTransactions || []).map((tx) => ({
       ...tx,
@@ -103,7 +119,9 @@ export function normalizeDashboardOverview(data) {
       transactionReference: tx.transactionReference || tx.transaction_reference,
       transactionType: tx.transactionType || tx.transaction_type,
       amountPaise: tx.amountPaise || tx.amount?.toString() || '0',
-      amountFormatted: formatCurrency(tx.amountFormatted ?? (Number(tx.amountPaise || tx.amount || 0) / 100)),
+      amountFormatted: tx.amountFormatted
+        ? formatCurrency(tx.amountFormatted)
+        : formatPaise(tx.amountPaise || tx.amount || 0),
       status: tx.status,
       sourceAccountNumber: tx.sourceAccountNumber || tx.source_account_number,
       destinationAccountNumber: tx.destinationAccountNumber || tx.destination_account_number,

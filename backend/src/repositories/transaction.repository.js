@@ -133,12 +133,20 @@ export class TransactionRepository {
     }
 
     if (startDate) {
-      params.push(startDate);
+      const normalizedStartDate =
+        typeof startDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(startDate.trim())
+          ? `${startDate.trim()}T00:00:00.000Z`
+          : startDate;
+      params.push(normalizedStartDate);
       conditions.push(`t.created_at >= $${params.length}`);
     }
 
     if (endDate) {
-      params.push(endDate);
+      const normalizedEndDate =
+        typeof endDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(endDate.trim())
+          ? `${endDate.trim()}T23:59:59.999Z`
+          : endDate;
+      params.push(normalizedEndDate);
       conditions.push(`t.created_at <= $${params.length}`);
     }
 

@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import ledgerService from '../../services/ledgerService.js';
-import { formatCurrency } from '../../utils/formatCurrency.js';
+import { formatCurrency, formatPaise } from '../../utils/formatCurrency.js';
 import { formatDate } from '../../utils/formatDate.js';
 import { getErrorMessage } from '../../services/api.js';
 import DashboardLayout from '../../layouts/DashboardLayout/index.jsx';
@@ -190,7 +190,7 @@ const Ledger = () => {
             <button
               type="button"
               className="btn-secondary"
-              onClick={() => fetchLedger(currentPage, filterType, searchTerm)}
+              onClick={() => fetchLedger(currentPage, pageSize, filterType, searchTerm)}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
               <RefreshCw size={14} />
@@ -366,7 +366,7 @@ const Ledger = () => {
                   <div style={{ padding: '0.75rem', background: 'var(--surface-secondary)', borderRadius: 'var(--border-radius-sm)', border: '1px solid var(--border-color)' }}>
                     <div style={{ fontSize: '0.6875rem', textTransform: 'uppercase', color: 'var(--text-secondary)', fontWeight: 600 }}>Ledger Calculated Sum</div>
                     <div style={{ fontSize: '0.875rem', fontWeight: 700 }} className="tabular-nums">
-                      ₹{(Number(accountLedgerData.ledgerCalculatedBalancePaise) / 100).toFixed(2)}
+                      {formatPaise(accountLedgerData.ledgerCalculatedBalancePaise ?? 0)}
                     </div>
                   </div>
                 </div>
@@ -393,10 +393,15 @@ const Ledger = () => {
                               <td style={{ padding: '6px 8px', fontFamily: 'monospace' }}>{ent.transactionReference || ent.transaction_reference}</td>
                               <td style={{ padding: '6px 8px' }}><StatusBadge status={ent.entryType || ent.entry_type} /></td>
                               <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 600, color: (ent.entryType || ent.entry_type) === 'CREDIT' ? 'var(--success-color)' : 'var(--text-color)' }}>
-                                {(ent.entryType || ent.entry_type) === 'CREDIT' ? '+' : '-'}₹{ent.amountFormatted || (Number(ent.amountPaise || ent.amount || 0) / 100).toFixed(2)}
+                                {(ent.entryType || ent.entry_type) === 'CREDIT' ? '+' : '-'}
+                                {ent.amountFormatted
+                                  ? (ent.amountFormatted.startsWith('₹') ? ent.amountFormatted : `₹${ent.amountFormatted}`)
+                                  : formatPaise(ent.amountPaise ?? ent.amount ?? 0)}
                               </td>
                               <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace' }}>
-                                ₹{ent.balanceAfterFormatted || (Number(ent.balanceAfterPaise || ent.balance_after || 0) / 100).toFixed(2)}
+                                {ent.balanceAfterFormatted
+                                  ? (ent.balanceAfterFormatted.startsWith('₹') ? ent.balanceAfterFormatted : `₹${ent.balanceAfterFormatted}`)
+                                  : formatPaise(ent.balanceAfterPaise ?? ent.balance_after ?? 0)}
                               </td>
                             </tr>
                           ))}

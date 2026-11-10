@@ -24,6 +24,7 @@ This document provides a systematic threat model, vulnerability analysis, and se
 | **THREAT-014** | Sensitive Credential Exposure via Logs or Errors | **MEDIUM** | Production error masking + `sanitizeUrl` + bcrypt (12 rounds) | Code Inspection & Automated Test (`auth.test.js`) | **VERIFIED (HYBRID)** |
 | **THREAT-015** | Admin Financial Privilege Overreach (Direct Money Operations) | **HIGH** | Least-privilege separation (`/transactions/*` strictly requires `ACCOUNT_HOLDER`; Admin restricted to `/admin/*`) | Automated Test (`role_authorization_day5.test.js` Point 2) | **VERIFIED (TEST)** |
 | **THREAT-016** | Sensitive Data Exposure in Audit Logs & Primary UI | **MEDIUM** | Data minimization: credential & token sanitization in audit logs; UUIDs hidden in favor of public account numbers | Code Inspection & Automated Test (`role_authorization_day5.test.js`) | **VERIFIED (HYBRID)** |
+| **THREAT-017** | Refresh Token Concurrency, Premature Abort & Cross-Tab Races | **HIGH** | Row-locked `BEGIN...COMMIT` rotation (`FOR UPDATE`), pre-commit abort `ROLLBACK`, fail-closed Web Locks handling, & single-use lost-response recovery | Automated Tests (`auth_refresh_race.test.js` 11 tests, `cookie_auth.test.js` 8 tests, `authCoordination.test.js` 25 tests) | **VERIFIED (TEST)** |
 
 ---
 
@@ -634,6 +635,41 @@ This document provides a systematic threat model, vulnerability analysis, and se
 
 ---
 
+### Threat ID: THREAT-017 – Concurrent Refresh Races, Interrupted Refresh Responses & Cross-Tab Coordination Failures
+
+- **Severity:** **HIGH** – Could cause denial-of-service session revocation (false-positive reuse detection), orphaned unrevoked tokens on logout, or uncoordinated multi-tab token collisions.
+- **1. Threat & Failure Description:**
+  - **Concurrent Refresh Requests:** Two simultaneous `POST /api/v1/auth/refresh` requests bearing the same pre-rotation cookie (due to two browser tabs, client retries after Web Locks `.catch()` fallback, or network timeouts) previously read the same `refresh_tokens` row without transactional row locking (`SELECT ... FOR UPDATE`), risking lost updates or duplicate session creation.
+  - **Unsafe Web Locks Rejection Handling:** Previously, wrapping `navigator.locks.request()` with a `.catch()` fallback executed `runRefreshWithEpochChecks()` outside the lock both when Web Locks acquisition failed and when the callback threw an HTTP/network error (`401`, `5xx`, `ECONNABORTED`), triggering duplicate uncoordinated backend requests.
+  - **Interrupted / Lost Refresh Responses:** If a client closes the connection before `COMMIT`, a non-transactional rotation still committed `RT_1 -> RT_2` and Node's default `res.statusCode = 200` logged `"200 OK — Request closed prematurely before response completion"`. Conversely, if the socket closes *after* PostgreSQL `COMMIT` but before `Set-Cookie: RT_2` reaches the browser (lost response), retrying with `RT_1` triggered `401` token reuse detection and revoked all sessions for the user.
+  - **Cross-Tab Coordination & Logout Serialization Races:** Without serializing `/auth/logout`, `/auth/login`, and `/auth/refresh` against both `inFlightRefreshPromise` and `ledgerline_refresh_lock` (plus `BroadcastChannel` sequence tracking and server-side replacement-chain traversal), an in-flight refresh response or stale `TOKEN_REFRESHED` broadcast could resurrect state after logout or fail to revoke the rotated successor.
+- **2. Implemented Mitigations (Verified):**
+  - **Atomic Transactional Rotation (`backend/src/modules/auth/auth.service.js`, `refresh-token.repository.js`):**
+    - `rotateRefreshToken` wraps validation, user check, old token revocation, successor insertion, and audit logging inside `BEGIN ... COMMIT` using `findByTokenHashForUpdate()` (`SELECT ... FOR UPDATE`) and conditional `WHERE id = $2 AND revoked_at IS NULL`.
+  - **Pre-Commit Client-Abort Protection (`auth.controller.js`, `auth.service.js`, `requestLogger.js`):**
+    - `req.on('aborted')` and `res.on('close')` track premature disconnects; `isClientAborted()` triggers explicit `ROLLBACK` before commit so the client's existing cookie stays valid. `requestLogger` logs HTTP `499` (instead of Node's default `200`) when `!res.headersSent` and evaluates `!res.writableFinished` on `'close'`.
+  - **Schema-Preserving Single-Use Lost-Response Recovery (`auth.service.js`, `audit.repository.js`, `auth.controller.js`):**
+    - When `res` closes post-commit before `res.writableFinished`, `authService.markRefreshResponseLost()` logs `AUTH_REFRESH_RESPONSE_LOST` (`resource_type = 'REFRESH_TOKEN'`) without storing raw/hashed tokens in `audit_events`. Pending writes are serialized via `pendingLostResponseWrites` keyed by SHA-256 `tokenHash`.
+    - Within 30 seconds (`LOST_RESPONSE_RECOVERY_WINDOW_SECONDS`), presenting `RT_1` recovers **at most once** (`AUTH_REFRESH_RECOVERY_SUCCESS`) only if: (a) `AUTH_REFRESH_RESPONSE_LOST` was recorded, (b) no prior `AUTH_REFRESH_RECOVERY_SUCCESS` exists for that token, (c) `User-Agent` matches, (d) the successor `RT_2` is unrevoked, unreplaced, and unexpired, and (e) `user.is_active` is true. Genuine reuse (no lost-response record, second replay, or mismatched `User-Agent`) still revokes all user sessions (`revokeAllForUser`) and returns `401`.
+  - **Fail-Closed Web Locks & Serialized Auth Transitions (`frontend/src/services/api.js`, `authService.js`, `AuthContext.jsx`):**
+    - Distinguishes pre-callback lock acquisition failure (`enteredLock === false` -> rejects with `WEB_LOCK_ACQUISITION_FAILED` without issuing an uncoordinated refresh) from callback errors (rethrown cleanly without fallback retry).
+    - Uses `activeLogoutCount`, `explicitlyLoggedOut`, `crossTabRefreshCounter`, and `serializeWithAuthLock` across `login`, `register`, and `logout`; suppresses misleading `ledgerline:session_expired` UI banners on `TOKEN_MISSING_OR_INVALID`; increases `rawAuthClient` timeout from `10000ms` to `20000ms`.
+    - Backend `logout()` runs inside a `FOR UPDATE` transaction following `replaced_by_token_hash` so concurrent rotation followed by logout revokes the active successor.
+- **3. Verification & Test Evidence:**
+  - Backend: `tests/integration/auth_refresh_race.test.js` (`11/11` passing) and `tests/integration/cookie_auth.test.js` (`8/8` passing) covering `Promise.all` concurrent refresh serialization, pre-commit abort `ROLLBACK`, post-commit `AUTH_REFRESH_RESPONSE_LOST` single-use recovery & replay revocation, User-Agent mismatch rejection, and replacement-chain logout.
+  - Frontend: `frontend/tests/authCoordination.test.js` (`25/25` passing) covering React StrictMode promise deduplication, simultaneous multi-tab `BroadcastChannel` + Web Locks token reuse, Web Locks acquisition rejection (fail-closed), callback error propagation without retry, refresh during logout, logout during refresh, `ECONNABORTED`/`ERR_CANCELED`, and missing-cookie UI suppression.
+- **4. Related Implementation Files:**
+  - `backend/src/modules/auth/auth.controller.js`, `backend/src/modules/auth/auth.service.js`, `backend/src/middleware/requestLogger.js`
+  - `backend/src/repositories/refresh-token.repository.js`, `backend/src/repositories/audit.repository.js`
+  - `frontend/src/services/api.js`, `frontend/src/services/authService.js`, `frontend/src/context/AuthContext.jsx`
+- **5. Remaining Risks (Open Limitations):**
+  - `pendingLostResponseWrites` is a process-local `Map` in Node.js memory: in a multi-instance deployment behind a load balancer, a rapid retry hitting a different backend instance before `AUTH_REFRESH_RESPONSE_LOST` commits on the original instance could still trigger `401` reuse detection.
+  - Once Node's kernel/socket flushes the entire HTTP response (`res.writableFinished === true`), a downstream proxy/network drop before browser receipt cannot be distinguished from delivery by Express alone, so recovery does not apply after `writableFinished`.
+  - Browsers lacking Web Locks (`navigator.locks`) still fall back to single-tab deduplication and cannot serialize two tabs started simultaneously unless cross-tab `BroadcastChannel` delivers `TOKEN_REFRESHED` beforehand.
+  - Within the 30-second lost-response recovery window, a local attacker sharing the exact victim `User-Agent` and possessing stolen `RT_1` could consume the single recovery before the victim retries (though doing so still leaves only one active successor chain and subsequent replay revokes all sessions).
+
+---
+
 ## Security Assessment Summary
 
 ### Threat Distribution by Severity
@@ -641,14 +677,14 @@ This document provides a systematic threat model, vulnerability analysis, and se
 | Severity Level | Threat Count | Threat IDs | Implemented & Verified |
 | :--- | :---: | :--- | :---: |
 | **CRITICAL** | **6** | THREAT-001, THREAT-003, THREAT-004, THREAT-008, THREAT-009, THREAT-010 | **6 / 6** |
-| **HIGH** | **6** | THREAT-005, THREAT-006, THREAT-007, THREAT-011, THREAT-012, THREAT-015 | **6 / 6** |
+| **HIGH** | **7** | THREAT-005, THREAT-006, THREAT-007, THREAT-011, THREAT-012, THREAT-015, THREAT-017 | **7 / 7** |
 | **MEDIUM** | **4** | THREAT-002, THREAT-013, THREAT-014, THREAT-016 | **4 / 4** |
 | **LOW** | **0** | — | — |
-| **TOTAL** | **16** | **All 16 threats evaluated** | **16 / 16** |
+| **TOTAL** | **17** | **All 17 threats evaluated** | **17 / 17** |
 
 ### Implementation and Verification Breakdown
 
-- **Threats Verified by Automated Tests (13 threats):**
+- **Threats Verified by Automated Tests (14 threats):**
   - THREAT-001 (Concurrency Overdraft): `concurrency.test.js` (Test D)
   - THREAT-002 (Deadlock Ordering): `concurrency.test.js` (Test E)
   - THREAT-003 (Idempotency Retries): `idempotency.test.js` (Tests A, B, C)
@@ -662,6 +698,7 @@ This document provides a systematic threat model, vulnerability analysis, and se
   - THREAT-012 (Token Tampering & Deactivation): `auth.test.js`
   - THREAT-015 (Admin Money Operation Denial): `role_authorization_day5.test.js` (Section 2)
   - THREAT-016 (Data Minimization & UUID Protection): `role_authorization_day5.test.js` (Section 1 & 9)
+  - THREAT-017 (Refresh Concurrency, Lost Responses & Cross-Tab Coordination): `auth_refresh_race.test.js` (11 tests), `cookie_auth.test.js` (8 tests), `frontend/tests/authCoordination.test.js` (25 tests)
 - **Threats Verified by Code Inspection & Hybrid Validation (3 threats):**
   - THREAT-010 (SQL Injection): Verified 100% parameterized queries across all repositories; automated fuzzing test suite was not implemented.
   - THREAT-013 (DoS & Rate Limiting): Verified middleware registration and configuration; volumetric connection pool exhaustion was not tested under automated load.
@@ -692,10 +729,12 @@ Following the implementation and regression testing of the React 19 frontend, th
   - Cryptographically secure 40-byte random refresh tokens are stored hashed (SHA-256) in the database (`refresh_tokens` table via migration `008_create_refresh_tokens.sql`) and transported via an `HttpOnly` cookie named `ledgerline_refresh_token` configured with `path: '/'`, `sameSite: isProd ? 'none' : 'lax'` (allowing secure cross-origin API contexts in production and standard navigation in development), and `secure: isProd` (enforcing HTTPS in production).
   - Refresh rotation endpoint (`POST /api/v1/auth/refresh`) issues a new access token and simultaneously rotates the refresh token, revoking the previous one (`revoked_at = NOW()`, `replaced_by_token_hash`).
 - **Security Assessment & Automated Breach Detection:**
-  - **Token Reuse Detection:** If an adversary attempts to present an already revoked refresh token that has been replaced by a successor, the system detects a token reuse breach. It immediately revokes **all** active refresh tokens and sessions for that user (`refreshTokenRepository.revokeAllForUser`), terminates the adversary's connection, and writes a high-priority audit security event (`AUTH_REFRESH_TOKEN_REUSE_DETECTED`).
-  - **Single Flight Refresh Concurrency:** The Axios response interceptor queues concurrent requests during an in-flight token refresh (`isRefreshing`, `refreshSubscribers`), ensuring only a single `/auth/refresh` round-trip occurs without race conditions or token collision.
-  - **Session Invalidation:** On explicit user logout (`POST /api/v1/auth/logout`), the refresh token is immediately revoked in the database, the `ledgerline_refresh_token` cookie is cleared using matching options, and the in-memory access token is set to `null`.
-- **Residual Risk:** Low. Protected by rotation, server-side revocation tracking, single-flight mutexing, and breach detection.
+  - **Token Reuse Detection:** If an adversary attempts to present an already revoked refresh token that has been replaced by a successor, the system checks under a transactional `FOR UPDATE` row lock (`auth.service.js`) whether a server-observed premature socket close (`AUTH_REFRESH_RESPONSE_LOST`) qualifies for single-use recovery; otherwise it detects a token reuse breach, immediately revokes **all** active refresh tokens and sessions for that user (`refreshTokenRepository.revokeAllForUser`), terminates the connection, and writes a high-priority audit security event (`AUTH_REFRESH_TOKEN_REUSE_DETECTED`).
+  - **Centralized Single-Flight & Fail-Closed Web Locks Coordination:** Both application startup (`AuthContext.jsx` initialization) and Axios 401 recovery share a single coordinated in-flight Promise instance (`requestTokenRefresh`). Under React 19 `StrictMode`, duplicate effect executions join the already-running refresh request rather than dispatching a duplicate rotation. Across browser tabs, Web Locks (`navigator.locks.request('ledgerline_refresh_lock')`) and `BroadcastChannel` synchronize rotations and session events (`TOKEN_REFRESHED`, `LOGIN`, `LOGOUT`, `SESSION_EXPIRED`). If Web Locks is present but lock acquisition fails before entering the lock callback, the client aborts fail-closed (`WEB_LOCK_ACQUISITION_FAILED`) without running an uncoordinated refresh. Callback errors (`401`, `5xx`, `ECONNABORTED`) are never retried outside the lock.
+  - **Stale Response & Logout Serialization Protection:** `authEpoch`, `activeLogoutCount`, `explicitlyLoggedOut`, and `serializeWithAuthLock` ensure `/auth/logout`, `/auth/login`, and `/auth/register` serialize behind any active same-tab or locked refresh, discard late refresh responses, prevent delayed `TOKEN_REFRESHED` broadcasts from resurrecting logged-out state, and walk replacement chains server-side on logout.
+  - **Diagnostic Error Classification:** The client classifies errors (`LOCK_COORDINATION_ERROR`, `NETWORK_ERROR`, `SERVER_ERROR`, `ACCOUNT_DEACTIVATED`, `TOKEN_REUSE`, `TOKEN_EXPIRED`, `TOKEN_REVOKED`, `TOKEN_MISSING_OR_INVALID`). Transient network/timeout (`20s` refresh timeout), lock acquisition, or 5xx errors do NOT invalidate the persistent cookie, and `TOKEN_MISSING_OR_INVALID` does not display a spurious session-expired error banner.
+  - **Session Invalidation:** On explicit user logout (`POST /api/v1/auth/logout`), the refresh token (or its active successor if concurrently rotated) is revoked inside a row-locked transaction, the `ledgerline_refresh_token` cookie is cleared using matching options, and the in-memory access token is set to `null`.
+- **Residual Risk:** Medium-Low. Single-instance process memory tracks `pendingLostResponseWrites`, browsers without Web Locks lack cross-tab mutual exclusion on cold start, and network drops occurring after socket buffer flush (`writableFinished === true`) cannot be observed by the backend for lost-response recovery.
 
 ### 3. Password Policy & Registration Role Escalation
 - **Implementation:**
@@ -746,8 +785,8 @@ Following the implementation and regression testing of the React 19 frontend, th
 
 While the core financial engine, concurrency safeguards, and authorization boundaries are verified, the following architectural limitations should be recognized:
 
-1. **In-Memory Rate Limiting:** The `express-rate-limit` middleware stores request counts in Node.js process memory. In a multi-instance, load-balanced production environment, rate limits are not shared across server nodes without a distributed store (e.g. Redis).
-2. **Stateless JWT Invalidation:** JWT tokens cannot be revoked individually before their expiration timestamp unless the user account itself is deactivated (`is_active = false`). There is currently no distributed token blocklist for immediate single-session logout.
+1. **In-Memory Rate Limiting & Lost-Response Write Tracking:** Both `express-rate-limit` counters and `pendingLostResponseWrites` reside in Node.js process memory. In a multi-instance, load-balanced production environment, rate limits and in-flight lost-response audit barriers are not shared across server nodes without a shared store (e.g. Redis).
+2. **Short-Lived Stateless Access JWTs & Browser Web Locks Availability:** Refresh sessions are stateful and immediately revocable in `refresh_tokens`, but already-minted access JWTs remain cryptographically valid until their short expiry (15m) unless the user account is deactivated (`is_active = false`, checked per request in `authenticate`). Additionally, browsers without Web Locks support cannot serialize concurrent cold-start tabs across browser processes.
 3. **Single-Currency Engine:** All money calculations assume Indian Rupees (INR) represented in integer paise. The system does not currently support multi-currency accounts or real-time foreign exchange conversions.
 4. **Database-Level Immutability Limitations:** PostgreSQL row-level triggers do not intercept `TRUNCATE` (which is guarded by role permissions), and neither triggers nor role privileges can prevent a superuser or database owner (`neondb_owner`) from disabling triggers or modifying tables directly.
 5. **Absence of Dedicated Load / Penetration Testing:** The current test harness verifies functional correctness, race condition safety, and authorization boundaries, but does not include automated volumetric DDoS or automated SQL injection fuzzing tools.
@@ -759,7 +798,7 @@ While the core financial engine, concurrency safeguards, and authorization bound
 The following improvements are recommended for future enterprise production milestones:
 
 1. **Distributed Rate Limiting:** Connect `express-rate-limit` to a shared Redis cluster to enforce global rate limits across multiple container instances.
-2. **JWT Revocation Blocklist / Refresh Tokens:** Implement short-lived access tokens (15 minutes) paired with rotating refresh tokens stored in PostgreSQL or Redis to enable immediate session termination.
+2. **Distributed Refresh Coordination & Access JWT Revocation:** Back `pendingLostResponseWrites` (or an explicit lost-response coordination table) and short-TTL access JWT revocation lists with a shared Redis store across multi-node deployments (building on the existing 15-minute access JWT + PostgreSQL rotating refresh token model).
 3. **Automated Idempotency Key Pruning:** Add a scheduled background cron job to archive and purge `idempotency_keys` older than 48 hours to prevent unbounded table growth.
 4. **Multi-Factor Authentication (MFA/2FA):** Implement TOTP-based two-factor authentication (e.g. authenticator apps) for administrative accounts (`ADMIN`, `AUDITOR`) and high-value transfers.
 5. **Edge Web Application Firewall (WAF):** Place an edge WAF (e.g. Cloudflare or AWS WAF) in front of the application to filter volumetric DDoS attacks and automated credential-stuffing botnets.

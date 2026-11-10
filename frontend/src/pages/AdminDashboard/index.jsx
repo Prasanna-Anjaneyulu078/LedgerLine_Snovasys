@@ -600,14 +600,12 @@ const AdminDashboard = () => {
                   </div>
                   <span
                     className={`operational-status-badge ${
-                      systemHealth?.status === 'UP' ||
-                      (overview.totalTransactions > 0 &&
-                      (overview.successfulTransactions / overview.totalTransactions) >= 0.9)
+                      systemHealth?.status === 'UP'
                         ? 'operational-status-optimal'
                         : 'operational-status-normal'
                     }`}
                   >
-                    {systemHealth?.status === 'UP' ? 'ONLINE (UP)' : 'NORMAL'}
+                    {systemHealth?.status === 'UP' ? 'ONLINE (UP)' : 'UNAVAILABLE'}
                   </span>
                 </div>
                 <div className="operational-health-metrics">
@@ -626,11 +624,11 @@ const AdminDashboard = () => {
                   </div>
                   <div className="operational-metric">
                     <span className="operational-metric-label">Database Health</span>
-                    <span className="operational-metric-value" style={{ color: systemHealth?.database?.connected ? 'var(--success-color)' : 'var(--text-color)' }}>
-                      {systemHealth?.database?.connected ? 'Connected' : 'Active'}
+                    <span className="operational-metric-value" style={{ color: systemHealth?.database?.connected ? 'var(--success-color)' : 'var(--text-secondary)' }}>
+                      {systemHealth?.database?.connected ? 'Connected' : 'Unavailable'}
                     </span>
                     <span className="operational-metric-sub">
-                      {systemHealth?.uptime ? `PostgreSQL (${(systemHealth.uptime / 60).toFixed(0)}m uptime)` : 'PostgreSQL Neon'}
+                      {systemHealth?.uptime ? `PostgreSQL (${(systemHealth.uptime / 60).toFixed(0)}m uptime)` : (systemHealth ? 'PostgreSQL' : 'Telemetry offline')}
                     </span>
                   </div>
                   <div className="operational-metric">
@@ -837,10 +835,15 @@ const AdminDashboard = () => {
                                   color: (le.entry_type || le.entryType) === 'CREDIT' ? 'var(--success-color)' : 'var(--text-color)',
                                 }}
                               >
-                                {(le.entry_type || le.entryType) === 'CREDIT' ? '+' : '-'}₹{le.amountFormatted || (Number(le.amountPaise || le.amount || 0) / 100).toFixed(2)}
+                                {(le.entry_type || le.entryType) === 'CREDIT' ? '+' : '-'}
+                                {le.amountFormatted
+                                  ? (le.amountFormatted.startsWith('₹') ? le.amountFormatted : `₹${le.amountFormatted}`)
+                                  : formatPaise(le.amountPaise ?? le.amount ?? 0)}
                               </td>
                               <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace' }}>
-                                ₹{le.balanceAfterFormatted || (Number(le.balanceAfterPaise || le.balance_after || 0) / 100).toFixed(2)}
+                                {le.balanceAfterFormatted
+                                  ? (le.balanceAfterFormatted.startsWith('₹') ? le.balanceAfterFormatted : `₹${le.balanceAfterFormatted}`)
+                                  : formatPaise(le.balanceAfterPaise ?? le.balance_after ?? 0)}
                               </td>
                             </tr>
                           ))}

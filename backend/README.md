@@ -284,17 +284,17 @@ All API routes are prefixed with `/api/v1`.
 
 ## 8. Demonstration Accounts & Local Credentials
 
-For local development and evaluation, four demonstration identities are pre-seeded:
+For local development and evaluation, four demonstration identities can be seeded using passwords configured via environment variables in `backend/.env`:
 
-| Role | Display Name | Email Address | Evaluation Password | Associated Accounts |
+| Role | Display Name | Email Address | Password Env Variable | Associated Accounts |
 | :--- | :--- | :--- | :--- | :--- |
-| **ADMIN** | Prasanna Anjaneyulu | `prasanna.admin@example.com` | `Prasanna@LL26#Admin` | Full administrative oversight |
-| **AUDITOR** | Sasank | `sasank.auditor@example.com` | `Sasank@LL26#Audit` | System-wide read-only inspection |
-| **ACCOUNT_HOLDER** | Kavi | `kavi@example.com` | `Kavi@LL26#User01` | `LL-ACC-1001` (Savings: ₹5,000.00)<br/>`LL-ACC-1002` (Checking: ₹2,500.00) |
-| **ACCOUNT_HOLDER** | Ravi | `ravi@example.com` | `Ravi@LL26#User02` | `LL-ACC-2001` (Savings: ₹10,000.00) |
+| **ADMIN** | Prasanna Anjaneyulu | `prasanna.admin@example.com` | `SEED_ADMIN_PASSWORD` | Full administrative oversight |
+| **AUDITOR** | Sasank | `sasank.auditor@example.com` | `SEED_AUDITOR_PASSWORD` | System-wide read-only inspection |
+| **ACCOUNT_HOLDER** | Kavi | `kavi@example.com` | `SEED_KAVI_PASSWORD` | `LL-ACC-1001` (Savings: ₹5,000.00)<br/>`LL-ACC-1002` (Checking: ₹2,500.00) |
+| **ACCOUNT_HOLDER** | Ravi | `ravi@example.com` | `SEED_RAVI_PASSWORD` | `LL-ACC-2001` (Savings: ₹10,000.00) |
 
 > [!NOTE]
-> **Local Evaluation Only:** These demonstration credentials are provided solely for reviewer evaluation and automated testing in non-production environments. In PostgreSQL, all passwords are salted and hashed using bcrypt (12 rounds). They are never logged to console or exposed via API.
+> **Local Evaluation Only:** Set `ALLOW_DEMO_SEED=true` (or pass `--confirm`) along with the `SEED_*_PASSWORD` environment variables in `backend/.env` before running `npm run seed` in non-production environments. Repeat seed runs are idempotent and preserve existing users' credentials, roles, and account ownership. In PostgreSQL, all passwords are salted and hashed using bcrypt (12 rounds). They are never stored in source, logged to console, or exposed via API.
 
 ---
 
@@ -316,9 +316,16 @@ PORT=5000
 NODE_ENV=development
 
 # Security & Authentication
-JWT_SECRET=super_secret_jwt_key_at_least_32_characters_long
-JWT_EXPIRES_IN=1d
+JWT_SECRET=replace_with_a_long_random_secret_at_least_32_characters
+JWT_EXPIRES_IN=15m
+REFRESH_TOKEN_EXPIRES_IN_DAYS=7
 BCRYPT_SALT_ROUNDS=12
+
+# Local Seeding Passwords (required only for npm run seed)
+SEED_ADMIN_PASSWORD=replace_with_local_seed_admin_password
+SEED_AUDITOR_PASSWORD=replace_with_local_seed_auditor_password
+SEED_KAVI_PASSWORD=replace_with_local_seed_user1_password
+SEED_RAVI_PASSWORD=replace_with_local_seed_user2_password
 
 # Logging & Telemetry
 LOG_LEVEL=info

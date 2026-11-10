@@ -222,7 +222,7 @@ const Users = () => {
           <button
             type="button"
             className="btn-secondary"
-            onClick={() => fetchUsers(currentPage, searchTerm, roleFilter, statusFilter)}
+            onClick={() => fetchUsers(currentPage, pageSize, searchTerm, roleFilter, statusFilter)}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
           >
             <RefreshCw size={14} />

@@ -1,9 +1,17 @@
+import crypto from 'crypto';
 import request from 'supertest';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import app from '../../src/app.js';
 import { env } from '../../src/config/env.js';
-import { cleanDatabase, seedTestFixtures, teardownTestDb, testPool } from '../helpers/testDb.js';
+import {
+  cleanDatabase,
+  seedTestFixtures,
+  teardownTestDb,
+  testPool,
+  TEST_USER_PASSWORD,
+  TEST_WRONG_PASSWORD,
+} from '../helpers/testDb.js';
 import { authService } from '../../src/modules/auth/auth.service.js';
 
 describe('Authentication & Authorization Tests', () => {
@@ -26,7 +34,7 @@ describe('Authentication & Authorization Tests', () => {
       const payload = {
         fullName: 'Normal User',
         email: 'normaluser@example.com',
-        password: 'Test@123456',
+        password: TEST_USER_PASSWORD,
       };
 
       const res = await request(app).post('/api/v1/auth/register').send(payload);
@@ -52,9 +60,9 @@ describe('Authentication & Authorization Tests', () => {
       expect(dbUser.is_active).toBe(true);
 
       // Verify password was securely hashed with bcrypt, not plaintext
-      expect(dbUser.password_hash).not.toBe('Test@123456');
+      expect(dbUser.password_hash).not.toBe(TEST_USER_PASSWORD);
       expect(dbUser.password_hash).toMatch(/^\$2[aby]\$\d{2}\$/);
-      const isPasswordValid = await bcrypt.compare('Test@123456', dbUser.password_hash);
+      const isPasswordValid = await bcrypt.compare(TEST_USER_PASSWORD, dbUser.password_hash);
       expect(isPasswordValid).toBe(true);
 
       // Token claim verification
@@ -77,7 +85,7 @@ describe('Authentication & Authorization Tests', () => {
       const payload = {
         fullName: 'Malicious Admin',
         email: 'maliciousadmin@example.com',
-        password: 'Test@123456',
+        password: TEST_USER_PASSWORD,
         role: 'ADMIN',
       };
 
@@ -97,7 +105,7 @@ describe('Authentication & Authorization Tests', () => {
       const payload = {
         fullName: 'Malicious Auditor',
         email: 'maliciousauditor@example.com',
-        password: 'Test@123456',
+        password: TEST_USER_PASSWORD,
         role: 'AUDITOR',
       };
 
@@ -123,7 +131,7 @@ describe('Authentication & Authorization Tests', () => {
           .send({
             fullName: 'Role Attacker',
             email,
-            password: 'Test@123456',
+            password: TEST_USER_PASSWORD,
             role: malRole,
           });
 
@@ -142,19 +150,19 @@ describe('Authentication & Authorization Tests', () => {
         {
           fullName: 'Privilege Attacker 1',
           email: 'priv1@example.com',
-          password: 'Test@123456',
+          password: TEST_USER_PASSWORD,
           isAdmin: true,
         },
         {
           fullName: 'Privilege Attacker 2',
           email: 'priv2@example.com',
-          password: 'Test@123456',
+          password: TEST_USER_PASSWORD,
           permissions: ['*'],
         },
         {
           fullName: 'Privilege Attacker 3',
           email: 'priv3@example.com',
-          password: 'Test@123456',
+          password: TEST_USER_PASSWORD,
           isVerified: true,
         },
       ];
@@ -178,7 +186,7 @@ describe('Authentication & Authorization Tests', () => {
         {
           fullName: 'Direct Service User',
           email: 'directservice@example.com',
-          password: 'Test@123456',
+          password: TEST_USER_PASSWORD,
           role: 'ADMIN', // Deliberately passed to service
         },
         { ipAddress: '127.0.0.1' }
@@ -200,7 +208,7 @@ describe('Authentication & Authorization Tests', () => {
         .post('/api/v1/auth/register')
         .send({
           email: 'noname@example.com',
-          password: 'Test@123456',
+          password: TEST_USER_PASSWORD,
         });
 
       expect(res.status).toBe(400);
@@ -214,7 +222,7 @@ describe('Authentication & Authorization Tests', () => {
         .send({
           fullName: 'Invalid Email User',
           email: 'not-an-email',
-          password: 'Test@123456',
+          password: TEST_USER_PASSWORD,
         });
 
       expect(res.status).toBe(400);
@@ -242,7 +250,7 @@ describe('Authentication & Authorization Tests', () => {
         .send({
           fullName: 'Alice Duplicate',
           email: 'alice@test.com',
-          password: 'Alice@123456',
+          password: TEST_USER_PASSWORD,
         });
 
       expect(res.status).toBe(409);
@@ -259,7 +267,7 @@ describe('Authentication & Authorization Tests', () => {
         .post('/api/v1/auth/login')
         .send({
           email: 'alice@test.com',
-          password: 'Test@123456',
+          password: TEST_USER_PASSWORD,
         });
 
       expect(res.status).toBe(200);
@@ -274,7 +282,7 @@ describe('Authentication & Authorization Tests', () => {
         .post('/api/v1/auth/login')
         .send({
           email: 'alice@test.com',
-          password: 'WrongPassword@123',
+          password: TEST_WRONG_PASSWORD,
         });
 
       expect(res.status).toBe(401);
@@ -304,7 +312,7 @@ describe('Authentication & Authorization Tests', () => {
       // Create a forged token claiming role: 'ADMIN' signed with an attacker key
       const forgedToken = jwt.sign(
         { id: fixtures.alice.id, email: fixtures.alice.email, role: 'ADMIN' },
-        'attacker_malicious_secret_key_1234567890'
+        crypto.randomBytes(32).toString('hex')
       );
 
       const res = await request(app)

@@ -38,6 +38,8 @@ The following matrix documents every UI screen, user action, underlying backend 
 | :--- | :--- | :--- | :---: | :---: | :--- | :---: | :--- | :---: |
 | **Login** | Submit login credentials | `/api/v1/auth/login` | `POST` | Public | User profile + JWT token | Yes (sessions) | None | Yes (`AUTH_LOGIN_SUCCESS` / `AUTH_LOGIN_FAILURE`) |
 | **Register** | Register new identity | `/api/v1/auth/register` | `POST` | Public | Created user + JWT token | Yes (users table) | None | Yes (`AUTH_REGISTER_SUCCESS` / `AUTH_REGISTER_FAILURE`) |
+| **Refresh Token** | Rotate session credentials | `/api/v1/auth/refresh` | `POST` | Public (`HttpOnly` cookie) | Rotated token + updated user profile | Yes (refresh_tokens table) | None | Yes (`AUTH_REFRESH_SUCCESS` / `AUTH_REFRESH_TOKEN_REUSE_DETECTED`) |
+| **Logout** | Invalidate session | `/api/v1/auth/logout` | `POST` | All authenticated | Null data (clears `HttpOnly` cookie) | Yes (refresh_tokens table) | None | Yes (`AUTH_LOGOUT_SUCCESS`) |
 | **Profile** | View session profile | `/api/v1/auth/me` | `GET` | All authenticated | Current user details & role | No | None | No |
 | **Account Holder Dashboard** | Load accounts & recent txns | `/api/v1/accounts`, `/api/v1/transactions` | `GET` | `ACCOUNT_HOLDER` | User accounts + transaction list | No | None | No |
 | **Account Holder Accounts** | Create new account | `/api/v1/accounts` | `POST` | `ACCOUNT_HOLDER`, `ADMIN` | Created account details | Yes (accounts table) | None (starts ₹0.00) | Yes (`ACCOUNT_CREATED`) |
@@ -153,9 +155,9 @@ LedgerLine strictly adheres to data minimization principles across all user inte
 - **Request Body**:
   ```json
   {
-    "fullName": "Kavi",
-    "email": "kavi@example.com",
-    "password": "Kavi@LL26#User01"
+    "fullName": "Example User",
+    "email": "user@example.com",
+    "password": "YourSecurePassword!1"
   }
   ```
   *(Note: The role is strictly assigned server-side as `ACCOUNT_HOLDER`. Client-supplied role fields are rejected with HTTP 400 Bad Request by Zod schema validation).*
@@ -168,8 +170,8 @@ LedgerLine strictly adheres to data minimization principles across all user inte
     "data": {
       "user": {
         "id": "5bd2ab30-5a86-4298-924a-558b88838a10",
-        "fullName": "Kavi",
-        "email": "kavi@example.com",
+        "fullName": "Example User",
+        "email": "user@example.com",
         "role": "ACCOUNT_HOLDER",
         "isActive": true
       },
@@ -186,8 +188,8 @@ LedgerLine strictly adheres to data minimization principles across all user inte
 - **Request Body**:
   ```json
   {
-    "email": "kavi@example.com",
-    "password": "Kavi@LL26#User01"
+    "email": "user@example.com",
+    "password": "YourSecurePassword!1"
   }
   ```
 - **Response** (`200 OK`): Returns sanitized user and signed JWT bearer token.
@@ -197,6 +199,57 @@ LedgerLine strictly adheres to data minimization principles across all user inte
 - **Path**: `/api/v1/auth/me`
 - **Headers**: `Authorization: Bearer <TOKEN>`
 - **Response** (`200 OK`): Returns user details and owned account balances.
+
+### Refresh Token & Centralized Session Restoration
+- **Method**: `POST`
+- **Path**: `/api/v1/auth/refresh`
+- **Rate Limit**: 20 requests / 15 minutes
+- **Authorization**: Public (`HttpOnly` cookie: `ledgerline_refresh_token`)
+- **Headers**: Sent with credentials (`withCredentials: true`)
+- **Single-Flight Coordination Contract**:
+  - The client ensures all concurrent refresh callers share a single in-flight Promise instance (`requestTokenRefresh`).
+  - React 19 `StrictMode` duplicate mount effects, concurrent API 401 retries, and multi-tab calls wait for the single rotation operation.
+  - Generates a new 40-byte cryptographically secure refresh token, links it to predecessor (`replaced_by_token_hash`), revokes the old token (`revoked_at = NOW()`), and issues a fresh 15-minute access token.
+  - If a rotated token is presented again (uncoordinated race or theft replay), the backend detects reuse, invokes `revokeAllForUser`, terminates all active user sessions, and audits `AUTH_REFRESH_TOKEN_REUSE_DETECTED`.
+- **Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "statusCode": 200,
+    "message": "Token refreshed successfully",
+    "data": {
+      "user": {
+        "id": "76495df3-938d-472e-84ad-e77030e6e729",
+        "fullName": "Alice Tester",
+        "email": "alice@test.com",
+        "role": "ACCOUNT_HOLDER",
+        "isActive": true,
+        "createdAt": "2026-11-05T21:40:00.000Z"
+      },
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    }
+  }
+  ```
+- **Error Responses**:
+  - `401 Unauthorized` (`Refresh token is required` / `Invalid or unrecognised refresh token`)
+  - `401 Unauthorized` (`Refresh token has expired. Please log in again.`)
+  - `401 Unauthorized` (`Security violation: Session token reuse detected. All sessions revoked.`)
+  - `403 Forbidden` (`User account is deactivated. Contact administrator.`)
+
+### Logout
+- **Method**: `POST`
+- **Path**: `/api/v1/auth/logout`
+- **Authorization**: Public / Authenticated (`HttpOnly` cookie: `ledgerline_refresh_token`)
+- **Behavior**: Revokes active refresh token record in PostgreSQL, clears `ledgerline_refresh_token` cookie with matching `Path`, `HttpOnly`, and `SameSite` attributes, increments client auth epoch, and broadcasts `LOGOUT` to other open tabs via `BroadcastChannel`.
+- **Response** (`200 OK`):
+  ```json
+  {
+    "success": true,
+    "statusCode": 200,
+    "message": "Logged out successfully",
+    "data": null
+  }
+  ```
 
 ---
 

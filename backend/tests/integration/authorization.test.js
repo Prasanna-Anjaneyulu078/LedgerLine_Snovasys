@@ -153,7 +153,7 @@ describe('Role-Based & Account-Level Authorization Tests', () => {
 
       expect(res.status).toBe(403);
       expect(res.body.success).toBe(false);
-      expect(res.body.message).toMatch(/Auditors are restricted/i);
+      expect(res.body.message).toMatch(/required role \[ACCOUNT_HOLDER\], current role is \[AUDITOR\]/i);
 
       // Database verification: Account balance unchanged
       const dbAcc = await testPool.query('SELECT balance FROM accounts WHERE id = $1', [fixtures.aliceAccount.id]);
@@ -171,7 +171,7 @@ describe('Role-Based & Account-Level Authorization Tests', () => {
 
       expect(res.status).toBe(403);
       expect(res.body.success).toBe(false);
-      expect(res.body.message).toMatch(/Auditors are restricted/i);
+      expect(res.body.message).toMatch(/required role \[ACCOUNT_HOLDER\], current role is \[AUDITOR\]/i);
 
       const dbAcc = await testPool.query('SELECT balance FROM accounts WHERE id = $1', [fixtures.aliceAccount.id]);
       expect(dbAcc.rows[0].balance).toBe(10000n);
@@ -189,7 +189,7 @@ describe('Role-Based & Account-Level Authorization Tests', () => {
 
       expect(res.status).toBe(403);
       expect(res.body.success).toBe(false);
-      expect(res.body.message).toMatch(/Auditors are restricted/i);
+      expect(res.body.message).toMatch(/required role \[ACCOUNT_HOLDER\], current role is \[AUDITOR\]/i);
 
       // Database check: 0 transactions created by auditor
       const auditorTxns = await testPool.query('SELECT count(*) as count FROM transactions WHERE initiated_by = $1', [

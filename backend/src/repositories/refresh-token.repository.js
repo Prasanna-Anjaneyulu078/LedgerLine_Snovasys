@@ -36,13 +36,27 @@ export class RefreshTokenRepository {
   }
 
   /**
-   * Revoke a refresh token and optionally record the replacement token hash (rotation)
+   * Find and row-lock a refresh token by its SHA-256 hash inside an active transaction
+   */
+  async findByTokenHashForUpdate(tokenHash, client) {
+    const sql = `
+      SELECT id, user_id, token_hash, expires_at, revoked_at, replaced_by_token_hash, user_agent, ip_address, created_at
+      FROM refresh_tokens
+      WHERE token_hash = $1
+      FOR UPDATE;
+    `;
+    const res = await client.query(sql, [tokenHash]);
+    return res.rows[0] || null;
+  }
+
+  /**
+   * Atomically revoke an active refresh token and optionally record its replacement hash
    */
   async revokeById(id, replacedByTokenHash = null, client = pool) {
     const sql = `
       UPDATE refresh_tokens
       SET revoked_at = NOW(), replaced_by_token_hash = $1
-      WHERE id = $2
+      WHERE id = $2 AND revoked_at IS NULL
       RETURNING id, user_id, token_hash, expires_at, revoked_at, replaced_by_token_hash;
     `;
     const res = await client.query(sql, [replacedByTokenHash, id]);
@@ -50,13 +64,13 @@ export class RefreshTokenRepository {
   }
 
   /**
-   * Revoke a refresh token by its token hash
+   * Revoke an active refresh token by its token hash
    */
   async revokeByTokenHash(tokenHash, client = pool) {
     const sql = `
       UPDATE refresh_tokens
       SET revoked_at = NOW()
-      WHERE token_hash = $1
+      WHERE token_hash = $1 AND revoked_at IS NULL
       RETURNING id, user_id, token_hash, revoked_at;
     `;
     const res = await client.query(sql, [tokenHash]);

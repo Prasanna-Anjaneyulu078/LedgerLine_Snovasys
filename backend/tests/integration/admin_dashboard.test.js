@@ -206,4 +206,42 @@ describe('Admin Dashboard, Telemetry & Institutional Operations Integration Test
       expect(res.body.data.committedPostings).toBeInstanceOf(Array);
     });
   });
+
+  // ========================================================
+  // 5. Validation & Date Filter Integrity (Day 5 Fixes)
+  // ========================================================
+  describe('Validation & Date Filter Integrity', () => {
+    test('Admin rejects non-boolean isActive flag on user status update (400 Bad Request)', async () => {
+      const res = await request(app)
+        .patch(`/api/v1/admin/users/${fixtures.alice.id}/status`)
+        .set('Authorization', `Bearer ${fixtures.tokens.admin}`)
+        .send({ isActive: 'false' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toMatch(/boolean/i);
+    });
+
+    test('Auditor YYYY-MM-DD date filters succeed across /transactions and /audit-events and reject invalid calendar dates', async () => {
+      const todayYmd = new Date().toISOString().slice(0, 10);
+
+      const txRes = await request(app)
+        .get(`/api/v1/transactions?startDate=${todayYmd}&endDate=${todayYmd}`)
+        .set('Authorization', `Bearer ${fixtures.tokens.auditor}`);
+      expect(txRes.status).toBe(200);
+      expect(txRes.body.data.transactions).toBeInstanceOf(Array);
+
+      const auditRes = await request(app)
+        .get(`/api/v1/audit-events?startDate=${todayYmd}&endDate=${todayYmd}`)
+        .set('Authorization', `Bearer ${fixtures.tokens.auditor}`);
+      expect(auditRes.status).toBe(200);
+      expect(auditRes.body.data.events).toBeInstanceOf(Array);
+
+      const invalidDateRes = await request(app)
+        .get('/api/v1/transactions?startDate=2026-02-31')
+        .set('Authorization', `Bearer ${fixtures.tokens.auditor}`);
+      expect(invalidDateRes.status).toBe(400);
+      expect(invalidDateRes.body.success).toBe(false);
+    });
+  });
 });

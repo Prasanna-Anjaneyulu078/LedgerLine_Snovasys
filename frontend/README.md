@@ -282,9 +282,9 @@ LedgerLine strictly separates access and refresh token responsibilities:
 - **Request Body:**
   ```json
   {
-    "fullName": "Kavi",
-    "email": "kavi@example.com",
-    "password": "Kavi@LL26#User01"
+    "fullName": "Example User",
+    "email": "user@example.com",
+    "password": "YourSecurePassword!1"
   }
   ```
 - **Response (`201 Created`):**
@@ -296,8 +296,8 @@ LedgerLine strictly separates access and refresh token responsibilities:
     "data": {
       "user": {
         "id": "5bd2ab30-5a86-4298-924a-558b88838a10",
-        "fullName": "Kavi",
-        "email": "kavi@example.com",
+        "fullName": "Example User",
+        "email": "user@example.com",
         "role": "ACCOUNT_HOLDER",
         "isActive": true,
         "createdAt": "2026-11-05T15:35:41.279Z"
@@ -311,8 +311,8 @@ LedgerLine strictly separates access and refresh token responsibilities:
 - **Request Body:**
   ```json
   {
-    "email": "kavi@example.com",
-    "password": "Kavi@LL26#User01"
+    "email": "user@example.com",
+    "password": "YourSecurePassword!1"
   }
   ```
 - **Response (`200 OK`):** Returns sanitized user object, signed access token in JSON payload, and sets the `HttpOnly` refresh token cookie.
@@ -568,4 +568,4 @@ For local evaluation, four demonstration identities are configured in the system
 | **ACCOUNT_HOLDER** | Ravi | `ravi@example.com` | `LL-ACC-2001` (₹10,500.00) |
 
 > [!WARNING]
-> **Local Demonstration Only:** Demonstration credentials are for local development and evaluation only. Passwords are logged to the console on server startup (`npm start`) and securely hashed in PostgreSQL. Never store or commit plaintext credentials.
+> **Local Demonstration Only:** Demonstration credentials are for local development and evaluation only. Seed passwords are supplied via environment variables in `backend/.env` (`SEED_*_PASSWORD`) and securely hashed in PostgreSQL. Never store, log, or commit plaintext credentials.

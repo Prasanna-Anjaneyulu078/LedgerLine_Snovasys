@@ -1,6 +1,6 @@
 import request from 'supertest';
 import app from '../../src/app.js';
-import { cleanDatabase, seedTestFixtures, teardownTestDb, testPool } from '../helpers/testDb.js';
+import { cleanDatabase, seedTestFixtures, teardownTestDb, testPool, TEST_USER_PASSWORD } from '../helpers/testDb.js';
 import { REFRESH_COOKIE_NAME } from '../../src/utils/cookie.js';
 
 describe('Secure Persistent Cookie-Based Authentication Tests', () => {
@@ -32,7 +32,7 @@ describe('Secure Persistent Cookie-Based Authentication Tests', () => {
       .post('/api/v1/auth/login')
       .send({
         email: 'alice@test.com',
-        password: 'Test@123456',
+        password: TEST_USER_PASSWORD,
       });
 
     expect(res.status).toBe(200);
@@ -70,7 +70,7 @@ describe('Secure Persistent Cookie-Based Authentication Tests', () => {
       .send({
         fullName: 'Cookie Test User',
         email: 'cookietest@example.com',
-        password: 'Test@123456',
+        password: TEST_USER_PASSWORD,
       });
 
     expect(res.status).toBe(201);
@@ -90,7 +90,7 @@ describe('Secure Persistent Cookie-Based Authentication Tests', () => {
       .post('/api/v1/auth/login')
       .send({
         email: 'bob@test.com',
-        password: 'Test@123456',
+        password: TEST_USER_PASSWORD,
       });
 
     const cookieHeader = extractCookie(loginRes, REFRESH_COOKIE_NAME);
@@ -126,7 +126,7 @@ describe('Secure Persistent Cookie-Based Authentication Tests', () => {
       .post('/api/v1/auth/login')
       .send({
         email: 'bob@test.com',
-        password: 'Test@123456',
+        password: TEST_USER_PASSWORD,
       });
 
     expect(loginRes.status).toBe(200);
@@ -178,8 +178,8 @@ describe('Secure Persistent Cookie-Based Authentication Tests', () => {
 
   test('6. Expired refresh token is rejected with 401', async () => {
     // Insert an already expired token into DB
-    const expiredRawToken = 'expired_test_token_1234567890abcdef1234567890abcdef';
     const crypto = await import('crypto');
+    const expiredRawToken = crypto.randomBytes(24).toString('hex');
     const tokenHash = crypto.createHash('sha256').update(expiredRawToken).digest('hex');
 
     await testPool.query(
@@ -202,7 +202,7 @@ describe('Secure Persistent Cookie-Based Authentication Tests', () => {
       .post('/api/v1/auth/login')
       .send({
         email: 'alice@test.com',
-        password: 'Test@123456',
+        password: TEST_USER_PASSWORD,
       });
 
     const cookieHeader = extractCookie(loginRes, REFRESH_COOKIE_NAME);
@@ -235,7 +235,7 @@ describe('Secure Persistent Cookie-Based Authentication Tests', () => {
       .post('/api/v1/auth/login')
       .send({
         email: 'alice@test.com',
-        password: 'Test@123456',
+        password: TEST_USER_PASSWORD,
       });
 
     const cookieHeader = extractCookie(loginRes, REFRESH_COOKIE_NAME);

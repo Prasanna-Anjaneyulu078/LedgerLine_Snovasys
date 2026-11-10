@@ -606,32 +606,36 @@ const Transactions = () => {
       align: 'right',
       render: (row) => {
         const rowType = row.displayType || row.type || row.transactionType;
+        const isOversightRole = role === 'ADMIN' || role === 'AUDITOR';
+        const isSystemTransfer = isOversightRole && rowType === 'TRANSFER';
         const userAccountIdentifiers = new Set(accounts.map((a) => a.accountNumber || a.id));
         const isIncoming =
-          row.isCredit === true ||
-          rowType === 'TRANSFER IN' ||
-          rowType === 'DEPOSIT' ||
-          (rowType === 'TRANSFER' &&
-            userAccountIdentifiers.has(row.destinationAccountNumber || row.destinationAccountId) &&
-            !userAccountIdentifiers.has(row.sourceAccountNumber || row.sourceAccountId));
+          !isSystemTransfer &&
+          (row.isCredit === true ||
+            rowType === 'TRANSFER IN' ||
+            rowType === 'DEPOSIT' ||
+            (rowType === 'TRANSFER' &&
+              userAccountIdentifiers.has(row.destinationAccountNumber || row.destinationAccountId) &&
+              !userAccountIdentifiers.has(row.sourceAccountNumber || row.sourceAccountId)));
 
         const isCredit = isIncoming;
         const isOutgoing =
-          row.isCredit === false ||
-          rowType === 'TRANSFER OUT' ||
-          rowType === 'WITHDRAWAL' ||
-          (rowType === 'TRANSFER' &&
-            userAccountIdentifiers.has(row.sourceAccountNumber || row.sourceAccountId) &&
-            !userAccountIdentifiers.has(row.destinationAccountNumber || row.destinationAccountId));
+          !isSystemTransfer &&
+          (row.isCredit === false ||
+            rowType === 'TRANSFER OUT' ||
+            rowType === 'WITHDRAWAL' ||
+            (rowType === 'TRANSFER' &&
+              userAccountIdentifiers.has(row.sourceAccountNumber || row.sourceAccountId) &&
+              !userAccountIdentifiers.has(row.destinationAccountNumber || row.destinationAccountId)));
 
         const isRefused = row.status === 'REFUSED';
-        const color = isRefused
-          ? 'var(--text-secondary)'
+        const color = isRefused || isSystemTransfer
+          ? 'var(--text-color)'
           : isCredit
           ? 'var(--success-color)'
           : 'var(--danger-color)';
 
-        const prefix = isRefused ? '' : isCredit ? '+' : isOutgoing ? '-' : '';
+        const prefix = isRefused || isSystemTransfer ? '' : isCredit ? '+' : isOutgoing ? '-' : '';
         return (
           <span style={{ fontWeight: 700, fontFamily: 'monospace', color }}>
             {prefix}
@@ -1292,16 +1296,32 @@ const Transactions = () => {
 
                   <div className="tx-detail-box">
                     <div className="tx-detail-label">Transacted Amount</div>
-                    <div
-                      className="tx-detail-value tabular-nums"
-                      style={{
-                        color: selectedTxForDetails.isCredit || selectedTxForDetails.displayType === 'TRANSFER IN' || selectedTxForDetails.type === 'DEPOSIT'
-                          ? 'var(--success-color)'
-                          : 'var(--danger-color)'
-                      }}
-                    >
-                      {(selectedTxForDetails.isCredit || selectedTxForDetails.displayType === 'TRANSFER IN' || selectedTxForDetails.type === 'DEPOSIT' ? '+' : '-')}{formatCurrency(selectedTxForDetails.amount)}
-                    </div>
+                    {(() => {
+                      const isOversightRole = role === 'ADMIN' || role === 'AUDITOR';
+                      const isSystemTransfer =
+                        isOversightRole &&
+                        (selectedTxForDetails.displayType || selectedTxForDetails.type) === 'TRANSFER';
+                      const isCreditDetail =
+                        !isSystemTransfer &&
+                        (selectedTxForDetails.isCredit ||
+                          selectedTxForDetails.displayType === 'TRANSFER IN' ||
+                          selectedTxForDetails.type === 'DEPOSIT');
+                      return (
+                        <div
+                          className="tx-detail-value tabular-nums"
+                          style={{
+                            color: isSystemTransfer
+                              ? 'var(--text-color)'
+                              : isCreditDetail
+                              ? 'var(--success-color)'
+                              : 'var(--danger-color)',
+                          }}
+                        >
+                          {isSystemTransfer ? '' : isCreditDetail ? '+' : '-'}
+                          {formatCurrency(selectedTxForDetails.amount)}
+                        </div>
+                      );
+                    })()}
                   </div>
 
                   <div className="tx-detail-box">

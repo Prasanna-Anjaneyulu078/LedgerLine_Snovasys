@@ -22,7 +22,10 @@ export function requestLogger(req, res, next) {
   const logFailure = (premature = false, customReason = null) => {
     if (logged) return;
 
-    const statusCode = res.statusCode || (premature ? 499 : 500);
+    const statusCode =
+      premature && !res.headersSent
+        ? 499
+        : res.statusCode || (premature ? 499 : 500);
 
     // Suppress successful (HTTP 200–299) and redirect/cache (HTTP 300–399) requests
     if (!premature && statusCode >= 200 && statusCode < 400) {
@@ -71,7 +74,7 @@ export function requestLogger(req, res, next) {
 
   // 2. Log if connection closes before response completion
   res.on('close', () => {
-    if (!res.writableEnded && !logged) {
+    if (!res.writableFinished && !logged) {
       logFailure(true, 'Request closed prematurely before response completion');
     }
   });

@@ -188,6 +188,17 @@ export const transactionIdParamSchema = z.object({
   transactionId: z.string().trim().min(1, 'Transaction identifier is required'),
 });
 
+const dateFilterSchema = z.union([
+  z.string().datetime({ offset: true }),
+  z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Invalid date format (expected YYYY-MM-DD or ISO 8601 datetime)')
+    .refine((val) => {
+      const parsed = new Date(`${val}T00:00:00.000Z`);
+      return !Number.isNaN(parsed.getTime()) && parsed.toISOString().startsWith(val);
+    }, 'Invalid calendar date'),
+]);
+
 export const transactionQuerySchema = z.object({
   page: z.coerce.number().min(1).optional(),
   limit: z.coerce.number().min(1).max(100).default(15).optional(),
@@ -196,8 +207,8 @@ export const transactionQuerySchema = z.object({
   accountNumber: z.string().trim().optional(),
   status: z.enum(['PENDING', 'SUCCESS', 'FAILED', 'REFUSED']).optional(),
   type: z.enum(['DEPOSIT', 'WITHDRAWAL', 'TRANSFER']).optional(),
-  startDate: z.string().datetime().optional(),
-  endDate: z.string().datetime().optional(),
+  startDate: dateFilterSchema.optional(),
+  endDate: dateFilterSchema.optional(),
   search: z.string().trim().optional(),
 });
 

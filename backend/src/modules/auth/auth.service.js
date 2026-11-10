@@ -2,11 +2,16 @@ import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { env } from '../../config/env.js';
+import { getClient } from '../../config/database.js';
+import { logger } from '../../config/logger.js';
 import { userRepository } from '../../repositories/user.repository.js';
 import { auditRepository } from '../../repositories/audit.repository.js';
 import { accountRepository } from '../../repositories/account.repository.js';
 import { refreshTokenRepository } from '../../repositories/refresh-token.repository.js';
 import { AppError } from '../../utils/appError.js';
+
+const LOST_RESPONSE_RECOVERY_WINDOW_SECONDS = 30;
+const pendingLostResponseWrites = new Map();
 
 export class AuthService {
   /**
@@ -133,8 +138,9 @@ export class AuthService {
   }
 
   /**
-   * Rotate refresh token and issue new access token
-   * Detects reuse of previously rotated tokens for automated breach mitigation
+   * Rotate refresh token and issue new access token inside an atomic row-locked transaction.
+   * Detects reuse of previously rotated tokens for automated breach mitigation while supporting
+   * single-use recovery strictly for server-observed premature response closures.
    */
   async rotateRefreshToken(rawToken, context = {}) {
     if (!rawToken || typeof rawToken !== 'string') {
@@ -142,125 +148,324 @@ export class AuthService {
     }
 
     const tokenHash = this.hashToken(rawToken);
-    const record = await refreshTokenRepository.findByTokenHash(tokenHash);
 
-    if (!record) {
-      await auditRepository.create({
-        action: 'AUTH_REFRESH_TOKEN_INVALID',
-        resourceType: 'USER',
-        metadata: { reason: 'Refresh token not recognized in system' },
-        ipAddress: context.ipAddress,
-      });
-      throw AppError.unauthorized('Invalid or unrecognised refresh token');
+    // Ensure any in-flight lost-response audit write for this exact token completes before checking recovery state
+    const pendingWrite = pendingLostResponseWrites.get(tokenHash);
+    if (pendingWrite) {
+      await pendingWrite.catch(() => {});
     }
 
-    // Reuse detection: If token is already revoked and was replaced by another, flag security breach
-    if (record.revoked_at) {
-      if (record.replaced_by_token_hash) {
-        // Suspected token compromise: Revoke ALL active sessions for this user
-        await refreshTokenRepository.revokeAllForUser(record.user_id);
+    const client = await getClient();
+    let inTransaction = false;
+
+    try {
+      await client.query('BEGIN;');
+      inTransaction = true;
+
+      const record = await refreshTokenRepository.findByTokenHashForUpdate(tokenHash, client);
+
+      if (!record) {
+        await client.query('ROLLBACK;');
+        inTransaction = false;
         await auditRepository.create({
-          actorId: record.user_id,
-          action: 'AUTH_REFRESH_TOKEN_REUSE_DETECTED',
+          action: 'AUTH_REFRESH_TOKEN_INVALID',
           resourceType: 'USER',
-          resourceId: record.user_id,
-          metadata: {
-            compromisedTokenId: record.id,
-            warning: 'Reused previously rotated refresh token. All active sessions terminated.',
-          },
+          metadata: { reason: 'Refresh token not recognized in system' },
           ipAddress: context.ipAddress,
         });
-        throw AppError.unauthorized('Security violation: Session token reuse detected. All sessions revoked.');
+        throw AppError.unauthorized('Invalid or unrecognised refresh token');
       }
-      throw AppError.unauthorized('Refresh token has been revoked');
-    }
 
-    // Check expiration
-    if (new Date(record.expires_at) <= new Date()) {
-      throw AppError.unauthorized('Refresh token has expired. Please log in again.');
-    }
-
-    // Verify user status
-    const user = await userRepository.findById(record.user_id);
-    if (!user) {
-      throw AppError.unauthorized('User associated with session no longer exists');
-    }
-
-    if (!user.is_active) {
-      await auditRepository.create({
-        actorId: user.id,
-        action: 'AUTH_REFRESH_REFUSED',
-        resourceType: 'USER',
-        resourceId: user.id,
-        metadata: { reason: 'User account deactivated' },
-        ipAddress: context.ipAddress,
+      const buildSanitizedUser = (u) => ({
+        id: u.id,
+        fullName: u.full_name,
+        email: u.email,
+        role: u.role,
+        isActive: u.is_active,
+        createdAt: u.created_at,
       });
-      throw AppError.forbidden('User account is deactivated. Contact administrator.');
+
+      const issueRotatedToken = async ({ targetRecord, auditAction, auditResourceType = 'USER', auditResourceId, auditMetadata = null }) => {
+        const user = await userRepository.findById(targetRecord.user_id, client);
+        if (!user) {
+          await client.query('ROLLBACK;');
+          inTransaction = false;
+          throw AppError.unauthorized('User associated with session no longer exists');
+        }
+
+        if (!user.is_active) {
+          await auditRepository.create(
+            {
+              actorId: user.id,
+              action: 'AUTH_REFRESH_REFUSED',
+              resourceType: 'USER',
+              resourceId: user.id,
+              metadata: { reason: 'User account deactivated' },
+              ipAddress: context.ipAddress,
+            },
+            client
+          );
+          await client.query('COMMIT;');
+          inTransaction = false;
+          throw AppError.forbidden('User account is deactivated. Contact administrator.');
+        }
+
+        if (context.isClientAborted?.()) {
+          await client.query('ROLLBACK;');
+          inTransaction = false;
+          return { aborted: true };
+        }
+
+        const newRawToken = crypto.randomBytes(40).toString('hex');
+        const newTokenHash = this.hashToken(newRawToken);
+        const maxAgeDays = Number(env.REFRESH_TOKEN_EXPIRES_IN_DAYS) || 7;
+        const newExpiresAt = new Date(Date.now() + maxAgeDays * 24 * 60 * 60 * 1000);
+
+        const revoked = await refreshTokenRepository.revokeById(targetRecord.id, newTokenHash, client);
+        if (!revoked) {
+          await client.query('ROLLBACK;');
+          inTransaction = false;
+          throw AppError.unauthorized('Refresh token has been revoked');
+        }
+
+        await refreshTokenRepository.create(
+          {
+            userId: user.id,
+            tokenHash: newTokenHash,
+            expiresAt: newExpiresAt,
+            userAgent: context.userAgent || null,
+            ipAddress: context.ipAddress || null,
+          },
+          client
+        );
+
+        await auditRepository.create(
+          {
+            actorId: user.id,
+            action: auditAction,
+            resourceType: auditResourceType,
+            resourceId: auditResourceId,
+            metadata: auditMetadata,
+            ipAddress: context.ipAddress,
+          },
+          client
+        );
+
+        const sanitizedUser = buildSanitizedUser(user);
+        const newAccessToken = this.generateToken(sanitizedUser);
+
+        if (context.isClientAborted?.()) {
+          await client.query('ROLLBACK;');
+          inTransaction = false;
+          return { aborted: true };
+        }
+
+        await client.query('COMMIT;');
+        inTransaction = false;
+
+        return {
+          user: sanitizedUser,
+          token: newAccessToken,
+          refreshToken: newRawToken,
+          rotatedFromTokenId: targetRecord.id,
+          rotatedFromTokenHash: targetRecord.token_hash,
+          newTokenHash,
+        };
+      };
+
+      // Handle already-revoked tokens: single-use server-observed lost-response recovery vs genuine reuse detection
+      if (record.revoked_at) {
+        if (record.replaced_by_token_hash) {
+          const lostState = await auditRepository.findRefreshResponseLostState(
+            record.id,
+            LOST_RESPONSE_RECOVERY_WINDOW_SECONDS,
+            client
+          );
+          const hasOriginalUserAgent =
+            typeof record.user_agent === 'string' && record.user_agent.trim().length > 0;
+          const hasRetryUserAgent =
+            typeof context.userAgent === 'string' && context.userAgent.trim().length > 0;
+          const userAgentMatches =
+            hasOriginalUserAgent && hasRetryUserAgent && record.user_agent === context.userAgent;
+
+          if (lostState.hasRecentLostResponse && !lostState.alreadyRecovered && userAgentMatches) {
+            const successor = await refreshTokenRepository.findByTokenHashForUpdate(
+              record.replaced_by_token_hash,
+              client
+            );
+
+            if (
+              successor &&
+              !successor.revoked_at &&
+              !successor.replaced_by_token_hash &&
+              new Date(successor.expires_at) > new Date()
+            ) {
+              const recoveredResult = await issueRotatedToken({
+                targetRecord: successor,
+                auditAction: 'AUTH_REFRESH_RECOVERY_SUCCESS',
+                auditResourceType: 'REFRESH_TOKEN',
+                auditResourceId: record.id,
+                auditMetadata: {
+                  recoveredSuccessorId: successor.id,
+                  reason: 'Recovered rotation after server-observed premature response close',
+                },
+              });
+              return { ...recoveredResult, recovered: true };
+            }
+          }
+
+          // Genuine or ineligible token reuse: revoke ALL active sessions for this user and commit breach audit
+          await refreshTokenRepository.revokeAllForUser(record.user_id, client);
+          await auditRepository.create(
+            {
+              actorId: record.user_id,
+              action: 'AUTH_REFRESH_TOKEN_REUSE_DETECTED',
+              resourceType: 'USER',
+              resourceId: record.user_id,
+              metadata: {
+                compromisedTokenId: record.id,
+                warning: 'Reused previously rotated refresh token. All active sessions terminated.',
+              },
+              ipAddress: context.ipAddress,
+            },
+            client
+          );
+          await client.query('COMMIT;');
+          inTransaction = false;
+          throw AppError.unauthorized('Security violation: Session token reuse detected. All sessions revoked.');
+        }
+
+        await client.query('ROLLBACK;');
+        inTransaction = false;
+        throw AppError.unauthorized('Refresh token has been revoked');
+      }
+
+      if (new Date(record.expires_at) <= new Date()) {
+        await client.query('ROLLBACK;');
+        inTransaction = false;
+        throw AppError.unauthorized('Refresh token has expired. Please log in again.');
+      }
+
+      return await issueRotatedToken({
+        targetRecord: record,
+        auditAction: 'AUTH_REFRESH_SUCCESS',
+        auditResourceType: 'USER',
+        auditResourceId: record.user_id,
+      });
+    } catch (error) {
+      if (inTransaction) {
+        await client.query('ROLLBACK;').catch(() => {});
+      }
+      throw error;
+    } finally {
+      client.release();
     }
-
-    // Generate new rotated refresh token
-    const newRawToken = crypto.randomBytes(40).toString('hex');
-    const newTokenHash = this.hashToken(newRawToken);
-    const maxAgeDays = Number(env.REFRESH_TOKEN_EXPIRES_IN_DAYS) || 7;
-    const newExpiresAt = new Date(Date.now() + maxAgeDays * 24 * 60 * 60 * 1000);
-
-    // Revoke old token and link to replacement token
-    await refreshTokenRepository.revokeById(record.id, newTokenHash);
-
-    // Persist new token record
-    await refreshTokenRepository.create({
-      userId: user.id,
-      tokenHash: newTokenHash,
-      expiresAt: newExpiresAt,
-      userAgent: context.userAgent || null,
-      ipAddress: context.ipAddress || null,
-    });
-
-    await auditRepository.create({
-      actorId: user.id,
-      action: 'AUTH_REFRESH_SUCCESS',
-      resourceType: 'USER',
-      resourceId: user.id,
-      ipAddress: context.ipAddress,
-    });
-
-    const sanitizedUser = {
-      id: user.id,
-      fullName: user.full_name,
-      email: user.email,
-      role: user.role,
-      isActive: user.is_active,
-      createdAt: user.created_at,
-    };
-
-    const newAccessToken = this.generateToken(sanitizedUser);
-
-    return {
-      user: sanitizedUser,
-      token: newAccessToken,
-      refreshToken: newRawToken,
-    };
   }
 
   /**
-   * Invalidate refresh token session on user logout
+   * Record that a committed refresh rotation response failed to complete socket delivery.
+   * Never stores raw tokens or hashes in audit metadata.
+   */
+  markRefreshResponseLost({ tokenId, userId, replacedTokenHash, ipAddress = null }) {
+    if (!tokenId || !replacedTokenHash) {
+      return Promise.resolve();
+    }
+
+    const writePromise = auditRepository
+      .create({
+        actorId: userId || null,
+        action: 'AUTH_REFRESH_RESPONSE_LOST',
+        resourceType: 'REFRESH_TOKEN',
+        resourceId: String(tokenId),
+        metadata: {
+          reason: 'Client closed connection before refresh response completion',
+        },
+        ipAddress,
+      })
+      .catch((err) => {
+        logger.error(
+          {
+            action: 'AUTH_REFRESH_RESPONSE_LOST',
+            tokenId: String(tokenId),
+            userId: userId || null,
+            errorCode: err?.code || null,
+            errorMessage: err?.message || 'Unknown audit persistence error',
+          },
+          'Failed to persist AUTH_REFRESH_RESPONSE_LOST audit event; lost-response recovery remains disabled (fail-closed)'
+        );
+        return null;
+      })
+      .finally(() => {
+        if (pendingLostResponseWrites.get(replacedTokenHash) === writePromise) {
+          pendingLostResponseWrites.delete(replacedTokenHash);
+        }
+      });
+
+    pendingLostResponseWrites.set(replacedTokenHash, writePromise);
+    return writePromise;
+  }
+
+  /**
+   * Invalidate refresh token session on user logout inside an atomic row-locked transaction.
+   * Follows replacement chain if the token was concurrently rotated before logout acquired the lock.
    */
   async logout(rawToken, context = {}) {
-    if (rawToken && typeof rawToken === 'string') {
-      const tokenHash = this.hashToken(rawToken);
-      const revoked = await refreshTokenRepository.revokeByTokenHash(tokenHash);
-
-      if (revoked) {
-        await auditRepository.create({
-          actorId: revoked.user_id,
-          action: 'AUTH_LOGOUT_SUCCESS',
-          resourceType: 'USER',
-          resourceId: revoked.user_id,
-          ipAddress: context.ipAddress,
-        });
-      }
+    if (!rawToken || typeof rawToken !== 'string') {
+      return true;
     }
-    return true;
+
+    const tokenHash = this.hashToken(rawToken);
+    const client = await getClient();
+    let inTransaction = false;
+
+    try {
+      await client.query('BEGIN;');
+      inTransaction = true;
+
+      let current = await refreshTokenRepository.findByTokenHashForUpdate(tokenHash, client);
+      let revokedUserId = null;
+      const visited = new Set();
+
+      while (current && !visited.has(current.id)) {
+        visited.add(current.id);
+        if (!current.revoked_at) {
+          const revoked = await refreshTokenRepository.revokeById(current.id, null, client);
+          if (revoked) {
+            revokedUserId = revoked.user_id;
+          }
+          break;
+        }
+        if (current.replaced_by_token_hash) {
+          current = await refreshTokenRepository.findByTokenHashForUpdate(current.replaced_by_token_hash, client);
+        } else {
+          break;
+        }
+      }
+
+      if (revokedUserId) {
+        await auditRepository.create(
+          {
+            actorId: revokedUserId,
+            action: 'AUTH_LOGOUT_SUCCESS',
+            resourceType: 'USER',
+            resourceId: revokedUserId,
+            ipAddress: context.ipAddress,
+          },
+          client
+        );
+      }
+
+      await client.query('COMMIT;');
+      inTransaction = false;
+      return true;
+    } catch (error) {
+      if (inTransaction) {
+        await client.query('ROLLBACK;').catch(() => {});
+      }
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /**

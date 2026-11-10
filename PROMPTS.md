@@ -1571,9 +1571,180 @@ Update THREATS.md, API_DOCUMENTATION.md, PROMPTS.md with permission matrix, mone
 
 ---
 
+### Session 8: Authentication Persistence and Refresh-Token Race Condition Remediation
+
+**Date:** 2026-11-09
+
+#### 1. Objective
+Investigate and fix the authentication issue where refreshing the browser logs out the current user under React 19 `StrictMode`, in-memory access token storage, HttpOnly refresh token cookies, Axios request/response interceptors, and backend refresh token rotation with token reuse detection.
+
+#### 2. Original AI Prompt
+```text
+# LedgerLine — Authentication Persistence and Refresh-Token Race Condition Remediation
+
+## Objective
+Investigate and fix the authentication issue where refreshing the browser logs out the current user.
+
+The current implementation uses:
+- React 19 with React.StrictMode.
+- React Context API for authentication state.
+- In-memory access-token storage.
+- HttpOnly refresh-token cookies.
+- Axios request and response interceptors.
+- Backend refresh-token rotation and reuse detection.
+
+The current AuthContext.jsx calls authService.refreshToken() during application initialization. React StrictMode performs an additional effect setup/cleanup cycle in development. The application currently has no shared in-flight promise protecting session restoration from duplicate requests.
+
+This may cause multiple /auth/refresh requests using the same refresh token, resulting in backend session reuse detection and session revocation.
+
+## Required remediation
+1. Centralized refresh coordination: Single shared in-flight refresh operation across app initialization, concurrent API requests, and 401 recovery.
+2. React StrictMode compatibility: Ensure effect setup/cleanup cycle is safe without disabling StrictMode or adding artificial timeouts.
+3. Authentication state restoration: Restore session from cookie, retrieve authoritative /auth/me profile, gate routes with loading state.
+4. Preserve security: Do not disable rotation or reuse detection, do not store tokens in localStorage, keep HttpOnly cookies.
+5. Error handling: Distinguish network failure, server error, expired cookie, revoked token, and deactivated account.
+6. Verification: Isolated test database, automated regression tests for duplicate initialization and concurrent refresh behavior.
+```
+
+#### 3. AI Suggestion & Root Cause Analysis
+- **Reproduction & Confirmed Root Cause:**
+  1. Under React 19 `StrictMode` in development, React mounts the component tree, unmounts it, and immediately mounts it again.
+  2. `AuthContext.jsx` called `authService.refreshToken()` on mount. Without an in-flight promise coordinator, both mount effect cycles fired independent `POST /api/v1/auth/refresh` requests carrying the identical initial refresh token cookie.
+  3. The first request reached the backend, successfully rotated the token, marked the predecessor token as revoked (`revoked_at = NOW()`, `replaced_by_token_hash = hash(new)`), and set the rotated cookie.
+  4. The second concurrent request arrived bearing the predecessor token. The backend detected that the token was revoked and replaced, which by design triggered **Token Reuse Detection** (`AUTH_REFRESH_TOKEN_REUSE_DETECTED`).
+  5. As an automated breach mitigation defense, the backend executed `refreshTokenRepository.revokeAllForUser()`, immediately terminating all active sessions for the user and returning `401 Unauthorized`.
+  6. The second effect caught the 401 error, wiped client authentication state, and permanently logged the user out.
+- **Architectural Remedy Suggested:**
+  - Create a centralized single-flight refresh coordinator (`requestTokenRefresh`) in `api.js` that returns a single shared `Promise` instance for all concurrent refresh callers.
+  - Implement Web Locks API (`navigator.locks.request('ledgerline_refresh_lock')`) and `BroadcastChannel` to synchronize token rotation across multiple browser tabs and prevent cross-tab races.
+  - Implement an `authEpoch` state sequence counter to detect and discard stale in-flight refresh responses if the user logs out or switches accounts during request transit.
+  - Guard `AuthContext.jsx` initialization with strict `isMounted` checks and route loading screens (`isLoading`) so route guards never redirect prematurely.
+  - Implement a diagnostic `classifyAuthError()` helper to cleanly separate transient network/server errors from genuine session expiration or account deactivation.
+
+#### 4. Human Review and Engineering Decisions
+- **Preserve Strict Backend Security:** Backend refresh-token rotation and token reuse detection remained completely intact and untouched. The solution addressed the root race condition at the client coordination layer.
+- **Pure Promise Deduplication:** Completely eliminated the legacy `isRefreshing` boolean flag and `refreshSubscribers` callback array in `api.js`. Replaced with direct Promise sharing so all concurrent 401 requests await the same `requestTokenRefresh()` Promise instance and retry cleanly.
+- **Zero Artificial Delays:** Rejected artificial `setTimeout` workarounds. StrictMode safety is achieved mathematically through synchronous Promise instance reuse (`p1 === p2`).
+- **Network Resilience:** Guaranteed that network failures (`ERR_NETWORK`) and 5xx server errors do NOT clear the HttpOnly cookie or emit `ledgerline:session_expired`.
+
+#### 5. Implementation Record
+- `frontend/src/services/api.js`:
+  - Implemented centralized `requestTokenRefresh()` returning shared `inFlightRefreshPromise` (synchronous function returning the active Promise instance reference).
+  - Integrated Web Locks API (`navigator.locks.request`) for cross-tab rotation serialization.
+  - Integrated `BroadcastChannel('ledgerline_auth_channel')` for multi-tab event propagation (`TOKEN_REFRESHED`, `LOGOUT`, `SESSION_EXPIRED`).
+  - Added `authEpoch` counter and `bumpAuthEpoch()` to discard stale responses.
+  - Created dedicated un-intercepted `rawAuthClient` for `/auth/refresh` to guarantee zero recursive interceptor loops.
+  - Implemented `classifyAuthError()` categorizing `NETWORK_ERROR`, `SERVER_ERROR`, `ACCOUNT_DEACTIVATED`, `TOKEN_REUSE`, `TOKEN_EXPIRED`, `TOKEN_REVOKED`, and `TOKEN_MISSING_OR_INVALID`.
+  - Refactored Axios 401 response interceptor to await `requestTokenRefresh()` directly and retry cleanly with `Bearer ${token}`.
+- `frontend/src/services/authService.js`:
+  - Updated `refreshToken()` to call centralized `requestTokenRefresh()`.
+  - Added `bumpAuthEpoch()` and cross-tab broadcasts on `login()`, `register()`, and `logout()`.
+- `frontend/src/context/AuthContext.jsx`:
+  - Fortified `initializeAuth()` with strict `isMounted` checks preventing unmounted StrictMode cleanup cycles from updating state or dispatching requests.
+  - Handled `/auth/me` authoritative profile sync with safe fallback to refresh user on transient fetch errors.
+  - Added cross-tab `BroadcastChannel` event listener to synchronize logouts and session expirations across all open tabs.
+- `frontend/tests/authCoordination.test.js`:
+  - Created 11 automated unit tests verifying error classification, in-flight promise instance sharing (`p1 === p2`), stale epoch protection, and bearer header injection.
+- `backend/tests/integration/auth_refresh_race.test.js`:
+  - Created 6 integration tests verifying role-based session restoration (`ADMIN`, `AUDITOR`, `ACCOUNT_HOLDER`), reproducing the uncoordinated reuse race condition, proving coordinated sequential refresh success, and testing logout/re-login.
+- Documentation:
+  - Updated `README.md`, `backend/docs/API_DOCUMENTATION.md`, `THREATS.md`, and `PROMPTS.md`.
+
+#### 6. Verification
+- **Frontend Coordination Tests:** `node --test frontend/tests/authCoordination.test.js` passed 11/11 tests (0 failures).
+- **Backend Race & Integration Tests:** `npm --prefix backend test -- tests/integration/auth_refresh_race.test.js` passed 6/6 tests (0 failures).
+- **Existing Cookie Auth Tests:** `npm --prefix backend test -- tests/integration/cookie_auth.test.js` passed 8/8 tests (0 failures).
+- **Frontend Production Build:** `npm --prefix frontend run build` built successfully in 250ms with zero errors.
+
+---
+
+### Session 9: Day 5 Authentication Stabilization, Admin & Auditor Verification, Full Regression & Threat Updates
+
+**Date:** 2026-11-10
+
+#### 1. Objective
+Investigate recurring `POST /api/v1/auth/refresh` failures (`200 OK` premature close, `401 Unauthorized`, and `Security violation: Session token reuse detected. All sessions revoked.`), stabilize frontend and backend refresh/logout coordination, verify and remediate the Admin and Auditor portals and RBAC protections, run the full regression test suites, and update project documentation without modifying production database records, running schema migrations, or committing/deploying.
+
+#### 2. Original Prompt & Checkpoint Instructions
+- Prompt instructed end-to-end investigation of frontend refresh coordination (`api.js`, `authService.js`, `AuthContext.jsx`, `main.jsx`), backend rotation/reuse detection/logging (`auth.controller.js`, `auth.service.js`, `refresh-token.repository.js`, `requestLogger.js`, cookie/transaction helpers), Admin dashboard/management pages, Auditor dashboard/permissions, focused + full regression testing, and documentation updates (`PROMPTS.md`, `THREATS.md`), with strict requirement to propose backend lost-response recovery before editing backend code and never invent mock data or weaken security/tests.
+- Explicit user checkpoint approval (2026-11-10):
+  > "Proceed with Option A and the four test corrections, followed by the Admin/Auditor fixes. Stop and report if Option A requires a schema change or cannot be implemented safely without one."
+
+#### 3. Key Findings & AI Architectural Suggestions
+- **Authentication Root Causes Identified:**
+  1. In `frontend/src/services/api.js`, `navigator.locks.request(...).catch((lockErr) => runRefreshWithEpochChecks())` caught both pre-callback Web Locks acquisition errors and in-callback HTTP/timeout/401 errors (`rawAuthClient` had a `10000ms` timeout), executing uncoordinated duplicate `/auth/refresh` requests outside the lock or masking `401` rejections after `authEpoch` transitioned.
+  2. `backend/src/modules/auth/auth.service.js` (`rotateRefreshToken`) operated outside an explicit transaction without `SELECT ... FOR UPDATE`, without `AND revoked_at IS NULL` conditional updates on `revokeById`, and without client-abort `ROLLBACK`; `requestLogger.js` left `statusCode = 200` on premature disconnects before `res.headersSent` and checked `!res.writableEnded` instead of `!res.writableFinished`.
+  3. Post-commit premature closes dropped the rotated cookie before reaching the browser, leaving the client retrying with `RT_1` against a committed `RT_1 -> RT_2` row and triggering `401` token reuse detection (`revokeAllForUser`).
+  4. `authService.logout()` needed a same-tab await on `inFlightRefreshPromise` + backend `FOR UPDATE` replacement-chain traversal; `BroadcastChannel` `TOKEN_REFRESHED` lacked a post-logout resurrection guard; `TOKEN_MISSING_OR_INVALID` emitted UI `ledgerline:session_expired` banners on unauthenticated visits.
+- **Proposed & Approved Option A:**
+  - Confirmed zero DB schema migrations required (`refresh_tokens` and `audit_events` tables and `ledgerline_runtime` role permissions already support Option A).
+  - Implemented transactional row-locked rotation, pre-commit abort `ROLLBACK`, `499` premature close status logging when `!res.headersSent`, and server-observed single-use 30-second recovery restricted via `AUTH_REFRESH_RESPONSE_LOST` + unused successor + matching `User-Agent` + active user check (no raw/hashed tokens in `audit_events`).
+- **Admin, Auditor & Baseline Test Findings:**
+  - Verified Admin telemetry metrics (`totalUsers`, `totalAccounts`, `totalVaultBalancePaise`, transaction counts/volumes, `totalAuditLogs`) derive directly from PostgreSQL aggregates in `admin.service.js`, with three targeted defects: `trendsQuery` returned oldest 14 days instead of latest 14 days; `updateUserStatus` lacked runtime boolean check on `isActive`; frontend pages had shifted retry/refresh handler arguments (`Users`, `AccountManagement`, `Ledger`), floating-point `Number(...) / 100` math and `Number("1,500.00") -> NaN` in `GlobalLedgerTable`, misleading offline health fallbacks (`'NORMAL'`/`'Active'`/`'PostgreSQL Neon'`) in `AdminDashboard`, fabricated fallback actor email/IP (`'system@ledgerline.internal'`, `'127.0.0.1'`) in `ledgerService.js`, exposed UUIDs in `AuditorDashboard` `Target Resource`, KPI overwrite when filtering Tab 1 in `AuditorDashboard`, red `'-'` prefix on Admin/Auditor system-wide `TRANSFER` rows in `Transactions`, incomplete audit action dropdowns (`AuditorDashboard`, `AuditEvents`), and `YYYY-MM-DD` date-filter rejection/midnight truncation across `transaction.validation.js`, `account.validation.js`, `transaction.repository.js`, `ledger.repository.js`, and `audit.repository.js`.
+  - Baseline Jest suite surfaced 4 stale assertions in pre-existing tests (`authorization.test.js` x3 expecting legacy `'Auditors are restricted'` message instead of current `authorize('ACCOUNT_HOLDER')` error envelope; `api_verification_audit.test.js` x1 reading `res.body.data.accountNumber` instead of `res.body.data.account.accountNumber`).
+
+#### 4. Human Review and Decisions
+- Verified Option A compatibility with existing PostgreSQL schema and runtime role privileges; approved executing Option A + the 4 test corrections + Admin/Auditor fixes.
+- Preserved React `StrictMode` (`frontend/src/main.jsx`), preserved refresh rotation and genuine reuse revocation, kept access tokens in-memory only and refresh tokens in `HttpOnly` cookies, and left database schema, migrations, git history, and production DB untouched.
+
+#### 5. Actual Files Changed
+- **Backend Authentication & Logging:**
+  - `backend/src/repositories/refresh-token.repository.js`
+  - `backend/src/repositories/audit.repository.js`
+  - `backend/src/modules/auth/auth.service.js`
+  - `backend/src/modules/auth/auth.controller.js`
+  - `backend/src/middleware/requestLogger.js`
+- **Frontend Authentication Coordination:**
+  - `frontend/src/services/api.js`
+  - `frontend/src/services/authService.js`
+  - `frontend/src/context/AuthContext.jsx`
+- **Admin, Auditor & Financial Precision Fixes:**
+  - `backend/src/modules/admin/admin.service.js`
+  - `backend/src/modules/transactions/transaction.validation.js`
+  - `backend/src/modules/accounts/account.validation.js`
+  - `backend/src/repositories/transaction.repository.js`
+  - `backend/src/repositories/ledger.repository.js`
+  - `frontend/src/pages/AdminDashboard/index.jsx`
+  - `frontend/src/pages/Users/index.jsx`
+  - `frontend/src/pages/AccountManagement/index.jsx`
+  - `frontend/src/pages/Ledger/index.jsx`
+  - `frontend/src/pages/AuditEvents/index.jsx`
+  - `frontend/src/pages/AuditorDashboard/index.jsx`
+  - `frontend/src/pages/Transactions/index.jsx`
+  - `frontend/src/components/GlobalLedgerTable/index.jsx`
+  - `frontend/src/services/adminService.js`
+  - `frontend/src/services/ledgerService.js`
+- **Tests & Documentation:**
+  - `frontend/tests/authCoordination.test.js`
+  - `backend/tests/integration/auth_refresh_race.test.js`
+  - `backend/tests/integration/authorization.test.js`
+  - `backend/tests/integration/api_verification_audit.test.js`
+  - `backend/tests/integration/admin_dashboard.test.js`
+  - `THREATS.md`, `PROMPTS.md`
+
+#### 6. Tests Performed & Verified Outcomes
+- **Frontend Auth Coordination Suite:** `node --test frontend/tests/authCoordination.test.js` — **25 passed, 0 failed, 0 skipped** (5 suites covering error classification, React StrictMode single-flight deduplication, Web Locks fail-closed acquisition rejection, simultaneous multi-tab `BroadcastChannel` + Web Locks coordination, logout/refresh mutual serialization, `ECONNABORTED`/`ERR_CANCELED`, and missing-cookie UI suppression).
+- **Frontend Production Build:** `npm --prefix frontend run build` — **passed** (`vite v8.3.6` transformed 1794 modules and built `dist/` in 402ms).
+- **Full Backend Regression Suite (`npm --prefix backend test` against isolated `ledgerline_test` database):** **13/13 suites passed, 180/180 tests passed, 0 failed, 0 skipped** (895.067s total):
+  - `tests/integration/account_number_transfer.test.js`: 20/20 passed
+  - `tests/integration/idempotency.test.js`: 9/9 passed
+  - `tests/integration/ledger_immutability.test.js`: 8/8 passed
+  - `tests/integration/auth_refresh_race.test.js`: 11/11 passed (includes concurrency `Promise.all`, pre-commit abort `ROLLBACK`, post-commit single-use recovery & replay revocation, User-Agent check, replacement-chain logout)
+  - `tests/integration/admin_dashboard.test.js`: 14/14 passed (includes `isActive` boolean validation and `YYYY-MM-DD` date filters)
+  - `tests/integration/authorization.test.js`: 12/12 passed
+  - `tests/integration/api_verification_audit.test.js`: 30/30 passed
+  - `tests/integration/transactions.test.js`: 4/4 passed
+  - `tests/integration/role_authorization_day5.test.js`: 36/36 passed
+  - `tests/integration/cookie_auth.test.js`: 8/8 passed
+  - `tests/integration/concurrency.test.js`: 2/2 passed
+  - `tests/integration/auth.test.js`: 18/18 passed
+  - `tests/unit/money.test.js`: 8/8 passed
+
+---
+
 ## Documentation Notes
 
 - All original prompts are genuine, verbatim records extracted from active conversation history.
-- Historical session records (Sessions 1–7) are preserved in their entirety.
+- Historical session records (Sessions 1–8) are preserved in their entirety.
 - Clearly distinguishes AI architectural suggestions from human review and implementation decisions.
-- Real Git commit hashes are documented for full provenance and traceability.
+- Real Git commit hashes are documented for full provenance and traceability (Session 9 remains uncommitted pending user review).

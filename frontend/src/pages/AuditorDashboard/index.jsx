@@ -271,19 +271,21 @@ const AuditorDashboard = () => {
       const pages = data?.pagination?.totalPages || (totalCount > 0 ? Math.ceil(totalCount / ledgerPageSize) : 1);
       setLedgerTotalPages(Math.max(1, pages));
 
-      if (data?.totalCreditsFormatted) {
-        setTotalCreditsFormatted(
-          data.totalCreditsFormatted.startsWith('₹')
-            ? data.totalCreditsFormatted
-            : `₹${data.totalCreditsFormatted}`
-        );
-      }
-      if (data?.totalDebitsFormatted) {
-        setTotalDebitsFormatted(
-          data.totalDebitsFormatted.startsWith('₹')
-            ? data.totalDebitsFormatted
-            : `₹${data.totalDebitsFormatted}`
-        );
+      if (ledgerTypeFilter === 'ALL' && !ledgerSearch.trim()) {
+        if (data?.totalCreditsFormatted) {
+          setTotalCreditsFormatted(
+            data.totalCreditsFormatted.startsWith('₹')
+              ? data.totalCreditsFormatted
+              : `₹${data.totalCreditsFormatted}`
+          );
+        }
+        if (data?.totalDebitsFormatted) {
+          setTotalDebitsFormatted(
+            data.totalDebitsFormatted.startsWith('₹')
+              ? data.totalDebitsFormatted
+              : `₹${data.totalDebitsFormatted}`
+          );
+        }
       }
     } catch (err) {
       setError('Unable to load institutional global ledger journal entries.');
@@ -533,12 +535,27 @@ const AuditorDashboard = () => {
     },
     {
       header: 'Target Resource',
-      accessor: 'resource',
-      render: (row) => (
-        <span style={{ fontFamily: 'monospace', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-          {row.resource || '—'}
-        </span>
-      ),
+      accessor: 'resourceType',
+      render: (row) => {
+        const meta = row.metadata && typeof row.metadata === 'object' ? row.metadata : {};
+        const friendlyTarget =
+          meta.accountNumber ||
+          meta.transactionReference ||
+          meta.reference ||
+          meta.email ||
+          null;
+        const label = friendlyTarget
+          ? `${row.resourceType || 'RESOURCE'} · ${friendlyTarget}`
+          : (row.resourceType || 'SYSTEM');
+        return (
+          <span
+            title={row.resourceId ? `Resource ID: ${row.resourceId}` : undefined}
+            style={{ fontFamily: 'monospace', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}
+          >
+            {label}
+          </span>
+        );
+      },
     },
     {
       header: 'Timestamp',
@@ -974,9 +991,19 @@ const AuditorDashboard = () => {
                     <option value="AUTH_LOGIN_SUCCESS">Login Success</option>
                     <option value="AUTH_LOGIN_FAILURE">Login Failure</option>
                     <option value="AUTH_LOGIN_REFUSED">Login Refused</option>
+                    <option value="AUTH_REGISTER_SUCCESS">Register Success</option>
+                    <option value="AUTH_REGISTER_FAILURE">Register Failure</option>
+                    <option value="AUTH_LOGOUT_SUCCESS">Logout Success</option>
+                    <option value="AUTH_REFRESH_SUCCESS">Token Refresh Success</option>
+                    <option value="AUTH_REFRESH_TOKEN_INVALID">Refresh Token Invalid</option>
+                    <option value="AUTH_REFRESH_TOKEN_REUSE_DETECTED">Token Reuse Detected</option>
+                    <option value="AUTH_REFRESH_REFUSED">Token Refresh Refused</option>
+                    <option value="AUTH_REFRESH_RESPONSE_LOST">Refresh Response Lost</option>
+                    <option value="AUTH_REFRESH_RECOVERY_SUCCESS">Refresh Recovery Success</option>
                     <option value="ACCOUNT_CREATED">Account Created</option>
                     <option value="ADMIN_USER_STATUS_UPDATED">User Status Changed</option>
                     <option value="ADMIN_ACCOUNT_STATUS_UPDATED">Account Status Changed</option>
+                    <option value="INITIAL_SEED_DEPOSIT">Initial Seed Deposit</option>
                     <option value="TRANSACTION_DEPOSIT_SUCCESS">Deposit Success</option>
                     <option value="TRANSACTION_DEPOSIT_REFUSED">Deposit Refused</option>
                     <option value="TRANSACTION_WITHDRAW_SUCCESS">Withdraw Success</option>
@@ -1428,7 +1455,7 @@ const AuditorDashboard = () => {
                       Ledger Calculated Net Sum
                     </div>
                     <div style={{ fontSize: '0.875rem', fontWeight: 700 }} className="tabular-nums">
-                      ₹{(Number(accountLedgerData.ledgerCalculatedBalancePaise) / 100).toFixed(2)}
+                      {formatPaise(accountLedgerData.ledgerCalculatedBalancePaise ?? 0)}
                     </div>
                   </div>
                 </div>
@@ -1476,11 +1503,15 @@ const AuditorDashboard = () => {
                                   color: (ent.entryType || ent.entry_type) === 'CREDIT' ? 'var(--success-color)' : 'var(--text-color)',
                                 }}
                               >
-                                {(ent.entryType || ent.entry_type) === 'CREDIT' ? '+' : '-'}₹
-                                {ent.amountFormatted || (Number(ent.amountPaise || ent.amount || 0) / 100).toFixed(2)}
+                                {(ent.entryType || ent.entry_type) === 'CREDIT' ? '+' : '-'}
+                                {ent.amountFormatted
+                                  ? (ent.amountFormatted.startsWith('₹') ? ent.amountFormatted : `₹${ent.amountFormatted}`)
+                                  : formatPaise(ent.amountPaise ?? ent.amount ?? 0)}
                               </td>
                               <td style={{ padding: '6px 8px', textAlign: 'right', fontFamily: 'monospace' }}>
-                                ₹{ent.balanceAfterFormatted || (Number(ent.balanceAfterPaise || ent.balance_after || 0) / 100).toFixed(2)}
+                                {ent.balanceAfterFormatted
+                                  ? (ent.balanceAfterFormatted.startsWith('₹') ? ent.balanceAfterFormatted : `₹${ent.balanceAfterFormatted}`)
+                                  : formatPaise(ent.balanceAfterPaise ?? ent.balance_after ?? 0)}
                               </td>
                             </tr>
                           ))}

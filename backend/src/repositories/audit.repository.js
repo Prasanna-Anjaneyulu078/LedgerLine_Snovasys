@@ -92,7 +92,11 @@ export class AuditRepository {
     }
 
     if (endDate) {
-      params.push(endDate);
+      const normalizedEndDate =
+        typeof endDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(endDate.trim())
+          ? `${endDate.trim()}T23:59:59.999Z`
+          : endDate;
+      params.push(normalizedEndDate);
       conditions.push(`ae.created_at <= $${params.length}`);
     }
 
@@ -154,7 +158,11 @@ export class AuditRepository {
     }
 
     if (endDate) {
-      params.push(endDate);
+      const normalizedEndDate =
+        typeof endDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(endDate.trim())
+          ? `${endDate.trim()}T23:59:59.999Z`
+          : endDate;
+      params.push(normalizedEndDate);
       conditions.push(`ae.created_at <= $${params.length}`);
     }
 
@@ -174,6 +182,36 @@ export class AuditRepository {
 
     const res = await client.query(sql, params);
     return res.rows;
+  }
+
+  /**
+   * Inspect recent lost-response / recovery audit events for a specific rotated refresh token ID
+   */
+  async findRefreshResponseLostState(tokenId, windowSeconds = 30, client = pool) {
+    const sql = `
+      SELECT
+        EXISTS (
+          SELECT 1
+          FROM audit_events
+          WHERE resource_type = 'REFRESH_TOKEN'
+            AND resource_id = $1
+            AND action = 'AUTH_REFRESH_RESPONSE_LOST'
+            AND created_at >= NOW() - ($2::int * INTERVAL '1 second')
+        ) AS has_recent_lost_response,
+        EXISTS (
+          SELECT 1
+          FROM audit_events
+          WHERE resource_type = 'REFRESH_TOKEN'
+            AND resource_id = $1
+            AND action = 'AUTH_REFRESH_RECOVERY_SUCCESS'
+        ) AS already_recovered;
+    `;
+    const res = await client.query(sql, [String(tokenId), Number(windowSeconds) || 30]);
+    const row = res.rows[0] || {};
+    return {
+      hasRecentLostResponse: Boolean(row.has_recent_lost_response),
+      alreadyRecovered: Boolean(row.already_recovered),
+    };
   }
 }
 

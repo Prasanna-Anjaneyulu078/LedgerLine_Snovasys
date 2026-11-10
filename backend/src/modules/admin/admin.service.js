@@ -57,18 +57,31 @@ export class AdminService {
 
     const trendsQuery = `
       SELECT
-        TO_CHAR(DATE_TRUNC('day', created_at), 'YYYY-MM-DD') as date,
-        count(*)::int as total_count,
-        count(*) FILTER (WHERE transaction_type = 'DEPOSIT' AND status = 'SUCCESS')::int as deposit_count,
-        count(*) FILTER (WHERE transaction_type = 'WITHDRAWAL' AND status = 'SUCCESS')::int as withdrawal_count,
-        count(*) FILTER (WHERE transaction_type = 'TRANSFER' AND status = 'SUCCESS')::int as transfer_count,
-        COALESCE(SUM(amount) FILTER (WHERE transaction_type = 'DEPOSIT' AND status = 'SUCCESS'), 0)::text as deposit_volume_paise,
-        COALESCE(SUM(amount) FILTER (WHERE transaction_type = 'WITHDRAWAL' AND status = 'SUCCESS'), 0)::text as withdrawal_volume_paise,
-        COALESCE(SUM(amount) FILTER (WHERE transaction_type = 'TRANSFER' AND status = 'SUCCESS'), 0)::text as transfer_volume_paise
-      FROM transactions
-      GROUP BY DATE_TRUNC('day', created_at)
-      ORDER BY DATE_TRUNC('day', created_at) ASC
-      LIMIT 14;
+        date,
+        total_count,
+        deposit_count,
+        withdrawal_count,
+        transfer_count,
+        deposit_volume_paise,
+        withdrawal_volume_paise,
+        transfer_volume_paise
+      FROM (
+        SELECT
+          DATE_TRUNC('day', created_at) as day_bucket,
+          TO_CHAR(DATE_TRUNC('day', created_at), 'YYYY-MM-DD') as date,
+          count(*)::int as total_count,
+          count(*) FILTER (WHERE transaction_type = 'DEPOSIT' AND status = 'SUCCESS')::int as deposit_count,
+          count(*) FILTER (WHERE transaction_type = 'WITHDRAWAL' AND status = 'SUCCESS')::int as withdrawal_count,
+          count(*) FILTER (WHERE transaction_type = 'TRANSFER' AND status = 'SUCCESS')::int as transfer_count,
+          COALESCE(SUM(amount) FILTER (WHERE transaction_type = 'DEPOSIT' AND status = 'SUCCESS'), 0)::text as deposit_volume_paise,
+          COALESCE(SUM(amount) FILTER (WHERE transaction_type = 'WITHDRAWAL' AND status = 'SUCCESS'), 0)::text as withdrawal_volume_paise,
+          COALESCE(SUM(amount) FILTER (WHERE transaction_type = 'TRANSFER' AND status = 'SUCCESS'), 0)::text as transfer_volume_paise
+        FROM transactions
+        GROUP BY DATE_TRUNC('day', created_at)
+        ORDER BY DATE_TRUNC('day', created_at) DESC
+        LIMIT 14
+      ) recent_days
+      ORDER BY day_bucket ASC;
     `;
 
     const recentTxnsQuery = `
@@ -235,6 +248,10 @@ export class AdminService {
   }
 
   async updateUserStatus(userId, isActive, adminUser, context = {}) {
+    if (typeof isActive !== 'boolean') {
+      throw AppError.badRequest('isActive boolean status flag is required');
+    }
+
     const user = await userRepository.findById(userId);
     if (!user) {
       throw AppError.notFound('User not found');

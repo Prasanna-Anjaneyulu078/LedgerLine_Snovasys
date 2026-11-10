@@ -54,13 +54,22 @@ export class LedgerRepository {
     const conditions = ['le.account_id = $1'];
     const params = [accountId];
 
-    if (startDate) {
-      params.push(startDate);
+    const normalizedStartDate =
+      typeof startDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(startDate.trim())
+        ? `${startDate.trim()}T00:00:00.000Z`
+        : startDate;
+    const normalizedEndDate =
+      typeof endDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(endDate.trim())
+        ? `${endDate.trim()}T23:59:59.999Z`
+        : endDate;
+
+    if (normalizedStartDate) {
+      params.push(normalizedStartDate);
       conditions.push(`le.created_at >= $${params.length}`);
     }
 
-    if (endDate) {
-      params.push(endDate);
+    if (normalizedEndDate) {
+      params.push(normalizedEndDate);
       conditions.push(`le.created_at <= $${params.length}`);
     }
 
@@ -82,7 +91,7 @@ export class LedgerRepository {
 
     // 2. Opening Balance Query: Balance immediately before startDate (or 0n if no prior entries/inception)
     let openingBalancePaise = 0n;
-    if (startDate) {
+    if (normalizedStartDate) {
       const priorSql = `
         SELECT balance_after
         FROM ledger_entries
@@ -90,7 +99,7 @@ export class LedgerRepository {
         ORDER BY created_at DESC, id DESC
         LIMIT 1;
       `;
-      const priorRes = await client.query(priorSql, [accountId, startDate]);
+      const priorRes = await client.query(priorSql, [accountId, normalizedStartDate]);
       if (priorRes.rows.length > 0) {
         openingBalancePaise = BigInt(priorRes.rows[0].balance_after);
       }
