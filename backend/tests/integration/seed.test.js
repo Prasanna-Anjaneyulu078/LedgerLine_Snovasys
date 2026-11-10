@@ -15,13 +15,18 @@ const SEED_ENV_KEYS = [
   'NODE_ENV',
 ];
 
+function generateTestCredential() {
+  return `Test_${crypto.randomBytes(16).toString('base64url')}_!1Aa`;
+}
+
 function createGeneratedSeedPasswords() {
-  return {
-    SEED_ADMIN_PASSWORD: `AdminSeed!${crypto.randomBytes(10).toString('hex')}1A`,
-    SEED_AUDITOR_PASSWORD: `AuditSeed!${crypto.randomBytes(10).toString('hex')}2B`,
-    SEED_KAVI_PASSWORD: `KaviSeed!${crypto.randomBytes(10).toString('hex')}3C`,
-    SEED_RAVI_PASSWORD: `RaviSeed!${crypto.randomBytes(10).toString('hex')}4D`,
-  };
+  const roles = ['ADMIN', 'AUDITOR', 'KAVI', 'RAVI'];
+  const envMap = {};
+  for (const role of roles) {
+    const envKey = `SEED_${role}_PASSWORD`;
+    envMap[envKey] = generateTestCredential();
+  }
+  return envMap;
 }
 
 describe('Database Seeder Security & Idempotency Tests', () => {
@@ -181,7 +186,7 @@ describe('Database Seeder Security & Idempotency Tests', () => {
   });
 
   test('Existing users preserve ID, rotated password hash, modified role, display name, and is_active across seed runs', async () => {
-    const customPassword = `CustomPass!${crypto.randomBytes(10).toString('hex')}9Z`;
+    const customPassword = generateTestCredential();
     const customHash = await bcrypt.hash(customPassword, 10);
 
     const inserted = await testPool.query(
@@ -212,7 +217,7 @@ describe('Database Seeder Security & Idempotency Tests', () => {
 
   test('Account ownership and balance are never reassigned if an existing seeded account belongs to another owner', async () => {
     const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
-    const altPasswordHash = await bcrypt.hash(`AltOwner!${crypto.randomBytes(8).toString('hex')}5X`, 10);
+    const altPasswordHash = await bcrypt.hash(generateTestCredential(), 10);
     const altOwnerRes = await testPool.query(
       `INSERT INTO users (full_name, email, password_hash, role, is_active)
        VALUES ('Existing Real Owner', 'real.owner@example.com', $1, 'ACCOUNT_HOLDER', true)
@@ -246,7 +251,7 @@ describe('Database Seeder Security & Idempotency Tests', () => {
   });
 
   test('Legacy user migration is disabled by default and preserves credentials/role when explicitly opted in', async () => {
-    const legacyPassword = `LegacyPass!${crypto.randomBytes(10).toString('hex')}7L`;
+    const legacyPassword = generateTestCredential();
     const legacyHash = await bcrypt.hash(legacyPassword, 10);
 
     const legacyInsert = await testPool.query(

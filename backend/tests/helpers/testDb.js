@@ -7,8 +7,8 @@ import { pool, closePool } from '../../src/config/database.js';
 import { runMigrations } from '../../src/database/migrate.js';
 
 export const TEST_USER_PASSWORD =
-  process.env.TEST_USER_PASSWORD || `TestPass!${crypto.randomBytes(8).toString('hex')}a1`;
-export const TEST_WRONG_PASSWORD = `WrongPass!${crypto.randomBytes(8).toString('hex')}b2`;
+  process.env.TEST_USER_PASSWORD || `Test_${crypto.randomBytes(12).toString('base64url')}_!1Aa`;
+export const TEST_WRONG_PASSWORD = `Wrong_${crypto.randomBytes(12).toString('base64url')}_!1Bb`;
 
 const { Pool } = pg;
 
