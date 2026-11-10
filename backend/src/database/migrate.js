@@ -62,7 +62,9 @@ export async function runMigrations({ isTest = false } = {}) {
 
     logger.info(
       { database: currentDb, user: currentUser, isTest },
-      `Connected to PostgreSQL for ${isTest ? 'TEST' : 'DEVELOPMENT'} migrations`
+      `Connected to PostgreSQL for ${
+          isTest ? 'TEST' : env.NODE_ENV === 'production' ? 'PRODUCTION' : 'DEVELOPMENT'
+      } migrations`
     );
 
     // Safeguard: Ensure test migrations do not run against production/development database
