@@ -2,7 +2,7 @@ import axios from 'axios';
 
 const API_BASE_URL =
   (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) ||
-  (typeof window === 'undefined' ? 'http://localhost:5000/api/v1' : '/api/v1');
+  (typeof window === 'undefined' ? 'https://ledgerline-jt4s.onrender.com/api/v1' : '/api/v1');
 
 // In-memory access token storage (short-lived access token, never in localStorage/cookies)
 let inMemoryAccessToken = null;
