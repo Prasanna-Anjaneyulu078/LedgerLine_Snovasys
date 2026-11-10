@@ -25,8 +25,10 @@ export const amountSchema = z
       z.bigint().positive('Amount must be positive'),
     ],
     {
-      required_error: 'Amount is required',
-      invalid_type_error: 'Amount must be a string, number, or integer',
+      error: (issue) =>
+        issue.input === undefined
+          ? 'Amount is required'
+          : 'Amount must be a string, number, or integer',
     }
   )
   .refine(
@@ -44,7 +46,12 @@ export const amountSchema = z
 export const depositSchema = z
   .object({
     accountNumber: z
-      .string({ invalid_type_error: 'Account number must be a string' })
+      .string({
+        error: (issue) =>
+          issue.input === undefined
+            ? undefined
+            : 'Account number must be a string',
+      })
       .trim()
       .min(1, 'Account number is required')
       .optional(),

@@ -1,3 +1,4 @@
+
 import { z } from 'zod';
 
 const passwordComplexityRegex =
@@ -5,14 +6,28 @@ const passwordComplexityRegex =
 
 export const registerSchema = z
   .object({
-    fullName: z.string({ required_error: 'Full name is required' }).trim().min(2, 'Name must be at least 2 characters'),
+    fullName: z
+      .string({
+        error: (issue) =>
+          issue.input === undefined ? 'Full name is required' : undefined,
+      })
+      .trim()
+      .min(2, 'Name must be at least 2 characters'),
+
     email: z
-      .string({ required_error: 'Email is required' })
+      .string({
+        error: (issue) =>
+          issue.input === undefined ? 'Email is required' : undefined,
+      })
       .email('Invalid email address')
       .toLowerCase()
       .trim(),
+
     password: z
-      .string({ required_error: 'Password is required' })
+      .string({
+        error: (issue) =>
+          issue.input === undefined ? 'Password is required' : undefined,
+      })
       .min(8, 'Password must be at least 8 characters long')
       .max(100, 'Password is too long')
       .regex(
@@ -24,10 +39,18 @@ export const registerSchema = z
 
 export const loginSchema = z.object({
   email: z
-    .string({ required_error: 'Email is required' })
+    .string({
+      error: (issue) =>
+        issue.input === undefined ? 'Email is required' : undefined,
+    })
     .email('Invalid email address')
     .toLowerCase()
     .trim(),
-  password: z.string({ required_error: 'Password is required' }).min(1, 'Password cannot be empty'),
-});
 
+  password: z
+    .string({
+      error: (issue) =>
+        issue.input === undefined ? 'Password is required' : undefined,
+    })
+    .min(1, 'Password cannot be empty'),
+});
