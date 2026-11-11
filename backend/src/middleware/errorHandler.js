@@ -1,3 +1,4 @@
+
 import { ZodError } from 'zod';
 import { AppError } from '../utils/appError.js';
 import { logger } from '../config/logger.js';
@@ -6,6 +7,22 @@ import { env } from '../config/env.js';
 export function errorHandler(err, req, res, next) {
   let error = err;
 
+  // Log database/driver errors for diagnosis.
+  if (err.code && !(err instanceof AppError)) {
+    logger.error(
+      {
+        errorCode: err.code,
+        errorMessage: err.message,
+        errorName: err.name,
+        constraint: err.constraint,
+        table: err.table,
+        path: req.originalUrl,
+        method: req.method,
+      },
+      'Database or driver error'
+    );
+  }
+
   // 1. Zod Validation Errors
   if (err instanceof ZodError) {
     const formattedErrors = err.issues.map((issue) => ({
@@ -13,45 +30,72 @@ export function errorHandler(err, req, res, next) {
       message: issue.message,
       rule: issue.code,
     }));
+
     error = AppError.badRequest('Validation failed', formattedErrors);
   }
-  // 2. PostgreSQL Database Errors (from pg driver)
+
+  // 2. PostgreSQL Database Errors
   else if (err.code) {
     switch (err.code) {
       case '23505': {
-        // Unique violation
         const detail = err.detail || '';
         const match = detail.match(/Key \((.*?)\)=\((.*?)\) already exists/);
         const field = match ? match[1] : 'field';
-        error = AppError.conflict(`Duplicate value error: ${field} already exists`);
+
+        error = AppError.conflict(
+          `Duplicate value error: ${field} already exists`
+        );
         break;
       }
-      case '23503': // Foreign key violation
-        error = AppError.badRequest('Referenced record does not exist or cannot be modified');
+
+      case '23503':
+        error = AppError.badRequest(
+          'Referenced record does not exist or cannot be modified'
+        );
         break;
-      case '23514': // Check constraint violation
-        error = AppError.badRequest('Operation violates financial constraint or boundary condition');
+
+      case '23514':
+        error = AppError.badRequest(
+          'Operation violates financial constraint or boundary condition'
+        );
         break;
-      case '40P01': // Deadlock detected
-        error = AppError.conflict('Transaction deadlock detected. Please retry the request.');
+
+      case '40P01':
+        error = AppError.conflict(
+          'Transaction deadlock detected. Please retry the request.'
+        );
         break;
-      case '40001': // Serialization failure
-        error = AppError.conflict('Serialization conflict detected. Please retry the request.');
+
+      case '40001':
+        error = AppError.conflict(
+          'Serialization conflict detected. Please retry the request.'
+        );
         break;
+
       default:
-        // Do not leak raw SQL errors in production
-        error = AppError.badRequest(env.NODE_ENV === 'development' ? `Database error: ${err.message}` : 'Database error occurred');
+        // Unexpected database/driver errors are server errors, not client errors.
+        error = AppError.internal();
         break;
     }
   }
+
   // 3. Body parser JSON syntax errors
-  else if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
+  else if (
+    err instanceof SyntaxError &&
+    err.status === 400 &&
+    'body' in err
+  ) {
     error = AppError.badRequest('Malformed JSON in request body');
   }
-  // 4. Fallback for unexpected non-AppError exceptions
+
+  // 4. Unexpected non-AppError exceptions
   else if (!(error instanceof AppError)) {
     const statusCode = error.statusCode || 500;
-    const message = error.message || 'Internal Server Error';
+    const message =
+      statusCode >= 500
+        ? 'Internal Server Error'
+        : error.message || 'Request failed';
+
     error = new AppError(statusCode, message, [], false);
   }
 
@@ -59,8 +103,12 @@ export function errorHandler(err, req, res, next) {
     success: false,
     statusCode: error.statusCode,
     message: error.message,
-    ...(error.errors && error.errors.length > 0 ? { errors: error.errors } : {}),
-    ...(env.NODE_ENV === 'development' ? { stack: err.stack } : {}),
+    ...(error.errors?.length
+      ? { errors: error.errors }
+      : {}),
+    ...(env.NODE_ENV === 'development'
+      ? { stack: err.stack }
+      : {}),
   };
 
   res.locals.errorMessage = error.message;
@@ -83,4 +131,3 @@ export function errorHandler(err, req, res, next) {
 
   res.status(error.statusCode).json(response);
 }
-

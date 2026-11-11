@@ -23,6 +23,9 @@ import { adminRouter } from './modules/admin/admin.routes.js';
 
 const app = express();
 
+// Trust Render's reverse proxy so rate limiting uses the real client IP.
+app.set('trust proxy', 1);
+
 // Security HTTP headers
 app.use(helmet());
 
