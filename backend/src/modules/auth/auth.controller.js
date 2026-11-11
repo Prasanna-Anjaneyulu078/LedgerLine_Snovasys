@@ -56,7 +56,7 @@ export class AuthController {
     const context = {
       ipAddress: req.ip || req.connection?.remoteAddress,
       userAgent: req.headers['user-agent'] || null,
-      isClientAborted: () => clientAborted || Boolean(req.destroyed || res.destroyed),
+      isClientAborted: () => clientAborted || Boolean(res.destroyed),
     };
     const rawToken = req.cookies?.[REFRESH_COOKIE_NAME] || req.body?.refreshToken;
 
